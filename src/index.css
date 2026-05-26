@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3efe5;
+  --foreground: #222;
+  --muted: #d8cfbd;
+  --muted-foreground: #4b4b4b;
+  --card: #fffaf0;
+  --border: #d2c5ab;
+  --accent: #1f6f78;
+  --accent-foreground: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at 20% 20%, #fffbe8 0%, transparent 45%),
+    linear-gradient(160deg, #ebe4d5 0%, #f6f2e8 100%);
+  color: var(--foreground);
+  font-family: "Fira Sans", "Trebuchet MS", sans-serif;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100%;
+}
+
+.content-scroll {
+  overflow: auto;
+  scroll-behavior: smooth;
+}
