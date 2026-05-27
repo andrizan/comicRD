@@ -49,16 +49,16 @@ importers:
         specifier: ^2.11.2
         version: 2.11.2
       '@types/node':
-        specifier: ^24.12.3
+        specifier: ^24.12.4
         version: 24.12.4
       '@types/react':
-        specifier: ^19.2.14
+        specifier: ^19.2.15
         version: 19.2.15
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.15)
       '@vitejs/plugin-react':
-        specifier: ^6.0.1
+        specifier: ^6.0.2
         version: 6.0.2(vite@8.0.14(@types/node@24.12.4)(jiti@2.7.0))
       oxfmt:
         specifier: ^0.52.0
@@ -70,10 +70,10 @@ importers:
         specifier: ^4.3.0
         version: 4.3.0
       typescript:
-        specifier: ~6.0.2
+        specifier: ~6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.12
+        specifier: ^8.0.14
         version: 8.0.14(@types/node@24.12.4)(jiti@2.7.0)
       vitest:
         specifier: ^4.1.7

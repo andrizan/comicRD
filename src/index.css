@@ -1,14 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3efe5;
-  --foreground: #222;
-  --muted: #d8cfbd;
-  --muted-foreground: #4b4b4b;
-  --card: #fffaf0;
-  --border: #d2c5ab;
-  --accent: #1f6f78;
-  --accent-foreground: #fff;
+  color-scheme: light;
+  --background: #f8f5ee;
+  --foreground: #181511;
+  --muted: #e5ddcf;
+  --muted-foreground: #514a40;
+  --card: #fffcf5;
+  --border: #a99b86;
+  --accent: #075e6f;
+  --accent-foreground: #ffffff;
+  --header: #fffcf5f0;
+  --page-glow: #fff3cf;
+  --page-start: #ede3d2;
+  --page-end: #fbf7ef;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #101416;
+  --foreground: #f4f6f6;
+  --muted: #263236;
+  --muted-foreground: #c6cecf;
+  --card: #182123;
+  --border: #4b5a5e;
+  --accent: #85d7e6;
+  --accent-foreground: #051114;
+  --header: #11181bed;
+  --page-glow: #1e3136;
+  --page-start: #0d1113;
+  --page-end: #151d20;
 }
 
 * {
@@ -24,10 +45,52 @@ body,
 
 body {
   background:
-    radial-gradient(circle at 20% 20%, #fffbe8 0%, transparent 45%),
-    linear-gradient(160deg, #ebe4d5 0%, #f6f2e8 100%);
+    radial-gradient(circle at 20% 20%, var(--page-glow) 0%, transparent 45%),
+    linear-gradient(160deg, var(--page-start) 0%, var(--page-end) 100%);
   color: var(--foreground);
-  font-family: "Fira Sans", "Trebuchet MS", sans-serif;
+  font-family:
+    "Atkinson Hyperlegible", "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+}
+
+input,
+select,
+textarea {
+  background-color: var(--card);
+  color: var(--foreground);
+}
+
+option {
+  background-color: var(--card);
+  color: var(--foreground);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .bg-white {
+  background-color: #1c2522 !important;
+}
+
+:root[data-theme="dark"] .bg-\[\#fffdf6\] {
+  background-color: #121917 !important;
+}
+
+:root[data-theme="dark"] .shadow-sm {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.library-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 88px;
 }
 
 .app-shell {
@@ -39,4 +102,5 @@ body {
 .content-scroll {
   overflow: auto;
   scroll-behavior: smooth;
+  scrollbar-gutter: stable;
 }

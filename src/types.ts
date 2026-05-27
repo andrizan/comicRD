@@ -22,6 +22,18 @@ export type Comic = {
   in_progress_chapter_count: number;
 };
 
+export type RawComic = {
+  key: string;
+  title: string;
+  source_path: string;
+  source_type: string;
+  library_path: string;
+  date_modified: number;
+  chapter_count: number;
+  read_chapter_count: number;
+  in_progress_chapter_count: number;
+};
+
 export type Chapter = {
   id: number;
   comic_id: number;
@@ -30,6 +42,18 @@ export type Chapter = {
   page_count: number;
   source_path: string;
   source_type: string;
+  is_read: boolean;
+  last_page: number;
+  total_pages: number;
+};
+
+export type RawChapter = {
+  key: string;
+  title: string;
+  chapter_index: number;
+  source_path: string;
+  source_type: string;
+  page_count: number;
   is_read: boolean;
   last_page: number;
   total_pages: number;
@@ -79,6 +103,8 @@ export type LibraryScanStatus = {
 export type ChapterContext = {
   chapter_id: number;
   comic_id: number;
+  comic_source_path: string;
+  chapter_source_path: string;
   comic_title: string;
   title: string;
   chapter_index: number;

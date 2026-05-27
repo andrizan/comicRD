@@ -4,6 +4,8 @@ import type {
   Chapter,
   ChapterContext,
   Comic,
+  RawChapter,
+  RawComic,
   LibraryScanStatus,
   Library,
   PageInfo,
@@ -47,28 +49,30 @@ export async function listChapters(comicId: number) {
   return invoke<Chapter[]>("list_chapters", { comicId });
 }
 
+export async function listLibraryComicsRaw(sortBy: SortBy, sortDir: SortDir) {
+  return invoke<RawComic[]>("list_library_comics_raw", {
+    sortBy,
+    sortDir,
+  });
+}
+
+export async function listComicChaptersRaw(comicSourcePath: string) {
+  return invoke<RawChapter[]>("list_comic_chapters_raw", { comicSourcePath });
+}
+
+export async function openChapterForReading(payload: {
+  comic_source_path: string;
+  chapter_source_path: string;
+}) {
+  return invoke<number>("open_chapter_for_reading", { payload });
+}
+
 export async function getChapterContext(chapterId: number) {
   return invoke<ChapterContext | null>("get_chapter_context", { chapterId });
 }
 
 export async function getChapterPages(chapterId: number) {
   return invoke<PageInfo[]>("get_chapter_pages", { chapterId });
-}
-
-export async function getPageData(
-  chapterId: number,
-  pageIndex: number,
-  options?: {
-    target_width?: number;
-    target_height?: number;
-    interpolation?: string;
-  },
-) {
-  return invoke<string>("get_page_data", {
-    chapterId,
-    pageIndex,
-    options,
-  });
 }
 
 export async function saveProgress(payload: {
@@ -110,4 +114,12 @@ export async function setSetting(key: string, value: unknown) {
     key,
     valueJson: JSON.stringify(value),
   });
+}
+
+export async function exportDatabaseBackup(outputPath: string) {
+  return invoke("export_database_backup", { outputPath });
+}
+
+export async function importDatabaseBackup(inputPath: string) {
+  return invoke("import_database_backup", { inputPath });
 }

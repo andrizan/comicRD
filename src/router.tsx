@@ -24,9 +24,6 @@ const comicRoute = createRoute({
 const readerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reader/$chapterId",
-  validateSearch: (_search: Record<string, unknown>) => ({
-    mode: "webtoon" as const,
-  }),
   component: ReaderPage,
 });
 

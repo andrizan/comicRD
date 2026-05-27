@@ -6,10 +6,7 @@ ComicRD adalah aplikasi komik reader desktop berbasis **Tauri 2 + React** untuk 
 - ZIP
 - CBZ
 
-Mode baca:
-
-- Manga mode (paging)
-- Webtoon mode (vertical scroll)
+Mode baca dikunci ke **Webtoon mode** (vertical scroll) supaya pipeline render tetap sederhana dan ringan.
 
 ## Fitur Utama
 
@@ -17,19 +14,21 @@ Mode baca:
 - Continue reading, bookmark, read/unread status
 - Prev/next page + prev/next chapter
 - Keyboard navigation (Arrow) dengan toggle
-- Zoom, interpolation, dan page margin/gap yang disimpan global
-- Interpolation methods: `lanczos3`, `lanczos2`, `spline36`, `mitchell`, `cubic`, `linear`, `nearest`
-- Sorting komik: `name`, `date`, `date_modified`
-- Bottom page/chapter indicator
+- `Esc` / close reader kembali ke halaman chapter
+- Zoom dan page margin/gap yang disimpan global
+- Sorting komik: `name`, `folder_date`, asc/desc
+- Sorting chapter: nama asc/desc
+- Status chapter: unread, reading, read
+- Bottom page indicator segmented seperti reader desktop
 
 ## Performa
 
-- Lazy loading image
-- Virtualized comic list
-- Prefetch page tetangga (prev/next)
-- Cache render terpisah dengan budget memori eksplisit:
-  - Thumbnail cache
-  - Preview cache
+- Scan library bertahap: title dulu, chapter hanya saat title diklik
+- Database write hanya saat chapter dibuka/dibaca
+- History path relatif terhadap library source supaya tetap cocok ketika folder library dipindah
+- Lazy loading image dan virtualized reader
+- Prefetch beberapa page berikutnya
+- Tauri custom protocol (`comicrd://...`) untuk melayani byte gambar langsung ke `<img>` tanpa base64 IPC
 
 ## Tech Stack
 

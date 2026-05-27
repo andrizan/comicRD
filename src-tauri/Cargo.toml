@@ -27,7 +27,6 @@ tauri-plugin-dialog = "2"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 walkdir = "2.5.0"
 zip = { version = "2.2.3", default-features = false, features = ["deflate"] }
-base64 = "0.22.1"
 image = { version = "0.25.8", default-features = true }
 
 [dev-dependencies]

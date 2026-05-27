@@ -8,7 +8,7 @@
 - Frontend Role: React + TanStack Router/Query untuk Library, Comic, Reader, Settings.
 - Backend Role: Tauri 2 + Rust command layer untuk scan source, rendering page, progress, bookmark, settings.
 - Data Role: SQLite (`rusqlite`) untuk metadata komik, chapter, progress, bookmark, dan `app_settings`.
-- Performance Role: lazy list, lazy image, prefetch tetangga page, cache render (`thumbnail` + `preview`) berbasis budget memori.
+- Performance Role: scan library bertahap, lazy list, lazy image, virtualized reader, dan custom protocol untuk melayani byte gambar tanpa base64 IPC.
 
 ## Tech Stack
 
@@ -26,8 +26,6 @@
 
 - `default_mode`
 - `arrow_navigation_enabled`
-- `smooth_scroll_speed`
-- `interpolation_method`
 - `default_zoom`
 - `page_gap`
 - `library_source_input`
@@ -35,12 +33,16 @@
 ## Current Reader UX
 
 - Reader route full-screen (main app navbar disembunyikan saat `/reader/*`).
-- Toolbar atas ala OpenComic/HakuNeko: close, judul komik/chapter, mode baca, navigasi, zoom, gap, interpolation.
-- Progress bar tipis fixed di bagian bawah.
-- Fokus baca: area konten lebih lebar, panel floating kanan dihapus.
+- Reader mode dikunci ke webtoon vertical scroll.
+- Toolbar atas ala OpenComic/HakuNeko: close, judul komik/chapter, navigasi, zoom, gap, fullscreen, bookmark.
+- Progress indicator segmented fixed di bagian bawah; segment bisa diklik untuk lompat page.
+- `Esc` dan tombol close kembali ke chapter page berdasarkan `comic_source_path`, bukan id database.
 
 ## Current Render Pipeline
 
-- Backend render image berjalan via `spawn_blocking` agar UI thread tidak freeze.
-- Resized output dikirim sebagai JPEG base64 (lebih cepat dari PNG untuk throughput render).
-- Prefetch manga: ±2 halaman; prefetch webtoon: beberapa halaman ke depan.
+- Library page hanya scan title komik dari folder source.
+- Comic/chapter page baru scan chapter saat title diklik.
+- Database write untuk comic/chapter/progress baru dilakukan saat chapter dibuka/dibaca.
+- Chapter status boleh melakukan lookup read-only ke database berdasarkan relative `history_key`.
+- Gambar dilayani lewat custom protocol `comicrd://localhost/page/{chapterId}/{pageIndex}`.
+- React menampilkan `<img>` langsung dari protocol URL dengan lazy loading dan prefetch beberapa halaman ke depan.

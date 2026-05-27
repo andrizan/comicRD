@@ -1,13 +1,22 @@
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { BookmarkPlus, ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  BookmarkPlus,
+  ChevronLeft,
+  ChevronRight,
+  Fullscreen,
+  Maximize2,
+  Minimize2,
+  Shrink,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import {
   addBookmark,
   getChapterContext,
   getChapterPages,
-  getPageData,
   getProgress,
   listSettings,
   saveProgress,
@@ -29,44 +38,46 @@ function parseJsonOr<T>(value: string | undefined, fallback: T): T {
   }
 }
 
+function normalizePageGap(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value / 10) * 10));
+}
+
 function PageImage({
   chapterId,
   pageIndex,
   zoom,
-  targetWidth,
 }: {
   chapterId: number;
   pageIndex: number;
   zoom: number;
-  targetWidth: number;
 }) {
-  const pageQuery = useQuery({
-    queryKey: ["page", chapterId, pageIndex, targetWidth, "off"],
-    queryFn: () =>
-      getPageData(chapterId, pageIndex, {
-        target_width: Math.max(560, Math.min(900, targetWidth)),
-      }),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
-    retry: 0,
-  });
+  const [loaded, setLoaded] = useState(false);
 
-  if (!pageQuery.data) {
-    return <div className="my-2 h-[220px] rounded-md bg-white/10" />;
-  }
+  useEffect(() => {
+    setLoaded(false);
+  }, [chapterId, pageIndex]);
+
+  const pageSrc = `comicrd://localhost/page/${chapterId}/${pageIndex}`;
 
   return (
-    <img
-      src={pageQuery.data}
-      alt={`Page ${pageIndex + 1}`}
-      loading="lazy"
-      className="mx-auto block w-full max-w-[980px] rounded-md"
+    <div
+      className="mx-auto w-full"
       style={{
-        transform: `scale(${zoom})`,
-        transformOrigin: "top center",
-        imageRendering: "auto",
+        maxWidth: `${Math.round(980 * zoom)}px`,
       }}
-    />
+    >
+      {!loaded ? <div className="my-2 h-[220px] rounded-md bg-white/10" /> : null}
+      <img
+        src={pageSrc}
+        alt={`Page ${pageIndex + 1}`}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        className={`mx-auto block w-full rounded-md ${loaded ? "opacity-100" : "opacity-0"} transition-opacity duration-150`}
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+      />
+    </div>
   );
 }
 
@@ -74,7 +85,6 @@ export function ReaderPage() {
   const { chapterId } = useParams({ from: "/reader/$chapterId" });
   const navigate = useNavigate({ from: "/reader/$chapterId" });
   const chapterIdNum = Number(chapterId);
-  const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -94,19 +104,13 @@ export function ReaderPage() {
   });
 
   const settingMap = useMemo(() => parseSettingMap(settingsQuery.data ?? []), [settingsQuery.data]);
-  const smoothSpeed = parseJsonOr<number>(settingMap.get("smooth_scroll_speed"), 1);
   const defaultZoom = parseJsonOr<number>(settingMap.get("default_zoom"), 1);
-  const defaultPageGap = parseJsonOr<number>(settingMap.get("page_gap"), 8);
+  const defaultPageGap = normalizePageGap(parseJsonOr<number>(settingMap.get("page_gap"), 10));
 
   const totalPages = pagesQuery.data?.length ?? 0;
   const [currentPage, setCurrentPage] = useState(0);
   const [zoom, setZoom] = useState(defaultZoom);
   const [pageGap, setPageGap] = useState(defaultPageGap);
-  const [viewportWidth, setViewportWidth] = useState(1280);
-
-  useEffect(() => {
-    setCurrentPage(0);
-  }, [chapterIdNum]);
 
   useEffect(() => {
     setZoom(defaultZoom);
@@ -115,22 +119,6 @@ export function ReaderPage() {
   useEffect(() => {
     setPageGap(defaultPageGap);
   }, [defaultPageGap]);
-
-  useEffect(() => {
-    const update = () => {
-      const next = Math.max(560, Math.floor(window.innerWidth * 0.9));
-      setViewportWidth(next);
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  useEffect(() => {
-    if (progressQuery.data) {
-      setCurrentPage(progressQuery.data.last_page);
-    }
-  }, [progressQuery.data]);
 
   const progressMutation = useMutation({
     mutationFn: saveProgress,
@@ -149,8 +137,23 @@ export function ReaderPage() {
     navigate({
       to: "/reader/$chapterId",
       params: { chapterId: String(nextChapterId) },
-      search: { mode: "webtoon" },
     });
+  };
+
+  const closeReader = () => {
+    const chapterContext = chapterContextQuery.data;
+    if (chapterContext?.comic_source_path) {
+      window.sessionStorage.setItem(
+        `comicrd:last-chapter:${chapterContext.comic_source_path}`,
+        chapterContext.chapter_source_path,
+      );
+      navigate({
+        to: "/comic/$comicId",
+        params: { comicId: encodeURIComponent(chapterContext.comic_source_path) },
+      });
+      return;
+    }
+    navigate({ to: "/" });
   };
 
   const persistProgressDebounced = useEffectEvent((nextPage: number) => {
@@ -176,37 +179,77 @@ export function ReaderPage() {
       (idx) => idx >= 0 && idx < totalPages,
     );
     for (const idx of ahead) {
-      queryClient.prefetchQuery({
-        queryKey: ["page", chapterIdNum, idx, viewportWidth, "off"],
-        queryFn: () =>
-          getPageData(chapterIdNum, idx, {
-            target_width: Math.max(560, Math.min(900, viewportWidth)),
-          }),
-        staleTime: 45_000,
-      });
+      const image = new Image();
+      image.src = `comicrd://localhost/page/${chapterIdNum}/${idx}`;
     }
-  }, [chapterIdNum, currentPage, queryClient, totalPages, viewportWidth]);
+  }, [chapterIdNum, currentPage, totalPages]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: totalPages,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 1200 / Math.max(1, smoothSpeed),
-    overscan: 2,
-  });
-  const virtualItems = rowVirtualizer.getVirtualItems();
+  const pageRefs = useRef(new Map<number, HTMLDivElement>());
   const lastWebtoonPageSyncTsRef = useRef(0);
+  const restoredChapterRef = useRef<number | null>(null);
+  const goToPage = (targetPage: number) => {
+    const nextPage = clampPage(targetPage);
+    setCurrentPage(nextPage);
+    pageRefs.current.get(nextPage)?.scrollIntoView({ block: "start" });
+  };
 
   useEffect(() => {
-    if (virtualItems.length === 0) return;
-    const now = performance.now();
-    if (now - lastWebtoonPageSyncTsRef.current < 120) return;
-    lastWebtoonPageSyncTsRef.current = now;
-    const firstVisible = virtualItems[0]?.index ?? 0;
-    startTransition(() => {
-      setCurrentPage((prev) => (prev === firstVisible ? prev : clampPage(firstVisible)));
+    restoredChapterRef.current = null;
+    lastWebtoonPageSyncTsRef.current = 0;
+    setCurrentPage(0);
+    pageRefs.current.clear();
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [chapterIdNum]);
+
+  useEffect(() => {
+    if (totalPages <= 0 || !progressQuery.isFetched) return;
+    if (restoredChapterRef.current === chapterIdNum) return;
+    const target = clampPage(progressQuery.data?.last_page ?? 0);
+    restoredChapterRef.current = chapterIdNum;
+    setCurrentPage(target);
+    window.requestAnimationFrame(() => {
+      if (target === 0) {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = 0;
+        }
+        return;
+      }
+      pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
     });
-  }, [virtualItems, totalPages]);
+  }, [chapterIdNum, progressQuery.data, progressQuery.isFetched, totalPages]);
+
+  useEffect(() => {
+    if (restoredChapterRef.current !== chapterIdNum) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const now = performance.now();
+        if (now - lastWebtoonPageSyncTsRef.current < 120) return;
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        const pageIndex = Number(visible[0]?.target.getAttribute("data-page-index"));
+        if (!Number.isFinite(pageIndex)) return;
+        lastWebtoonPageSyncTsRef.current = now;
+        startTransition(() => {
+          setCurrentPage((prev) => (prev === pageIndex ? prev : clampPage(pageIndex)));
+        });
+      },
+      {
+        root,
+        rootMargin: "-20% 0px -65% 0px",
+        threshold: 0.01,
+      },
+    );
+    for (const node of pageRefs.current.values()) {
+      observer.observe(node);
+    }
+    return () => observer.disconnect();
+  }, [chapterIdNum, pagesQuery.data, totalPages]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -222,11 +265,79 @@ export function ReaderPage() {
     return () => window.clearTimeout(timer);
   }, [pageGap]);
 
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const scrollTop = root.scrollTop;
+    window.requestAnimationFrame(() => {
+      root.scrollTop = scrollTop;
+    });
+  }, [pageGap, zoom]);
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    onFullscreenChange();
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeReader();
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        scrollRef.current?.scrollBy({ top: -520, behavior: "smooth" });
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        scrollRef.current?.scrollBy({ top: 520, behavior: "smooth" });
+        return;
+      }
+      if (event.key === "PageUp") {
+        event.preventDefault();
+        scrollRef.current?.scrollBy({ top: -window.innerHeight * 0.85, behavior: "smooth" });
+        return;
+      }
+      if (event.key === "PageDown") {
+        event.preventDefault();
+        scrollRef.current?.scrollBy({ top: window.innerHeight * 0.85, behavior: "smooth" });
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
+          goToChapter(chapterContextQuery.data.prev_chapter_id);
+          return;
+        }
+        goToPage(currentPage - 1);
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
+          goToChapter(chapterContextQuery.data.next_chapter_id);
+          return;
+        }
+        goToPage(currentPage + 1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [chapterContextQuery.data, currentPage, totalPages]);
+
   const pageIndicator = `${Math.min(currentPage + 1, Math.max(totalPages, 1))}`;
-  const progressPercent = totalPages <= 1 ? 0 : (currentPage / (totalPages - 1)) * 100;
   const segmentCount = Math.max(1, totalPages);
   const activeSegment =
-    totalPages <= 1 ? 0 : Math.round((currentPage / (totalPages - 1)) * Math.max(0, segmentCount - 1));
+    totalPages <= 1
+      ? 0
+      : Math.round((currentPage / (totalPages - 1)) * Math.max(0, segmentCount - 1));
 
   const criticalQueryError =
     settingsQuery.error ?? pagesQuery.error ?? chapterContextQuery.error ?? progressQuery.error;
@@ -265,16 +376,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent text-white hover:bg-white/10"
-              onClick={() => {
-                if (chapterContextQuery.data?.comic_id) {
-                  navigate({
-                    to: "/comic/$comicId",
-                    params: { comicId: String(chapterContextQuery.data.comic_id) },
-                  });
-                  return;
-                }
-                navigate({ to: "/" });
-              }}
+              onClick={closeReader}
             >
               <X size={14} />
             </Button>
@@ -305,16 +407,7 @@ export function ReaderPage() {
           <Button
             variant="outline"
             className="border-white/20 bg-transparent text-white hover:bg-white/10"
-            onClick={() => {
-              if (chapterContextQuery.data?.comic_id) {
-                navigate({
-                  to: "/comic/$comicId",
-                  params: { comicId: String(chapterContextQuery.data.comic_id) },
-                });
-                return;
-              }
-              navigate({ to: "/" });
-            }}
+            onClick={closeReader}
           >
             <X size={14} />
           </Button>
@@ -332,12 +425,28 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+              title="Kurangi gap"
+              onClick={() => setPageGap((value) => Math.max(0, value - 10))}
+            >
+              <Minimize2 size={14} />
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+              title="Tambah gap"
+              onClick={() => setPageGap((value) => Math.min(100, value + 10))}
+            >
+              <Maximize2 size={14} />
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
               onClick={() => {
                 if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
                   goToChapter(chapterContextQuery.data.prev_chapter_id);
                   return;
                 }
-                setCurrentPage((v) => clampPage(v - 1));
+                goToPage(currentPage - 1);
               }}
             >
               <ChevronLeft size={14} />
@@ -350,7 +459,7 @@ export function ReaderPage() {
                   goToChapter(chapterContextQuery.data.next_chapter_id);
                   return;
                 }
-                setCurrentPage((v) => clampPage(v + 1));
+                goToPage(currentPage + 1);
               }}
             >
               <ChevronRight size={14} />
@@ -375,84 +484,95 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+              title="Reset zoom"
+              onClick={() => setZoom(1)}
+            >
+              <Shrink size={14} />
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+              title="Fullscreen"
+              onClick={() => {
+                if (document.fullscreenElement) {
+                  void document.exitFullscreen();
+                  return;
+                }
+                void document.documentElement.requestFullscreen();
+              }}
+            >
+              <Fullscreen size={14} className={isFullscreen ? "text-[#ff6a3d]" : ""} />
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
               onClick={() =>
                 bookmarkMutation.mutate({ chapter_id: chapterIdNum, page: currentPage })
               }
             >
               <BookmarkPlus size={14} />
             </Button>
-            <label className="ml-1 hidden text-xs font-semibold text-white/80 md:block">
-              Gap
-              <input
-                type="range"
-                min={0}
-                max={32}
-                step={1}
-                value={pageGap}
-                onChange={(e) => setPageGap(Number(e.target.value))}
-                className="ml-2 w-24 align-middle"
-              />
-            </label>
+            <span className="w-10 text-center text-xs font-semibold text-white/80">
+              {pageGap}px
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="px-2 pt-20">
+      <div className="bg-black px-2 pt-20">
         <div
+          key={chapterIdNum}
           ref={scrollRef}
-          className="h-[calc(100dvh-120px)] overflow-auto pr-1"
+          className="h-[calc(100dvh-120px)] overflow-auto bg-black pr-1"
           style={{ scrollBehavior: "smooth" }}
         >
-          <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
-            {virtualItems.map((v) => (
+          <div className="mx-auto w-full">
+            {Array.from({ length: totalPages }).map((_, index) => (
               <div
-                key={v.key}
-                className="absolute left-0 top-0 w-full"
+                key={`${chapterIdNum}-${index}`}
+                ref={(node) => {
+                  if (node) {
+                    pageRefs.current.set(index, node);
+                    return;
+                  }
+                  pageRefs.current.delete(index);
+                }}
+                data-page-index={index}
+                className="w-full"
                 style={{
-                  transform: `translateY(${v.start}px)`,
-                  paddingTop: `${Math.max(0, pageGap / 2)}px`,
-                  paddingBottom: `${Math.max(0, pageGap / 2)}px`,
+                  marginBottom: `${index >= totalPages - 1 ? 0 : Math.max(0, pageGap)}px`,
                 }}
               >
-                <PageImage
-                  chapterId={chapterIdNum}
-                  pageIndex={v.index}
-                  zoom={zoom}
-                  targetWidth={viewportWidth}
-                />
+                <PageImage chapterId={chapterIdNum} pageIndex={index} zoom={zoom} />
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="group fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#151922f0] px-6 py-2 transition-all duration-150 hover:py-3">
+      <div className="group fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#151922d9] px-6 py-1 opacity-80 transition-all duration-150 hover:bg-[#151922f0] hover:py-3 hover:opacity-100">
         <div className="mx-auto flex w-full max-w-[1400px] items-center gap-3">
-          <span className="w-8 text-left text-sm text-white">{pageIndicator}</span>
-          <div className="flex flex-1 items-center gap-1">
+          <span className="w-0 overflow-hidden text-left text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
+            {pageIndicator}
+          </span>
+          <div className="flex flex-1 items-center gap-0.5 group-hover:gap-1">
             {Array.from({ length: segmentCount }).map((_, idx) => (
               <button
                 key={idx}
                 type="button"
                 title={`Page ${idx + 1}`}
-                className={`h-2 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
+                className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
                   idx <= activeSegment ? "bg-[#ff6a3d]" : "bg-white/20"
                 }`}
                 onClick={() => {
-                  const target = idx;
-                  setCurrentPage(target);
-                  rowVirtualizer.scrollToIndex(target, { align: "start" });
+                  goToPage(idx);
                 }}
               />
             ))}
           </div>
-          <span className="w-8 text-right text-sm text-white">{Math.max(totalPages, 1)}</span>
-        </div>
-        <div className="mt-1 h-0.5 w-full rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-[#ff6a3d] transition-[width] duration-150"
-            style={{ width: `${progressPercent}%` }}
-          />
+          <span className="w-0 overflow-hidden text-right text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
+            {Math.max(totalPages, 1)}
+          </span>
         </div>
       </div>
     </section>
