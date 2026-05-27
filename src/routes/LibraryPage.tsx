@@ -119,78 +119,83 @@ export function LibraryPage() {
       ) : null}
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
-        <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-bold">Comics</h2>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Data diambil langsung dari folder library (raw filesystem).
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 font-semibold">
-                Total Komik/Folder: {libraryStats.totalComics}
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 font-semibold">
+                {libraryStats.totalComics} comics
               </span>
               {searchText.trim() ? (
-                <span className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 font-semibold text-[var(--muted-foreground)]">
-                  Filtered: {libraryStats.visibleComics} komik
+                <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 font-semibold text-[var(--muted-foreground)]">
+                  {libraryStats.visibleComics} shown
                 </span>
               ) : null}
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              onClick={() => void comicsQuery.refetch()}
-              variant="outline"
-              disabled={!activeLibraryPath}
-            >
-              <RefreshCw size={14} />
-              <span>Refresh</span>
-            </Button>
-            <div className="rounded-md border border-[var(--border)] bg-[var(--card)] p-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-md border border-[var(--border)] p-0.5">
               <button
                 onClick={() => setViewMode("all")}
-                className={`rounded px-2 py-1 text-xs font-semibold ${
+                className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
                   viewMode === "all"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--muted-foreground)]"
+                    ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                 }`}
               >
                 All
               </button>
               <button
                 onClick={() => setViewMode("by_folder")}
-                className={`rounded px-2 py-1 text-xs font-semibold ${
+                className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
                   viewMode === "by_folder"
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--muted-foreground)]"
+                    ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                 }`}
               >
-                Folder View
+                Folder
               </button>
             </div>
-            <Search size={14} />
+            <Button
+              onClick={() => void comicsQuery.refetch()}
+              variant="ghost"
+              disabled={!activeLibraryPath}
+              className="gap-1.5 px-2.5"
+            >
+              <RefreshCw size={14} />
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]"
+            />
             <input
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="min-w-[220px] rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm"
-              placeholder="Cari komik..."
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
+              placeholder="Search comics..."
             />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-2 text-sm"
-            >
-              <option value="name">Sort: Name</option>
-              <option value="folder_date">Sort: Folder Date</option>
-            </select>
-            <select
-              value={sortDir}
-              onChange={(e) => setSortDir(e.target.value as SortDir)}
-              className="rounded-md border border-[var(--border)] bg-[var(--card)] px-2 py-2 text-sm"
-            >
-              <option value="asc">Asc</option>
-              <option value="desc">Desc</option>
-            </select>
           </div>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortBy)}
+            className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
+          >
+            <option value="name">Name</option>
+            <option value="folder_date">Folder Date</option>
+          </select>
+          <select
+            value={sortDir}
+            onChange={(e) => setSortDir(e.target.value as SortDir)}
+            className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
+          >
+            <option value="asc">Asc</option>
+            <option value="desc">Desc</option>
+          </select>
         </div>
 
         {comicsQuery.isPending ? (
