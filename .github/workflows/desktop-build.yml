@@ -4,7 +4,12 @@ on:
   workflow_dispatch:
   push:
     branches: ["main"]
+    tags:
+      - "v*"
   pull_request:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -12,15 +17,42 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
+          - name: linux-deb-rpm
+            os: ubuntu-24.04
+            rust_targets: x86_64-unknown-linux-gnu
             script: tauri:build:linux
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
+            artifact_name: comicrd-linux-deb-rpm
+            artifact_paths: |
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+
+          - name: linux-appimage
+            os: ubuntu-24.04
+            rust_targets: x86_64-unknown-linux-gnu
+            script: tauri:build:linux:appimage
+            artifact_name: comicrd-linux-appimage
+            artifact_paths: |
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+
+          - name: windows
+            os: windows-latest
+            rust_targets: x86_64-pc-windows-msvc
             script: tauri:build:windows
-          - os: macos-latest
-            target: universal-apple-darwin
+            artifact_name: comicrd-windows
+            artifact_paths: |
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+              src-tauri/target/x86_64-pc-windows-msvc/release/*.exe
+
+          - name: macos
+            os: macos-latest
+            rust_targets: x86_64-apple-darwin,aarch64-apple-darwin
             script: tauri:build:macos
+            artifact_name: comicrd-macos
+            artifact_paths: |
+              src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
 
     runs-on: ${{ matrix.os }}
 
@@ -28,23 +60,79 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 11
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            libfuse2
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build Desktop Bundle
-        run: pnpm ${{ matrix.script }}
+        run: pnpm run ${{ matrix.script }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_paths }}
+          if-no-files-found: warn
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Show release files
+        run: find release-artifacts -type f -maxdepth 5 -print
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/**/*.deb
+            release-artifacts/**/*.rpm
+            release-artifacts/**/*.AppImage
+            release-artifacts/**/*.msi
+            release-artifacts/**/*.exe
+            release-artifacts/**/*.dmg
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.sig
+          generate_release_notes: true
