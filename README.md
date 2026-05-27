@@ -1,94 +1,123 @@
 # ComicRD
 
-ComicRD adalah aplikasi komik reader desktop berbasis **Tauri 2 + React** untuk membaca komik lokal dari:
+A lightweight, high-performance desktop comic reader built with **Tauri 2 + React**, designed for reading local comics from folders, ZIP, and CBZ archives.
 
-- Folder gambar
-- ZIP
-- CBZ
+The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering pipeline simple and efficient.
 
-Mode baca dikunci ke **Webtoon mode** (vertical scroll) supaya pipeline render tetap sederhana dan ringan.
+## Features
 
-## Fitur Utama
+- **Library Management** — Set a library folder with automatic comic detection (similar to HakuNeko)
+- **Reading Progress** — Continue reading, bookmarks, and read/unread status tracking
+- **Navigation** — Previous/next page and chapter navigation with keyboard arrow support (toggleable)
+- **Reader Controls** — Zoom, page gap/margin, and fullscreen with globally persisted settings
+- **Sorting** — Comics sortable by `name` or `folder_date` (ascending/descending); chapters sortable by name
+- **Chapter Status** — Unread, reading, and read indicators per chapter
+- **Page Indicator** — Segmented bottom progress bar with clickable segments for quick page jumping
+- **Responsive Toolbar** — Top toolbar with close, title, navigation, zoom, gap, fullscreen, and bookmark controls
+- **`Esc` Navigation** — Returns to the chapter page based on `comic_source_path`
 
-- Set folder library + **auto-detect komik otomatis** (gaya Hakuneko)
-- Continue reading, bookmark, read/unread status
-- Prev/next page + prev/next chapter
-- Keyboard navigation (Arrow) dengan toggle
-- `Esc` / close reader kembali ke halaman chapter
-- Zoom dan page margin/gap yang disimpan global
-- Sorting komik: `name`, `folder_date`, asc/desc
-- Sorting chapter: nama asc/desc
-- Status chapter: unread, reading, read
-- Bottom page indicator segmented seperti reader desktop
+## Performance
 
-## Performa
-
-- Scan library bertahap: title dulu, chapter hanya saat title diklik
-- Database write hanya saat chapter dibuka/dibaca
-- History path relatif terhadap library source supaya tetap cocok ketika folder library dipindah
-- Lazy loading image dan virtualized reader
-- Prefetch beberapa page berikutnya
-- Tauri custom protocol (`comicrd://...`) untuk melayani byte gambar langsung ke `<img>` tanpa base64 IPC
+- **Incremental Library Scan** — Titles scanned first; chapters scanned only when a title is opened
+- **Lazy Database Writes** — Comic, chapter, and progress records created only when a chapter is read
+- **Relative History Paths** — Progress keys are relative to the library source, so history survives folder moves
+- **Virtualized Reader** — Lazy image loading with virtualized rendering and prefetching of upcoming pages
+- **Custom Protocol** — `comicrd://` protocol serves image bytes directly to `<img>` tags, bypassing base64 IPC overhead
 
 ## Tech Stack
 
-- Tauri 2
-- Rust + `rusqlite` (SQLite)
-- React 19 + Vite + TypeScript
-- TailwindCSS
-- TanStack Router + TanStack Query
-- Lucide Icons
-- Lint/Format: `oxlint`, `oxfmt`
+| Layer | Technology |
+|---|---|
+| Runtime | [Tauri 2](https://v2.tauri.app/) |
+| Backend | Rust + [`rusqlite`](https://github.com/rusqlite/rusqlite) (SQLite) |
+| Frontend | [React 19](https://react.dev/) + [Vite](https://vite.dev/) + TypeScript |
+| Styling | [TailwindCSS v4](https://tailwindcss.com/) |
+| Routing | [TanStack Router](https://tanstack.com/router) |
+| Data Fetching | [TanStack Query](https://tanstack.com/query) |
+| Virtualization | [TanStack Virtual](https://tanstack.com/virtual) |
+| Icons | [Lucide React](https://lucide.dev/) |
+| Linting | [oxlint](https://oxc-project.github.io/) |
+| Formatting | [oxfmt](https://oxc-project.github.io/) |
+| Testing | [Vitest](https://vitest.dev/) (frontend), `cargo test` (Rust) |
+| Package Manager | [pnpm](https://pnpm.io/) |
 
-## Development
+## Getting Started
+
+### Prerequisites
+
+Ensure you have the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) installed for your platform.
+
+### Installation
 
 ```bash
 pnpm install
+```
+
+### Development
+
+```bash
 pnpm tauri:dev
 ```
 
-Command quality checks:
+### Quality Checks
 
 ```bash
-pnpm format
-pnpm lint
-pnpm typecheck
-pnpm test
+pnpm format        # Format code with oxfmt
+pnpm lint          # Lint with oxlint
+pnpm typecheck     # TypeScript type checking
+pnpm test          # Run Vitest tests
 ```
 
-## Build Desktop
+## Building
 
-Build target per platform:
+Build for a specific platform:
 
 ```bash
-pnpm tauri:build:linux
-pnpm tauri:build:windows
-pnpm tauri:build:macos
+pnpm tauri:build:linux       # Linux (.deb + .rpm)
+pnpm tauri:build:windows     # Windows
+pnpm tauri:build:macos       # macOS (universal)
 ```
 
-Linux default build menghasilkan `.deb` dan `.rpm`. AppImage dipisah karena membutuhkan `linuxdeploy`:
+Linux AppImage requires `linuxdeploy` and is built separately:
 
 ```bash
 pnpm tauri:build:linux:appimage
 ```
 
-Build current machine default target:
+Build for the current machine's default target:
 
 ```bash
 pnpm tauri:build
 ```
 
-CI workflow untuk build Windows/Linux/macOS ada di:
+CI workflows for multi-platform builds are defined in `.github/workflows/desktop-build.yml`.
 
-- `.github/workflows/desktop-build.yml`
+## Project Structure
 
-## Catatan Cross-Platform Build
+```
+comicrd/
+├── .github/workflows/   # CI/CD workflows
+├── public/              # Static assets
+├── src/                 # React frontend (TypeScript)
+├── src-tauri/           # Tauri backend (Rust)
+├── AGENTS.md            # Agent coding guidelines
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+└── README.md
+```
 
-- Build native per OS tetap membutuhkan toolchain/SDK OS target.
-- Untuk build multi-platform otomatis, gunakan CI matrix (sudah disiapkan).
+## Cross-Platform Notes
 
-Referensi resmi:
+- Native builds require the target OS toolchain and SDK.
+- For automated multi-platform builds, use the CI matrix workflow (already configured).
 
-- https://v2.tauri.app/
-- https://v2.tauri.app/distribute/windows-installer/
-- https://v2.tauri.app/start/prerequisites/
+## License
+
+See [LICENSE](./LICENSE) for details.
+
+## Resources
+
+- [Tauri 2 Documentation](https://v2.tauri.app/)
+- [Tauri Windows Installer](https://v2.tauri.app/distribute/windows-installer/)
+- [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/)
