@@ -11,6 +11,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: desktop-build-${{ github.ref }}
   cancel-in-progress: true
@@ -54,8 +57,6 @@ jobs:
             artifact_name: comicrd-macos
             artifact_paths: |
               src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
-              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
 
     runs-on: ${{ matrix.os }}
 
@@ -108,7 +109,7 @@ jobs:
         run: pnpm run ${{ matrix.script }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_paths }}
@@ -128,14 +129,11 @@ jobs:
           pacman -S --noconfirm \
             base-devel \
             git \
-            nodejs \
-            pnpm \
             rust \
             curl \
             wget \
             file \
             openssl \
-            appmenu-gtk-module \
             gtk3 \
             webkit2gtk-4.1 \
             libayatana-appindicator \
@@ -146,6 +144,15 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
 
       - name: Prepare build user
         run: |
@@ -161,13 +168,45 @@ jobs:
           su builder -c "cd '$GITHUB_WORKSPACE' && pnpm build"
           su builder -c "cd '$GITHUB_WORKSPACE/src-tauri' && cargo build --release --target x86_64-unknown-linux-gnu"
 
-      - name: Build pacman package
+      - name: Create Arch source tarball and PKGBUILD
         run: |
+          set -euo pipefail
+
           VERSION="${GITHUB_REF_NAME#v}"
           PKGDIR="$GITHUB_WORKSPACE/pkgbuild"
+          SRCDIR="$PKGDIR/src/comicrd-$VERSION"
 
-          mkdir -p "$PKGDIR"
-          chown -R builder:builder "$PKGDIR"
+          mkdir -p "$SRCDIR"
+
+          install -Dm755 \
+            "$GITHUB_WORKSPACE/src-tauri/target/x86_64-unknown-linux-gnu/release/app" \
+            "$SRCDIR/comicrd"
+
+          cat > "$SRCDIR/comicrd.desktop" <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=ComicRD
+          Comment=ComicRD Desktop App
+          Exec=comicrd
+          Icon=comicrd
+          Terminal=false
+          Categories=Utility;
+          EOF
+
+          if [ -f "$GITHUB_WORKSPACE/src-tauri/icons/128x128.png" ]; then
+            install -Dm644 \
+              "$GITHUB_WORKSPACE/src-tauri/icons/128x128.png" \
+              "$SRCDIR/comicrd.png"
+          fi
+
+          if [ -f "$GITHUB_WORKSPACE/LICENSE" ]; then
+            install -Dm644 "$GITHUB_WORKSPACE/LICENSE" "$SRCDIR/LICENSE"
+          fi
+
+          cd "$PKGDIR/src"
+          tar -czf "$PKGDIR/comicrd-$VERSION-linux-x86_64.tar.gz" "comicrd-$VERSION"
+
+          SHA256="$(sha256sum "$PKGDIR/comicrd-$VERSION-linux-x86_64.tar.gz" | awk '{print $1}')"
 
           cat > "$PKGDIR/PKGBUILD" <<EOF
           pkgname=comicrd-bin
@@ -183,40 +222,43 @@ jobs:
             'libayatana-appindicator'
             'librsvg'
             'openssl'
+            'hicolor-icon-theme'
           )
-          source=()
-          sha256sums=()
+          provides=('comicrd')
+          conflicts=('comicrd')
+          source=("comicrd-\${pkgver}-linux-x86_64.tar.gz::https://github.com/${GITHUB_REPOSITORY}/releases/download/v\${pkgver}/comicrd-\${pkgver}-linux-x86_64.tar.gz")
+          sha256sums=('$SHA256')
 
           package() {
-            install -Dm755 "\$startdir/../src-tauri/target/x86_64-unknown-linux-gnu/release/app" "\$pkgdir/usr/bin/comicrd"
+            install -Dm755 "\${srcdir}/comicrd-\${pkgver}/comicrd" "\${pkgdir}/usr/bin/comicrd"
+            install -Dm644 "\${srcdir}/comicrd-\${pkgver}/comicrd.desktop" "\${pkgdir}/usr/share/applications/comicrd.desktop"
 
-            install -Dm644 /dev/stdin "\$pkgdir/usr/share/applications/comicrd.desktop" <<DESKTOP
-          [Desktop Entry]
-          Type=Application
-          Name=ComicRD
-          Comment=ComicRD Desktop App
-          Exec=comicrd
-          Icon=comicrd
-          Terminal=false
-          Categories=Utility;
-          DESKTOP
+            if [ -f "\${srcdir}/comicrd-\${pkgver}/comicrd.png" ]; then
+              install -Dm644 "\${srcdir}/comicrd-\${pkgver}/comicrd.png" "\${pkgdir}/usr/share/icons/hicolor/128x128/apps/comicrd.png"
+            fi
 
-            if [ -f "\$startdir/../src-tauri/icons/128x128.png" ]; then
-              install -Dm644 "\$startdir/../src-tauri/icons/128x128.png" "\$pkgdir/usr/share/icons/hicolor/128x128/apps/comicrd.png"
+            if [ -f "\${srcdir}/comicrd-\${pkgver}/LICENSE" ]; then
+              install -Dm644 "\${srcdir}/comicrd-\${pkgver}/LICENSE" "\${pkgdir}/usr/share/licenses/comicrd-bin/LICENSE"
             fi
           }
           EOF
 
           chown -R builder:builder "$PKGDIR"
-          su builder -c "cd '$PKGDIR' && makepkg -f --clean"
+
+      - name: Generate .SRCINFO and build pacman package
+        run: |
+          su builder -c "cd '$GITHUB_WORKSPACE/pkgbuild' && makepkg --printsrcinfo > .SRCINFO"
+          su builder -c "cd '$GITHUB_WORKSPACE/pkgbuild' && makepkg -f --clean"
 
       - name: Upload Arch package artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: comicrd-arch-cachyos
           path: |
             pkgbuild/*.pkg.tar.zst
+            pkgbuild/comicrd-*-linux-x86_64.tar.gz
             pkgbuild/PKGBUILD
+            pkgbuild/.SRCINFO
           if-no-files-found: error
 
   release:
@@ -236,23 +278,38 @@ jobs:
         with:
           path: release-artifacts
 
-      - name: Show release files
-        run: find release-artifacts -type f -maxdepth 6 -print
+      - name: Collect release files
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-upload
+
+          find release-artifacts -type f \( \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.AppImage" -o \
+            -name "*.msi" -o \
+            -name "*.exe" -o \
+            -name "*.dmg" -o \
+            -name "*.pkg.tar.zst" -o \
+            -name "*.tar.gz" -o \
+            -name "PKGBUILD" -o \
+            -name ".SRCINFO" \
+          \) -exec cp -v {} release-upload/ \;
+
+          echo "Release files:"
+          find release-upload -type f -maxdepth 1 -print | sort
+
+          FILE_COUNT="$(find release-upload -type f -maxdepth 1 | wc -l)"
+          if [ "$FILE_COUNT" -eq 0 ]; then
+            echo "No release files found."
+            exit 1
+          fi
 
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v3
         with:
           name: ComicRD ${{ github.ref_name }}
-          files: |
-            release-artifacts/**/*.deb
-            release-artifacts/**/*.rpm
-            release-artifacts/**/*.AppImage
-            release-artifacts/**/*.msi
-            release-artifacts/**/*.exe
-            release-artifacts/**/*.dmg
-            release-artifacts/**/*.tar.gz
-            release-artifacts/**/*.sig
-            release-artifacts/**/*.pkg.tar.zst
-            release-artifacts/**/PKGBUILD
+          files: release-upload/*
           fail_on_unmatched_files: true
           generate_release_notes: true
