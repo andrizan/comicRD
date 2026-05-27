@@ -66,6 +66,12 @@ pnpm tauri:build:windows
 pnpm tauri:build:macos
 ```
 
+Linux default build menghasilkan `.deb` dan `.rpm`. AppImage dipisah karena membutuhkan `linuxdeploy`:
+
+```bash
+pnpm tauri:build:linux:appimage
+```
+
 Build current machine default target:
 
 ```bash
