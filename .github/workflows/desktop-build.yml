@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -42,7 +46,6 @@ jobs:
             artifact_paths: |
               src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
               src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-              src-tauri/target/x86_64-pc-windows-msvc/release/*.exe
 
           - name: macos
             os: macos-latest
@@ -58,13 +61,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -90,8 +93,13 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libxdo-dev \
             patchelf \
-            rpm \
-            libfuse2
+            rpm
+
+          if apt-cache show libfuse2t64 >/dev/null 2>&1; then
+            sudo apt-get install -y libfuse2t64
+          else
+            sudo apt-get install -y libfuse2
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -100,30 +108,141 @@ jobs:
         run: pnpm run ${{ matrix.script }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_paths }}
-          if-no-files-found: warn
+          if-no-files-found: error
+
+  arch-package:
+    name: Build Arch/CachyOS Package
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:latest
+
+    steps:
+      - name: Install Arch build dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm \
+            base-devel \
+            git \
+            nodejs \
+            pnpm \
+            rust \
+            curl \
+            wget \
+            file \
+            openssl \
+            appmenu-gtk-module \
+            gtk3 \
+            webkit2gtk-4.1 \
+            libayatana-appindicator \
+            librsvg \
+            xdotool \
+            patchelf \
+            desktop-file-utils
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Prepare build user
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Install dependencies
+        run: |
+          su builder -c "cd '$GITHUB_WORKSPACE' && pnpm install --frozen-lockfile"
+
+      - name: Build frontend and Rust binary
+        run: |
+          su builder -c "cd '$GITHUB_WORKSPACE' && pnpm build"
+          su builder -c "cd '$GITHUB_WORKSPACE/src-tauri' && cargo build --release --target x86_64-unknown-linux-gnu"
+
+      - name: Build pacman package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PKGDIR="$GITHUB_WORKSPACE/pkgbuild"
+
+          mkdir -p "$PKGDIR"
+          chown -R builder:builder "$PKGDIR"
+
+          cat > "$PKGDIR/PKGBUILD" <<EOF
+          pkgname=comicrd-bin
+          pkgver=$VERSION
+          pkgrel=1
+          pkgdesc="ComicRD desktop app"
+          arch=('x86_64')
+          url="https://github.com/${GITHUB_REPOSITORY}"
+          license=('custom')
+          depends=(
+            'webkit2gtk-4.1'
+            'gtk3'
+            'libayatana-appindicator'
+            'librsvg'
+            'openssl'
+          )
+          source=()
+          sha256sums=()
+
+          package() {
+            install -Dm755 "\$startdir/../src-tauri/target/x86_64-unknown-linux-gnu/release/app" "\$pkgdir/usr/bin/comicrd"
+
+            install -Dm644 /dev/stdin "\$pkgdir/usr/share/applications/comicrd.desktop" <<DESKTOP
+          [Desktop Entry]
+          Type=Application
+          Name=ComicRD
+          Comment=ComicRD Desktop App
+          Exec=comicrd
+          Icon=comicrd
+          Terminal=false
+          Categories=Utility;
+          DESKTOP
+
+            if [ -f "\$startdir/../src-tauri/icons/128x128.png" ]; then
+              install -Dm644 "\$startdir/../src-tauri/icons/128x128.png" "\$pkgdir/usr/share/icons/hicolor/128x128/apps/comicrd.png"
+            fi
+          }
+          EOF
+
+          chown -R builder:builder "$PKGDIR"
+          su builder -c "cd '$PKGDIR' && makepkg -f --clean"
+
+      - name: Upload Arch package artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: comicrd-arch-cachyos
+          path: |
+            pkgbuild/*.pkg.tar.zst
+            pkgbuild/PKGBUILD
+          if-no-files-found: error
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs:
+      - build
+      - arch-package
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-artifacts
 
       - name: Show release files
-        run: find release-artifacts -type f -maxdepth 5 -print
+        run: find release-artifacts -type f -maxdepth 6 -print
 
       - name: Create Release and Upload Assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
+          name: ComicRD ${{ github.ref_name }}
           files: |
             release-artifacts/**/*.deb
             release-artifacts/**/*.rpm
@@ -133,4 +252,7 @@ jobs:
             release-artifacts/**/*.dmg
             release-artifacts/**/*.tar.gz
             release-artifacts/**/*.sig
+            release-artifacts/**/*.pkg.tar.zst
+            release-artifacts/**/PKGBUILD
+          fail_on_unmatched_files: true
           generate_release_notes: true
