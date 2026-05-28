@@ -5,6 +5,7 @@ import { AlertTriangle, FolderOpen, X } from "lucide-react";
 import { exportDatabaseBackup, importDatabaseBackup, listSettings, setSetting } from "../api/tauri";
 import { SkeletonList } from "../components/feedback/states";
 import { localeOptions, type LocalePreference, useAppI18n } from "../i18n";
+import { usePreferencesStore } from "../stores/libraryStore";
 
 function parse<T>(value: string | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -46,7 +47,6 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [appTheme, setAppTheme] = useState<"light" | "dark">("light");
   const [localePreference, setLocalePreference] = useState<LocalePreference>("en");
   const [librarySource, setLibrarySource] = useState("");
-  const [savedLibrarySource, setSavedLibrarySource] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
   const [isBackupBusy, setIsBackupBusy] = useState(false);
@@ -59,7 +59,6 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setLocalePreference(parseLocalePreference(map.get("app_locale")));
     const storedLibrarySource = parse<string>(map.get("library_source_input"), "");
     setLibrarySource(storedLibrarySource);
-    setSavedLibrarySource(storedLibrarySource);
   }, [settingsQuery.data]);
 
   useEffect(() => {
@@ -71,18 +70,20 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   async function saveAll() {
     setIsSaving(true);
     try {
+      const trimmedSource = librarySource.trim();
       await setSetting("default_mode", "webtoon");
       await setSetting("arrow_navigation_enabled", false);
       await setSetting("default_zoom", Number(defaultZoom.toFixed(2)));
       await setSetting("page_gap", normalizePageGap(pageGap));
       await setSetting("app_theme", appTheme);
       await setSetting("app_locale", localePreference);
-      if (librarySource.trim() && librarySource.trim() !== savedLibrarySource.trim()) {
-        await setSetting("library_source_input", librarySource.trim());
-        await queryClient.invalidateQueries({ queryKey: ["raw-comics"] });
-        setSavedLibrarySource(librarySource.trim());
+      if (trimmedSource) {
+        await setSetting("library_source_input", trimmedSource);
+        usePreferencesStore.getState().setInputPath(trimmedSource);
       }
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["raw-comics"] });
+      await queryClient.refetchQueries({ queryKey: ["raw-comics"] });
     } finally {
       setIsSaving(false);
     }
