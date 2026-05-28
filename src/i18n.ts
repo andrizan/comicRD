@@ -47,6 +47,13 @@ const enMessages = {
   "library.modified": "Modified: {value}",
   "library.groupCount": "Comics: {count}",
   "library.noComicsInFolder": "No comics in this folder.",
+  "library.bookmarks": "Bookmarks",
+  "library.bookmarked": "Bookmarked: {value}",
+  "library.addBookmark": "Add bookmark",
+  "library.removeBookmark": "Remove bookmark",
+  "library.bookmarksEmpty.title": "No bookmarked comics",
+  "library.bookmarksEmpty.description": "Bookmark comics to quickly find them later.",
+  "library.bookmarkDate": "Bookmark Date",
 
   "comic.refreshChapters": "Refresh chapters",
   "comic.chapters": "{count} chapters",
@@ -145,6 +152,13 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "library.modified": "Modified: {value}",
   "library.groupCount": "Comics: {count}",
   "library.noComicsInFolder": "Tidak ada komik di folder ini.",
+  "library.bookmarks": "Bookmark",
+  "library.bookmarked": "Dibookmark: {value}",
+  "library.addBookmark": "Tambah bookmark",
+  "library.removeBookmark": "Hapus bookmark",
+  "library.bookmarksEmpty.title": "Belum ada komik di bookmark",
+  "library.bookmarksEmpty.description": "Bookmark komik untuk menemukannya dengan cepat nanti.",
+  "library.bookmarkDate": "Tanggal Bookmark",
 
   "comic.refreshChapters": "Refresh chapter",
   "comic.chapters": "{count} chapters",
@@ -158,10 +172,10 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "comic.empty.description": "Folder/arsip komik ini tidak punya chapter yang valid.",
   "comic.emptyFilter.title": "Tidak ada chapter sesuai filter",
   "comic.emptyFilter.description": "Ubah filter atau kata kunci pencarian.",
-  "comic.pages": "Pages: {count}",
-  "comic.pagesEmpty": "Pages: -",
+  "comic.pages": "Halaman: {count}",
+  "comic.pagesEmpty": "Halaman: -",
   "comic.status.read": "Read",
-  "comic.status.reading": "Reading p.{page}/{total}",
+  "comic.status.reading": "Reading h.{page}/{total}",
   "comic.status.unread": "Unread",
 
   "settings.librarySource.title": "Library Source",
@@ -181,7 +195,7 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "settings.language": "Language",
   "settings.language.english": "English",
   "settings.language.indonesian": "Indonesia",
-  "settings.saveAppearance": "Save Appearance",
+  "settings.saveAppearance": "Simpan Tampilan",
   "settings.backup.title": "Backup Database",
   "settings.backup.description": "Export/import seluruh history baca, bookmark, dan settings.",
   "settings.exportBackup": "Export Backup",
@@ -195,7 +209,7 @@ const idMessages: Record<keyof typeof enMessages, string> = {
 
   "reader.loadError.title": "Gagal memuat reader",
   "reader.loadError.description":
-    "Terjadi error saat mengambil data chapter/page. Coba reload chapter ini.",
+    "Terjadi error saat mengambil data chapter/halaman. Coba reload chapter ini.",
   "reader.empty.title": "Chapter kosong",
   "reader.empty.description": "Tidak ada halaman gambar untuk chapter ini.",
   "reader.comicFallback": "Comic",
@@ -205,7 +219,7 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "reader.increaseGap": "Tambah gap",
   "reader.resetZoom": "Reset zoom",
   "reader.fullscreen": "Fullscreen",
-  "reader.pageTitle": "Page {page}",
+  "reader.pageTitle": "Halaman {page}",
 };
 
 const catalogs = {

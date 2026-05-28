@@ -4,6 +4,7 @@ import type {
   Chapter,
   ChapterContext,
   Comic,
+  ComicBookmark,
   RawChapter,
   RawComic,
   LibraryScanStatus,
@@ -122,4 +123,20 @@ export async function exportDatabaseBackup(outputPath: string) {
 
 export async function importDatabaseBackup(inputPath: string) {
   return invoke("import_database_backup", { inputPath });
+}
+
+export async function listAllBookmarks() {
+  return invoke<ComicBookmark[]>("list_all_bookmarks");
+}
+
+export async function addComicBookmark(comicSourcePath: string) {
+  return invoke<number>("add_comic_bookmark", { comicSourcePath });
+}
+
+export async function removeComicBookmark(comicSourcePath: string) {
+  return invoke("remove_comic_bookmark", { comicSourcePath });
+}
+
+export async function isComicBookmarked(comicSourcePath: string) {
+  return invoke<boolean>("is_comic_bookmarked", { comicSourcePath });
 }

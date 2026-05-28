@@ -72,6 +72,13 @@ export type Bookmark = {
   note: string;
 };
 
+export type ComicBookmark = {
+  id: number;
+  comic_source_path: string;
+  comic_title: string;
+  created_at: number;
+};
+
 export type ReadingProgress = {
   chapter_id: number;
   last_page: number;

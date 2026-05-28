@@ -41,7 +41,10 @@ export function SettingsPage() {
   const [defaultZoom, setDefaultZoom] = useState(1);
   const [pageGap, setPageGap] = useState(10);
   const [appTheme, setAppTheme] = useState<"light" | "dark">("light");
+  const [savedAppTheme, setSavedAppTheme] = useState<"light" | "dark">("light");
   const [localePreference, setLocalePreference] = useState<LocalePreference>("en");
+  const [savedLocalePreference, setSavedLocalePreference] = useState<LocalePreference>("en");
+  const [isAppearanceSaving, setIsAppearanceSaving] = useState(false);
   const [librarySource, setLibrarySource] = useState("");
   const [savedLibrarySource, setSavedLibrarySource] = useState("");
   const [isLibrarySourceSaving, setIsLibrarySourceSaving] = useState(false);
@@ -52,8 +55,12 @@ export function SettingsPage() {
     const map = new Map((settingsQuery.data ?? []).map((x) => [x.key, x.value_json]));
     setDefaultZoom(parse<number>(map.get("default_zoom"), 1));
     setPageGap(normalizePageGap(parse<number>(map.get("page_gap"), 10)));
-    setAppTheme(parseTheme(map.get("app_theme")));
-    setLocalePreference(parseLocalePreference(map.get("app_locale")));
+    const theme = parseTheme(map.get("app_theme"));
+    setAppTheme(theme);
+    setSavedAppTheme(theme);
+    const locale = parseLocalePreference(map.get("app_locale"));
+    setLocalePreference(locale);
+    setSavedLocalePreference(locale);
     const storedLibrarySource = parse<string>(map.get("library_source_input"), "");
     setLibrarySource(storedLibrarySource);
     setSavedLibrarySource(storedLibrarySource);
@@ -67,6 +74,20 @@ export function SettingsPage() {
     await setSetting("app_theme", appTheme);
     await setSetting("app_locale", localePreference);
     await queryClient.invalidateQueries({ queryKey: ["settings"] });
+  }
+
+  async function saveAppearance() {
+    if (isAppearanceDisabled) return;
+    setIsAppearanceSaving(true);
+    try {
+      await setSetting("app_theme", appTheme);
+      await setSetting("app_locale", localePreference);
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      setSavedAppTheme(appTheme);
+      setSavedLocalePreference(localePreference);
+    } finally {
+      setIsAppearanceSaving(false);
+    }
   }
 
   async function onPickLibrarySource() {
@@ -168,6 +189,9 @@ export function SettingsPage() {
     isLibrarySourceSaving,
   );
 
+  const isAppearanceDisabled =
+    isAppearanceSaving || (appTheme === savedAppTheme && localePreference === savedLocalePreference);
+
   return (
     <section className="space-y-4">
       <Card className="space-y-4">
@@ -262,7 +286,9 @@ export function SettingsPage() {
             ))}
           </select>
         </label>
-        <Button onClick={saveAll}>{t("settings.saveAppearance")}</Button>
+        <Button onClick={() => void saveAppearance()} disabled={isAppearanceDisabled}>
+          {t("settings.saveAppearance")}
+        </Button>
       </Card>
 
       <Card className="space-y-3">

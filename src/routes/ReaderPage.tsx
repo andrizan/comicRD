@@ -2,7 +2,6 @@ import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState }
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
-  BookmarkPlus,
   ChevronLeft,
   ChevronRight,
   Fullscreen,
@@ -14,7 +13,6 @@ import {
   ZoomOut,
 } from "lucide-react";
 import {
-  addBookmark,
   getChapterContext,
   getChapterPages,
   getProgress,
@@ -139,10 +137,6 @@ export function ReaderPage() {
         updated_at: Math.floor(Date.now() / 1000),
       });
     },
-  });
-
-  const bookmarkMutation = useMutation({
-    mutationFn: addBookmark,
   });
 
   const clampPage = (value: number) => {
@@ -551,15 +545,6 @@ export function ReaderPage() {
               }}
             >
               <Fullscreen size={14} className={isFullscreen ? "text-[#ff6a3d]" : ""} />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              onClick={() =>
-                bookmarkMutation.mutate({ chapter_id: chapterIdNum, page: currentPage })
-              }
-            >
-              <BookmarkPlus size={14} />
             </Button>
             <span className="w-10 text-center text-xs font-semibold text-white/80">
               {pageGap}px

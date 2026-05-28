@@ -117,6 +117,14 @@ struct Bookmark {
 }
 
 #[derive(Debug, Serialize)]
+struct ComicBookmark {
+    id: i64,
+    comic_source_path: String,
+    comic_title: String,
+    created_at: i64,
+}
+
+#[derive(Debug, Serialize)]
 struct SettingEntry {
     key: String,
     value_json: String,
@@ -285,6 +293,12 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         key TEXT PRIMARY KEY,
         value_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS comic_bookmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        comic_source_path TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL
       );
 
       DROP TABLE IF EXISTS settings;
@@ -1646,6 +1660,69 @@ fn list_bookmarks(app: AppHandle, chapter_id: i64) -> Result<Vec<Bookmark>, Stri
 }
 
 #[tauri::command]
+fn list_all_bookmarks(app: AppHandle) -> Result<Vec<ComicBookmark>, String> {
+    let conn = open_conn(&app)?;
+    let mut stmt = conn
+    .prepare(
+      r#"
+      SELECT cb.id, cb.comic_source_path, COALESCE(c.title, ''), cb.created_at
+      FROM comic_bookmarks cb
+      LEFT JOIN comics c ON c.source_path = cb.comic_source_path
+      ORDER BY cb.created_at DESC
+      "#,
+    )
+    .map_err(|e| format!("failed preparing comic bookmarks query: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ComicBookmark {
+                id: row.get(0)?,
+                comic_source_path: row.get(1)?,
+                comic_title: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })
+        .map_err(|e| format!("failed querying comic bookmarks: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting comic bookmarks: {e}"))
+}
+
+#[tauri::command]
+fn add_comic_bookmark(app: AppHandle, comic_source_path: String) -> Result<i64, String> {
+    let conn = open_conn(&app)?;
+    let ts = now_ts();
+    conn.execute(
+        "INSERT OR IGNORE INTO comic_bookmarks (comic_source_path, created_at) VALUES (?1, ?2)",
+        params![comic_source_path, ts],
+    )
+    .map_err(|e| format!("failed adding comic bookmark: {e}"))?;
+    Ok(conn.last_insert_rowid())
+}
+
+#[tauri::command]
+fn remove_comic_bookmark(app: AppHandle, comic_source_path: String) -> Result<(), String> {
+    let conn = open_conn(&app)?;
+    conn.execute(
+        "DELETE FROM comic_bookmarks WHERE comic_source_path = ?1",
+        params![comic_source_path],
+    )
+    .map_err(|e| format!("failed removing comic bookmark: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn is_comic_bookmarked(app: AppHandle, comic_source_path: String) -> Result<bool, String> {
+    let conn = open_conn(&app)?;
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM comic_bookmarks WHERE comic_source_path = ?1",
+            params![comic_source_path],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("failed checking comic bookmark: {e}"))?;
+    Ok(count > 0)
+}
+
+#[tauri::command]
 fn set_setting(app: AppHandle, key: String, value_json: String) -> Result<(), String> {
     let conn = open_conn(&app)?;
     conn.execute(
@@ -1801,6 +1878,10 @@ pub fn run() {
             add_bookmark,
             remove_bookmark,
             list_bookmarks,
+            list_all_bookmarks,
+            add_comic_bookmark,
+            remove_comic_bookmark,
+            is_comic_bookmarked,
             set_setting,
             get_setting,
             list_settings,

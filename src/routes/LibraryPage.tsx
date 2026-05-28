@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { RefreshCw, Search } from "lucide-react";
-import { getSetting, initDb, listLibraryComicsRaw, setSetting } from "../api/tauri";
+import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
+import {
+  addComicBookmark,
+  getSetting,
+  initDb,
+  listAllBookmarks,
+  listLibraryComicsRaw,
+  removeComicBookmark,
+  setSetting,
+} from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { useAppI18n } from "../i18n";
 import { unixToLocale } from "../lib/utils";
-import type { RawComic, SortBy, SortDir } from "../types";
+import type { ComicBookmark, RawComic, SortBy, SortDir } from "../types";
 
 function parseStoredString(value: string | null): string {
   if (!value) return "";
@@ -19,16 +27,17 @@ function parseStoredString(value: string | null): string {
   }
 }
 
-function isViewMode(value: string): value is "all" | "by_folder" {
-  return value === "all" || value === "by_folder";
+function isViewMode(value: string): value is "all" | "by_folder" | "bookmarks" {
+  return value === "all" || value === "by_folder" || value === "bookmarks";
 }
 
 export function LibraryPage() {
   const { t } = useAppI18n();
+  const queryClient = useQueryClient();
   const [inputPath, setInputPath] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [viewMode, setViewMode] = useState<"all" | "by_folder">("all");
+  const [viewMode, setViewMode] = useState<"all" | "by_folder" | "bookmarks">("all");
   const [searchText, setSearchText] = useState("");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const activeLibraryPath = inputPath.trim();
@@ -83,6 +92,37 @@ export function LibraryPage() {
     queryFn: () => listLibraryComicsRaw(sortBy, sortDir),
   });
 
+  const bookmarksQuery = useQuery({
+    queryKey: ["comic-bookmarks"],
+    queryFn: listAllBookmarks,
+  });
+
+  const bookmarkSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of bookmarksQuery.data ?? []) {
+      set.add(b.comic_source_path);
+    }
+    return set;
+  }, [bookmarksQuery.data]);
+
+  const addBookmarkMutation = useMutation({
+    mutationFn: (comicSourcePath: string) => addComicBookmark(comicSourcePath),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["comic-bookmarks"] }),
+  });
+
+  const removeBookmarkMutation = useMutation({
+    mutationFn: (comicSourcePath: string) => removeComicBookmark(comicSourcePath),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["comic-bookmarks"] }),
+  });
+
+  function toggleBookmark(comicSourcePath: string) {
+    if (bookmarkSet.has(comicSourcePath)) {
+      removeBookmarkMutation.mutate(comicSourcePath);
+    } else {
+      addBookmarkMutation.mutate(comicSourcePath);
+    }
+  }
+
   const filteredComics = useMemo(
     () =>
       (comicsQuery.data ?? []).filter((comic) => {
@@ -103,13 +143,35 @@ export function LibraryPage() {
     return groups;
   }, [filteredComics]);
 
+  const bookmarkedComics = useMemo(() => {
+    const bookmarks = bookmarksQuery.data ?? [];
+    const q = searchText.trim().toLowerCase();
+    const filtered = bookmarks.filter((b) => {
+      if (!q) return true;
+      return b.comic_title.toLowerCase().includes(q) || b.comic_source_path.toLowerCase().includes(q);
+    });
+    filtered.sort((a, b) => {
+      let cmp: number;
+      if (sortBy === "folder_date") {
+        cmp = a.created_at - b.created_at;
+      } else {
+        cmp = a.comic_title.localeCompare(b.comic_title, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      }
+      return sortDir === "desc" ? -cmp : cmp;
+    });
+    return filtered;
+  }, [bookmarksQuery.data, searchText, sortBy, sortDir]);
+
   const libraryStats = useMemo(() => {
     const allComics = comicsQuery.data ?? [];
     return {
       totalComics: allComics.length,
-      visibleComics: filteredComics.length,
+      visibleComics: viewMode === "bookmarks" ? bookmarkedComics.length : filteredComics.length,
     };
-  }, [comicsQuery.data, filteredComics]);
+  }, [comicsQuery.data, filteredComics, bookmarkedComics, viewMode]);
 
   return (
     <section className="space-y-3">
@@ -157,6 +219,16 @@ export function LibraryPage() {
               >
                 {t("library.folder")}
               </button>
+              <button
+                onClick={() => setViewMode("bookmarks")}
+                className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
+                  viewMode === "bookmarks"
+                    ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                {t("library.bookmarks")}
+              </button>
             </div>
             <Button
               onClick={() => void comicsQuery.refetch()}
@@ -190,7 +262,9 @@ export function LibraryPage() {
             className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
           >
             <option value="name">{t("common.name")}</option>
-            <option value="folder_date">{t("library.folderDate")}</option>
+            <option value="folder_date">
+              {viewMode === "bookmarks" ? t("library.bookmarkDate") : t("library.folderDate")}
+            </option>
           </select>
           <select
             value={sortDir}
@@ -210,6 +284,43 @@ export function LibraryPage() {
             description={t("library.readError.description")}
             onRetry={() => void comicsQuery.refetch()}
           />
+        ) : viewMode === "bookmarks" ? (
+          bookmarkedComics.length === 0 ? (
+            <EmptyState
+              title={t("library.bookmarksEmpty.title")}
+              description={t("library.bookmarksEmpty.description")}
+            />
+          ) : (
+            <div className="rounded-md border border-[var(--border)] bg-[var(--card)]">
+              {bookmarkedComics.map((bm) => (
+                <div
+                  key={bm.id}
+                  className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3 last:border-b-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to="/comic/$comicId"
+                      params={{ comicId: encodeURIComponent(bm.comic_source_path) }}
+                      className="text-base font-semibold text-[var(--accent)] hover:underline"
+                    >
+                      {bm.comic_title || bm.comic_source_path}
+                    </Link>
+                    <p className="text-xs text-[var(--muted-foreground)]">{bm.comic_source_path}</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {t("library.bookmarked", { value: unixToLocale(bm.created_at) })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleBookmark(bm.comic_source_path)}
+                    className="text-[var(--accent)] hover:opacity-70"
+                    title={t("library.removeBookmark")}
+                  >
+                    <BookmarkCheck size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
         ) : viewMode === "all" ? (
           filteredComics.length === 0 ? (
             <EmptyState
@@ -221,19 +332,40 @@ export function LibraryPage() {
               {filteredComics.map((item) => (
                 <div
                   key={item.key}
-                  className="library-row border-b border-[var(--border)] p-3 last:border-b-0"
+                  className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3 last:border-b-0"
                 >
-                  <Link
-                    to="/comic/$comicId"
-                    params={{ comicId: encodeURIComponent(item.source_path) }}
-                    className="text-base font-semibold text-[var(--accent)] hover:underline"
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to="/comic/$comicId"
+                      params={{ comicId: encodeURIComponent(item.source_path) }}
+                      className="text-base font-semibold text-[var(--accent)] hover:underline"
+                    >
+                      {item.title}
+                    </Link>
+                    <p className="text-xs text-[var(--muted-foreground)]">{item.source_path}</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {t("library.modified", { value: unixToLocale(item.date_modified) })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleBookmark(item.source_path)}
+                    className={
+                      bookmarkSet.has(item.source_path)
+                        ? "text-[var(--accent)] hover:opacity-70"
+                        : "text-[var(--muted-foreground)] hover:text-[var(--accent)]"
+                    }
+                    title={
+                      bookmarkSet.has(item.source_path)
+                        ? t("library.removeBookmark")
+                        : t("library.addBookmark")
+                    }
                   >
-                    {item.title}
-                  </Link>
-                  <p className="text-xs text-[var(--muted-foreground)]">{item.source_path}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    {t("library.modified", { value: unixToLocale(item.date_modified) })}
-                  </p>
+                    {bookmarkSet.has(item.source_path) ? (
+                      <BookmarkCheck size={18} />
+                    ) : (
+                      <Bookmark size={18} />
+                    )}
+                  </button>
                 </div>
               ))}
             </div>
@@ -250,18 +382,39 @@ export function LibraryPage() {
                   {items.map((item) => (
                     <div
                       key={item.key}
-                      className="library-row rounded-md bg-[var(--background)] px-2 py-2"
+                      className="library-row flex items-center gap-2 rounded-md bg-[var(--background)] px-2 py-2"
                     >
-                      <Link
-                        to="/comic/$comicId"
-                        params={{ comicId: encodeURIComponent(item.source_path) }}
-                        className="text-sm font-semibold text-[var(--accent)] hover:underline"
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          to="/comic/$comicId"
+                          params={{ comicId: encodeURIComponent(item.source_path) }}
+                          className="text-sm font-semibold text-[var(--accent)] hover:underline"
+                        >
+                          {item.title}
+                        </Link>
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          {item.source_type} · {unixToLocale(item.date_modified)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => toggleBookmark(item.source_path)}
+                        className={
+                          bookmarkSet.has(item.source_path)
+                            ? "text-[var(--accent)] hover:opacity-70"
+                            : "text-[var(--muted-foreground)] hover:text-[var(--accent)]"
+                        }
+                        title={
+                          bookmarkSet.has(item.source_path)
+                            ? t("library.removeBookmark")
+                            : t("library.addBookmark")
+                        }
                       >
-                        {item.title}
-                      </Link>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {item.source_type} · {unixToLocale(item.date_modified)}
-                      </p>
+                        {bookmarkSet.has(item.source_path) ? (
+                          <BookmarkCheck size={16} />
+                        ) : (
+                          <Bookmark size={16} />
+                        )}
+                      </button>
                     </div>
                   ))}
                   {items.length === 0 ? (
