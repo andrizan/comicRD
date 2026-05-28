@@ -142,6 +142,18 @@ export async function isComicBookmarked(comicSourcePath: string) {
   return invoke<boolean>("is_comic_bookmarked", { comicSourcePath });
 }
 
+export async function addChapterFavorite(chapterSourcePath: string, comicSourcePath: string) {
+  return invoke<number>("add_chapter_favorite", { chapterSourcePath, comicSourcePath });
+}
+
+export async function removeChapterFavorite(chapterSourcePath: string) {
+  return invoke("remove_chapter_favorite", { chapterSourcePath });
+}
+
+export async function listChapterFavorites(comicSourcePath: string) {
+  return invoke<string[]>("list_chapter_favorites", { comicSourcePath });
+}
+
 export async function listReadingHistory() {
   return invoke<ReadingHistoryEntry[]>("list_reading_history");
 }

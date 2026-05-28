@@ -89,8 +89,6 @@ textarea::placeholder {
 }
 
 .library-row {
-  content-visibility: auto;
-  contain-intrinsic-size: 88px;
 }
 
 .app-shell {

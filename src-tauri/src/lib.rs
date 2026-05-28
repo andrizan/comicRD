@@ -314,6 +314,13 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         created_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS chapter_favorites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chapter_source_path TEXT NOT NULL UNIQUE,
+        comic_source_path TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
       DROP TABLE IF EXISTS settings;
       "#,
     )
@@ -1736,6 +1743,54 @@ fn is_comic_bookmarked(app: AppHandle, comic_source_path: String) -> Result<bool
 }
 
 #[tauri::command]
+fn add_chapter_favorite(
+    app: AppHandle,
+    chapter_source_path: String,
+    comic_source_path: String,
+) -> Result<i64, String> {
+    let conn = open_conn(&app)?;
+    let ts = now_ts();
+    conn.execute(
+        "INSERT OR IGNORE INTO chapter_favorites (chapter_source_path, comic_source_path, created_at) VALUES (?1, ?2, ?3)",
+        params![chapter_source_path, comic_source_path, ts],
+    )
+    .map_err(|e| format!("failed adding chapter favorite: {e}"))?;
+    Ok(conn.last_insert_rowid())
+}
+
+#[tauri::command]
+fn remove_chapter_favorite(app: AppHandle, chapter_source_path: String) -> Result<(), String> {
+    let conn = open_conn(&app)?;
+    conn.execute(
+        "DELETE FROM chapter_favorites WHERE chapter_source_path = ?1",
+        params![chapter_source_path],
+    )
+    .map_err(|e| format!("failed removing chapter favorite: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn list_chapter_favorites(
+    app: AppHandle,
+    comic_source_path: String,
+) -> Result<Vec<String>, String> {
+    let conn = open_conn(&app)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT chapter_source_path FROM chapter_favorites WHERE comic_source_path = ?1 ORDER BY created_at DESC",
+        )
+        .map_err(|e| format!("failed preparing list chapter favorites: {e}"))?;
+    let rows = stmt
+        .query_map(params![comic_source_path], |row| row.get(0))
+        .map_err(|e| format!("failed listing chapter favorites: {e}"))?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| format!("failed reading chapter favorite row: {e}"))?);
+    }
+    Ok(result)
+}
+
+#[tauri::command]
 fn list_reading_history(app: AppHandle) -> Result<Vec<ReadingHistoryEntry>, String> {
     let conn = open_conn(&app)?;
     let mut stmt = conn
@@ -1971,6 +2026,9 @@ pub fn run() {
             add_comic_bookmark,
             remove_comic_bookmark,
             is_comic_bookmarked,
+            add_chapter_favorite,
+            remove_chapter_favorite,
+            list_chapter_favorites,
             list_reading_history,
             set_setting,
             get_setting,

@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Copy, FolderOpen, RefreshCw, Search, Type } from "lucide-react";
-import { listComicChaptersRaw, openChapterForReading, openContainingFolder } from "../api/tauri";
+import { ArrowLeft, Copy, FolderOpen, Heart, RefreshCw, Search, Type } from "lucide-react";
+import {
+  addChapterFavorite,
+  listChapterFavorites,
+  listComicChaptersRaw,
+  openChapterForReading,
+  openContainingFolder,
+  removeChapterFavorite,
+} from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -86,6 +93,40 @@ export function ComicPage() {
     queryFn: () => listComicChaptersRaw(comicSourcePath),
   });
 
+  const favoritesQuery = useQuery({
+    queryKey: ["chapter-favorites", comicSourcePath],
+    queryFn: () => listChapterFavorites(comicSourcePath),
+  });
+
+  const favoriteSet = useMemo(() => new Set(favoritesQuery.data ?? []), [favoritesQuery.data]);
+
+  const queryClient = useQueryClient();
+
+  const addFavoriteMutation = useMutation({
+    mutationFn: (chapterSourcePath: string) =>
+      addChapterFavorite(chapterSourcePath, comicSourcePath),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chapter-favorites", comicSourcePath] });
+    },
+  });
+
+  const removeFavoriteMutation = useMutation({
+    mutationFn: (chapterSourcePath: string) => removeChapterFavorite(chapterSourcePath),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["chapter-favorites", comicSourcePath] });
+    },
+  });
+
+  function toggleFavorite(chapterSourcePath: string) {
+    if (favoriteSet.has(chapterSourcePath)) {
+      removeFavoriteMutation.mutate(chapterSourcePath);
+    } else {
+      addFavoriteMutation.mutate(chapterSourcePath);
+    }
+  }
+
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
   const openChapterMutation = useMutation({
     mutationFn: openChapterForReading,
   });
@@ -93,10 +134,13 @@ export function ComicPage() {
   const filteredChapters = useMemo(() => {
     const filtered = (chaptersQuery.data ?? []).filter((chapter) => {
       const q = searchText.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        chapter.title.toLowerCase().includes(q) || chapter.source_path.toLowerCase().includes(q)
-      );
+      if (q && !chapter.title.toLowerCase().includes(q) && !chapter.source_path.toLowerCase().includes(q)) {
+        return false;
+      }
+      if (showFavoritesOnly && !favoriteSet.has(chapter.source_path)) {
+        return false;
+      }
+      return true;
     });
     filtered.sort((a, b) => {
       const order = a.title.localeCompare(b.title, undefined, {
@@ -124,11 +168,17 @@ export function ComicPage() {
   const ctxMenu = useContextMenu();
 
   function chapterContextItems(chapter: RawChapter): ContextMenuItem[] {
+    const isFav = favoriteSet.has(chapter.source_path);
     return [
       {
         label: t("comic.openChapter"),
         icon: <FolderOpen size={14} />,
         onClick: () => void onOpenChapter(chapter.source_path),
+      },
+      {
+        label: isFav ? t("comic.removeFavorite") : t("comic.addFavorite"),
+        icon: <Heart size={14} fill={isFav ? "currentColor" : "none"} />,
+        onClick: () => toggleFavorite(chapter.source_path),
       },
       {
         label: t("library.openFolder"),
@@ -198,6 +248,23 @@ export function ComicPage() {
             : t("comic.pagesEmpty")}
         </p>
       </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFavorite(chapter.source_path);
+        }}
+        className={`shrink-0 transition ${
+          favoriteSet.has(chapter.source_path)
+            ? "text-red-500 hover:text-red-400"
+            : "text-[var(--muted-foreground)] hover:text-red-400"
+        }`}
+        title={
+          favoriteSet.has(chapter.source_path) ? t("comic.removeFavorite") : t("comic.addFavorite")
+        }
+      >
+        <Heart size={16} fill={favoriteSet.has(chapter.source_path) ? "currentColor" : "none"} />
+      </button>
       <span
         className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${chapterStatusClass(chapter)}`}
       >
@@ -264,6 +331,19 @@ export function ComicPage() {
             <option value="asc">{t("comic.nameAsc")}</option>
             <option value="desc">{t("comic.nameDesc")}</option>
           </select>
+          <button
+            type="button"
+            onClick={() => setShowFavoritesOnly((v) => !v)}
+            className={`flex items-center gap-1 rounded-md border px-2.5 py-2 text-sm transition ${
+              showFavoritesOnly
+                ? "border-red-400 bg-red-500/10 text-red-500"
+                : "border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-red-400"
+            }`}
+            title={t("comic.showFavorites")}
+          >
+            <Heart size={14} fill={showFavoritesOnly ? "currentColor" : "none"} />
+            {showFavoritesOnly ? String(favoriteSet.size) : ""}
+          </button>
         </div>
       </Card>
       <Card className="space-y-2">
