@@ -12,6 +12,7 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 - **Reader Controls** — Zoom, page gap/margin, and fullscreen with globally persisted settings
 - **Sorting** — Comics sortable by `name` or `folder_date` (ascending/descending); chapters sortable by name
 - **Chapter Status** — Unread, reading, and read indicators per chapter
+- **Internationalization** — English and Indonesian UI via Lingui, with English as the default locale
 - **Page Indicator** — Segmented bottom progress bar with clickable segments for quick page jumping
 - **Responsive Toolbar** — Top toolbar with close, title, navigation, zoom, gap, fullscreen, and bookmark controls
 - **`Esc` Navigation** — Returns to the chapter page based on `comic_source_path`
@@ -22,7 +23,8 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 - **Lazy Database Writes** — Comic, chapter, and progress records created only when a chapter is read
 - **Relative History Paths** — Progress keys are relative to the library source, so history survives folder moves
 - **Virtualized Reader** — Lazy image loading with virtualized rendering and prefetching of upcoming pages
-- **Custom Protocol** — `comicrd://` protocol serves image bytes directly to `<img>` tags, bypassing base64 IPC overhead
+- **Custom Protocol** — Page bytes are served directly to `<img>` tags, using `comicrd://` where supported and an HTTP protocol fallback on Windows/Android
+- **Persistent Settings** — Reader, library, theme, and locale preferences are stored in SQLite `app_settings`
 
 ## Tech Stack
 
@@ -34,6 +36,7 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 | Styling | [TailwindCSS v4](https://tailwindcss.com/) |
 | Routing | [TanStack Router](https://tanstack.com/router) |
 | Data Fetching | [TanStack Query](https://tanstack.com/query) |
+| i18n | [Lingui](https://lingui.dev/) |
 | Virtualization | [TanStack Virtual](https://tanstack.com/virtual) |
 | Icons | [Lucide React](https://lucide.dev/) |
 | Linting | [oxlint](https://oxc-project.github.io/) |
