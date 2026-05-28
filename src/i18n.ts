@@ -65,7 +65,6 @@ const enMessages = {
   "comic.status.read": "Read",
   "comic.status.reading": "Reading p.{page}/{total}",
   "comic.status.unread": "Unread",
-  "comic.read": "Read",
 
   "settings.librarySource.title": "Library Source",
   "settings.librarySource.description":
@@ -164,7 +163,6 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "comic.status.read": "Read",
   "comic.status.reading": "Reading p.{page}/{total}",
   "comic.status.unread": "Unread",
-  "comic.read": "Baca",
 
   "settings.librarySource.title": "Library Source",
   "settings.librarySource.description":

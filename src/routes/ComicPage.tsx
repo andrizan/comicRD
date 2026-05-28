@@ -209,10 +209,23 @@ export function ComicPage() {
                 }
                 chapterRefs.current.delete(chapter.source_path);
               }}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--card)] p-3"
+              role="button"
+              tabIndex={0}
+              onClick={() => void onOpenChapter(chapter.source_path)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  void onOpenChapter(chapter.source_path);
+                }
+              }}
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--card)] p-3 ${
+                openChapterMutation.isPending
+                  ? "pointer-events-none opacity-60"
+                  : "cursor-pointer hover:bg-[var(--accent)]/5"
+              }`}
             >
               <div className="min-w-[220px] flex-1">
-                <p className="font-semibold text-[var(--accent)]">{chapter.title}</p>
+                <p className="font-semibold text-[var(--accent)] hover:underline">{chapter.title}</p>
                 <p className="text-xs text-[var(--muted-foreground)]">
                   {chapter.page_count
                     ? t("comic.pages", { count: chapter.page_count })
@@ -224,12 +237,6 @@ export function ComicPage() {
               >
                 {chapterStatusLabel(chapter)}
               </span>
-              <Button
-                onClick={() => void onOpenChapter(chapter.source_path)}
-                disabled={openChapterMutation.isPending}
-              >
-                {t("comic.read")}
-              </Button>
             </div>
           ))
         )}
