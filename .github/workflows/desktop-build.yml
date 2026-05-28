@@ -178,7 +178,7 @@ jobs:
           mkdir -p "$SRCDIR"
 
           install -Dm755 \
-            "$GITHUB_WORKSPACE/src-tauri/target/x86_64-unknown-linux-gnu/release/app" \
+            "$GITHUB_WORKSPACE/src-tauri/target/x86_64-unknown-linux-gnu/release/comicrd" \
             "$SRCDIR/comicrd"
 
           cat > "$SRCDIR/comicrd.desktop" <<'EOF'
