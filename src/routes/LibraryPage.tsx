@@ -509,6 +509,7 @@ export function LibraryPage() {
                   `${historyEntries[i].comic_source_path}-${historyEntries[i].chapter_id}`
                 }
                 renderItem={renderHistoryItem}
+                measureElement
               />
             </div>
           )
