@@ -26,7 +26,7 @@ function parseSettingString(value: string | undefined, fallback: string): string
   }
 }
 
-const scrollPositions = new Map<string, number>();
+export const scrollPositions = new Map<string, number>();
 let activeScrollKey = "";
 let isRestoring = false;
 
@@ -105,11 +105,12 @@ export function Layout() {
   useLayoutEffect(() => {
     if (isReaderRoute) return;
     if (prevPath.current === pathname) return;
-    const oldKey = activeScrollKey;
-    if (oldKey) saveScroll(oldKey);
+    const container = document.querySelector<HTMLElement>(".content-scroll");
+    if (container) {
+      if (prevPath.current) scrollPositions.set(prevPath.current, container.scrollTop);
+      container.scrollTop = 0;
+    }
     prevPath.current = pathname;
-    const newKey = activeScrollKey;
-    if (newKey) restoreScroll(newKey);
   }, [pathname, isReaderRoute]);
 
   async function toggleTheme() {

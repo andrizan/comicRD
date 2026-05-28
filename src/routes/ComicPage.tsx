@@ -11,7 +11,7 @@ import { ScrollToTop } from "../components/ui/scroll-to-top";
 import { VirtualList, type VirtualListHandle } from "../components/ui/virtual-list";
 import { t as translate, useAppI18n } from "../i18n";
 import { useChapterSort } from "../stores/libraryStore";
-import { setScrollKey, restoreScroll } from "./Layout";
+import { setScrollKey, restoreScroll, scrollPositions } from "./Layout";
 import type { RawChapter, SortDir } from "../types";
 
 function decodeComicPath(value: string): string {
@@ -71,6 +71,10 @@ export function ComicPage() {
     const key = `comic:${comicSourcePath}`;
     setScrollKey(key);
     restoreScroll(key);
+    const container = scrollEl.current;
+    if (container && !scrollPositions.has(key)) {
+      container.scrollTo({ top: 0, behavior: "instant" });
+    }
   }, [comicSourcePath]);
 
   useEffect(() => {

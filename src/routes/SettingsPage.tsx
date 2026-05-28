@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { localeOptions, type LocalePreference, useAppI18n } from "../i18n";
 import { isLibrarySourceSaveDisabled } from "../lib/settings-state";
-import { setScrollKey, restoreScroll } from "./Layout";
+import { setScrollKey, restoreScroll, scrollPositions } from "./Layout";
 
 function parse<T>(value: string | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -42,6 +42,9 @@ export function SettingsPage() {
   useEffect(() => {
     setScrollKey("settings");
     restoreScroll("settings");
+    if (!scrollPositions.has("settings")) {
+      document.querySelector<HTMLElement>(".content-scroll")?.scrollTo({ top: 0, behavior: "instant" });
+    }
   }, []);
 
   const [defaultZoom, setDefaultZoom] = useState(1);
