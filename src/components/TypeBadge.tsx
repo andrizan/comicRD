@@ -13,7 +13,7 @@ interface TypeBadgeProps {
 export function TypeBadge({ type }: TypeBadgeProps) {
   const meta = TYPE_META[type];
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${meta.cls}`}>
+    <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}>
       {meta.flag} {meta.label}
     </span>
   );

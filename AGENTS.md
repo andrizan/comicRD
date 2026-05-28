@@ -2,6 +2,10 @@
 
 # ComicRD Agent Notes
 
+## Rules
+
+- **JANGAN melakukan commit secara otomatis.** Hanya lakukan commit ketika user secara eksplisit meminta (misalnya: "commit", "buat commit", "ya commit"). Jangan pernah mengasumsikan user ingin commit setelah selesai perubahan.
+
 ## Roles
 
 - Product Role: Desktop comic reader lokal dengan fokus performa dan UX baca.

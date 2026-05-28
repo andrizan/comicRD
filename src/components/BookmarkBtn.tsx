@@ -10,17 +10,18 @@ export function BookmarkBtn({ isBookmarked, onToggle }: BookmarkBtnProps) {
     <button
       type="button"
       onClick={(e) => {
+        e.preventDefault();
         e.stopPropagation();
         onToggle();
       }}
-      className={`flex-shrink-0 text-sm transition-colors ${
+      className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
         isBookmarked
-          ? "text-[var(--accent)]"
-          : "text-neutral-800 hover:text-neutral-500"
+          ? "text-app-accent"
+          : "text-app-muted hover:bg-app-bg hover:text-app-text"
       }`}
       aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
     >
-      {isBookmarked ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+      {isBookmarked ? <BookmarkCheck size={20} /> : <Bookmark size={20} />}
     </button>
   );
 }

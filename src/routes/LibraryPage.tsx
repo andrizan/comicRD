@@ -263,17 +263,53 @@ export function LibraryPage() {
   }
 
   function renderHistoryRow(index: number, entry: ReadingHistoryEntry) {
+    if (displayMode === "grid") {
+      return (
+        <div
+          title={entry.comic_title}
+          className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
+          onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
+        >
+          <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
+            <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
+              {entry.comic_title.split(" ").slice(0, 2).map((w) => w[0] || "").join("").toUpperCase()}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{entry.comic_title}</p>
+            <p className="mt-1 truncate text-xs text-app-muted">{entry.chapter_title}</p>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-[10px] text-app-muted">{unixToLocale(entry.updated_at)}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBookmark(entry.comic_source_path);
+                }}
+                className={`transition-colors ${
+                  bookmarkSet.has(entry.comic_source_path)
+                    ? "text-app-accent"
+                    : "text-app-muted hover:text-app-text"
+                }`}
+              >
+                {bookmarkSet.has(entry.comic_source_path) ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
-        className="flex cursor-pointer items-center gap-2.5 bg-[var(--card)] px-4 py-2.5 transition-colors hover:bg-[var(--muted)]"
+        className="flex cursor-pointer items-center gap-2.5 border-b border-app-border bg-app-surface px-4 py-3 transition-colors hover:bg-app-bg"
         onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
       >
-        <span className="w-5 flex-shrink-0 text-right font-display text-[11px] font-bold text-neutral-800">
+        <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold text-app-muted">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-medium text-neutral-300">{entry.comic_title}</p>
-          <p className="mt-0.5 truncate text-[10px] text-[#2a3d4f]">
+          <p className="truncate text-sm font-medium">{entry.comic_title}</p>
+          <p className="mt-0.5 truncate text-xs text-app-muted">
             {entry.chapter_title}
             {!entry.is_read && entry.total_pages > 0
               ? ` — p.${entry.last_page + 1}/${entry.total_pages}`
@@ -283,7 +319,7 @@ export function LibraryPage() {
           </p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
-          <span className="hidden text-[10px] text-neutral-700 sm:block">
+          <span className="hidden text-xs text-app-muted sm:block">
             {unixToLocale(entry.updated_at)}
           </span>
           <button
@@ -292,16 +328,16 @@ export function LibraryPage() {
               e.stopPropagation();
               toggleBookmark(entry.comic_source_path);
             }}
-            className={`text-sm transition-colors ${
+            className={`transition-colors ${
               bookmarkSet.has(entry.comic_source_path)
-                ? "text-[var(--accent)]"
-                : "text-neutral-800 hover:text-neutral-500"
+                ? "text-app-accent"
+                : "text-app-muted hover:text-app-text"
             }`}
           >
             {bookmarkSet.has(entry.comic_source_path) ? (
-              <BookmarkCheck size={16} />
+              <BookmarkCheck size={18} />
             ) : (
-              <Bookmark size={16} />
+              <Bookmark size={18} />
             )}
           </button>
         </div>
@@ -310,26 +346,63 @@ export function LibraryPage() {
   }
 
   function renderBookmarkRow(index: number, bm: ComicBookmark) {
+    if (displayMode === "grid") {
+      return (
+        <div
+          title={bm.comic_title || bm.comic_source_path}
+          className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
+          onContextMenu={(e) => ctxMenu.show(e, comicContextItems({ source_path: bm.comic_source_path, title: bm.comic_title } as RawComic))}
+        >
+          <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
+            <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
+              {(bm.comic_title || bm.comic_source_path).split(" ").slice(0, 2).map((w) => w[0] || "").join("").toUpperCase()}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <Link
+              to="/comic/$comicId"
+              params={{ comicId: encodeURIComponent(bm.comic_source_path) }}
+              className="truncate text-sm font-medium"
+            >
+              {bm.comic_title || bm.comic_source_path}
+            </Link>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-[10px] text-app-muted">{unixToLocale(bm.created_at)}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBookmark(bm.comic_source_path);
+                }}
+                className="text-app-accent transition-colors hover:opacity-70"
+              >
+                <BookmarkCheck size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
-        className="flex cursor-pointer items-center gap-2.5 bg-[var(--card)] px-4 py-2.5 transition-colors hover:bg-[var(--muted)]"
+        className="flex cursor-pointer items-center gap-2.5 border-b border-app-border bg-app-surface px-4 py-3 transition-colors hover:bg-app-bg"
         onContextMenu={(e) => ctxMenu.show(e, comicContextItems({ source_path: bm.comic_source_path, title: bm.comic_title } as RawComic))}
       >
-        <span className="w-5 flex-shrink-0 text-right font-display text-[11px] font-bold text-neutral-800">
+        <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold text-app-muted">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="min-w-0 flex-1">
           <Link
             to="/comic/$comicId"
             params={{ comicId: encodeURIComponent(bm.comic_source_path) }}
-            className="truncate text-[12px] font-medium text-neutral-300"
+            className="truncate text-sm font-medium"
           >
             {bm.comic_title || bm.comic_source_path}
           </Link>
-          <p className="mt-0.5 truncate text-[10px] text-[#2a3d4f]">{bm.comic_source_path}</p>
+          <p className="mt-0.5 truncate text-xs text-app-muted">{bm.comic_source_path}</p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
-          <span className="hidden text-[10px] text-neutral-700 sm:block">
+          <span className="hidden text-xs text-app-muted sm:block">
             {unixToLocale(bm.created_at)}
           </span>
           <button
@@ -338,9 +411,9 @@ export function LibraryPage() {
               e.stopPropagation();
               toggleBookmark(bm.comic_source_path);
             }}
-            className="text-sm text-[var(--accent)] transition-colors hover:opacity-70"
+            className="text-app-accent transition-colors hover:opacity-70"
           >
-            <BookmarkCheck size={16} />
+            <BookmarkCheck size={18} />
           </button>
         </div>
       </div>
@@ -364,111 +437,104 @@ export function LibraryPage() {
   return (
     <section className="flex flex-col">
       {/* Header */}
-      <div className="border-b border-[var(--border)] bg-[var(--header)]">
-        <div className="flex items-center justify-between px-5 pt-4 pb-0">
-          <span className="font-display text-xl font-extrabold tracking-tight">
-            Comic<span className="text-[var(--accent)]">RD</span>
-          </span>
-          <div className="flex gap-1.5">
+      <div className="border-b border-app-border bg-app-surface">
+        <div className="flex items-center justify-between px-5 pt-3 pb-0">
+          <nav className="flex">
             <button
               type="button"
-              onClick={() => {
-                void comicsQuery.refetch();
-                void historyQuery.refetch();
-                void bookmarksQuery.refetch();
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-white/5 text-neutral-500 transition-all hover:border-[var(--border-accent)] hover:bg-[var(--accent)]/5 hover:text-[var(--accent)]"
-              title={t("library.refresh")}
+              onClick={() => switchViewMode("history")}
+              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-all ${
+                viewMode === "history"
+                  ? "border-app-accent text-app-accent"
+                  : "border-transparent text-app-muted hover:text-app-text"
+              }`}
             >
-              <RefreshCw size={14} />
+              <Clock size={16} />
+              {t("library.history")}
             </button>
-          </div>
+            <button
+              type="button"
+              onClick={() => switchViewMode("library")}
+              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-all ${
+                viewMode === "library"
+                  ? "border-app-accent text-app-accent"
+                  : "border-transparent text-app-muted hover:text-app-text"
+              }`}
+            >
+              <BookOpen size={16} />
+              {t("library.library")}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchViewMode("bookmarks")}
+              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-all ${
+                viewMode === "bookmarks"
+                  ? "border-app-accent text-app-accent"
+                  : "border-transparent text-app-muted hover:text-app-text"
+              }`}
+            >
+              <Bookmark size={16} />
+              {t("library.bookmarks")}
+            </button>
+          </nav>
+          <button
+            type="button"
+            onClick={() => {
+              void comicsQuery.refetch();
+              void historyQuery.refetch();
+              void bookmarksQuery.refetch();
+            }}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+            title={t("library.refresh")}
+          >
+            <RefreshCw size={14} />
+          </button>
         </div>
-
-        {/* Tabs */}
-        <nav className="mt-3 flex">
-          <button
-            type="button"
-            onClick={() => switchViewMode("history")}
-            className={`flex items-center gap-1.5 border-b-2 px-5 py-2.5 text-xs font-medium transition-all ${
-              viewMode === "history"
-                ? "border-[var(--accent)] text-[var(--accent)]"
-                : "border-transparent text-neutral-600 hover:text-neutral-400"
-            }`}
-          >
-            <Clock size={14} />
-            {t("library.history")}
-          </button>
-          <button
-            type="button"
-            onClick={() => switchViewMode("library")}
-            className={`flex items-center gap-1.5 border-b-2 px-5 py-2.5 text-xs font-medium transition-all ${
-              viewMode === "library"
-                ? "border-[var(--accent)] text-[var(--accent)]"
-                : "border-transparent text-neutral-600 hover:text-neutral-400"
-            }`}
-          >
-            <BookOpen size={14} />
-            {t("library.library")}
-          </button>
-          <button
-            type="button"
-            onClick={() => switchViewMode("bookmarks")}
-            className={`flex items-center gap-1.5 border-b-2 px-5 py-2.5 text-xs font-medium transition-all ${
-              viewMode === "bookmarks"
-                ? "border-[var(--accent)] text-[var(--accent)]"
-                : "border-transparent text-neutral-600 hover:text-neutral-400"
-            }`}
-          >
-            <Bookmark size={14} />
-            {t("library.bookmarks")}
-          </button>
-        </nav>
       </div>
 
       {/* Body */}
       <div className="space-y-4 px-5 py-4">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--input)] px-3.5 py-2.5">
-            <div className="font-display text-lg font-extrabold leading-none text-white">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-app-border bg-app-surface px-4 py-3">
+            <div className="font-display text-2xl font-extrabold leading-none">
               {libraryStats.totalComics}
-              <sup className="ml-0.5 text-[10px] font-medium not-italic text-[var(--accent)]">
+              <sup className="ml-0.5 text-[11px] font-medium not-italic text-app-accent">
                 komik
               </sup>
             </div>
-            <div className="mt-1 text-[9px] uppercase tracking-widest text-neutral-600">
+            <div className="mt-1.5 text-[10px] uppercase tracking-widest text-app-muted">
               Total Library
             </div>
           </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--input)] px-3.5 py-2.5">
-            <div className="font-display text-lg font-extrabold leading-none text-white">
+          <div className="rounded-lg border border-app-border bg-app-surface px-4 py-3">
+            <div className="font-display text-2xl font-extrabold leading-none">
               {historyEntries.length}
             </div>
-            <div className="mt-1 text-[9px] uppercase tracking-widest text-neutral-600">
+            <div className="mt-1.5 text-[10px] uppercase tracking-widest text-app-muted">
               Dibaca
             </div>
           </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--input)] px-3.5 py-2.5">
-            <div className="font-display text-lg font-extrabold leading-none text-white">
+          <div className="rounded-lg border border-app-border bg-app-surface px-4 py-3">
+            <div className="font-display text-2xl font-extrabold leading-none">
               {bookmarkedComics.length}
             </div>
-            <div className="mt-1 text-[9px] uppercase tracking-widest text-neutral-600">
+            <div className="mt-1.5 text-[10px] uppercase tracking-widest text-app-muted">
               Bookmark
             </div>
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 h-9 transition-all focus-within:border-[var(--border-accent)]">
-            <Search size={14} className="flex-shrink-0 text-neutral-600" />
+        <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-app-border bg-app-surface px-3.5 h-10 transition-all focus-within:border-app-accent">
+            <Search size={16} className="flex-shrink-0 text-app-muted" />
             <input
               type="text"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder={t("library.searchPlaceholder")}
-              className="min-w-0 flex-1 border-none bg-transparent text-xs text-neutral-300 outline-none placeholder-neutral-700"
+              className="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-app-muted"
             />
           </div>
           {viewMode !== "history" ? (
@@ -476,7 +542,7 @@ export function LibraryPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
-                className="h-9 flex-shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--input)] px-2.5 text-xs text-neutral-500 transition-all focus:border-[var(--border-accent)] focus:outline-none"
+                className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
               >
                 <option value="name">{t("common.name")}</option>
                 <option value="folder_date">{sortLabel}</option>
@@ -484,52 +550,51 @@ export function LibraryPage() {
               <select
                 value={sortDir}
                 onChange={(e) => setSortDir(e.target.value as SortDir)}
-                className="h-9 flex-shrink-0 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--input)] px-2.5 text-xs text-neutral-500 transition-all focus:border-[var(--border-accent)] focus:outline-none"
+                className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
               >
                 <option value="asc">{t("common.asc")}</option>
                 <option value="desc">{t("common.desc")}</option>
               </select>
             </>
           ) : null}
-          {/* View toggle */}
-          <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--input)]">
+          <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-app-border bg-app-surface">
             <button
               type="button"
               onClick={() => setDisplayMode("grid")}
               aria-label="Grid"
-              className={`flex h-9 w-9 items-center justify-center text-sm transition-all ${
+              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
                 displayMode === "grid"
-                  ? "bg-[var(--accent)]/10 text-[var(--accent)]"
-                  : "text-neutral-600 hover:bg-white/4 hover:text-neutral-400"
+                  ? "bg-app-accent/10 text-app-accent"
+                  : "text-app-muted hover:text-app-text"
               }`}
             >
-              <LayoutGrid size={14} />
+              <LayoutGrid size={16} />
             </button>
             <button
               type="button"
               onClick={() => setDisplayMode("list")}
               aria-label="List"
-              className={`flex h-9 w-9 items-center justify-center text-sm transition-all ${
+              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
                 displayMode === "list"
-                  ? "bg-[var(--accent)]/10 text-[var(--accent)]"
-                  : "text-neutral-600 hover:bg-white/4 hover:text-neutral-400"
+                  ? "bg-app-accent/10 text-app-accent"
+                  : "text-app-muted hover:text-app-text"
               }`}
             >
-              <List size={14} />
+              <List size={16} />
             </button>
           </div>
         </div>
 
         {/* Section label */}
         <div className="flex items-center justify-between">
-          <span className="font-display text-[10px] font-extrabold uppercase tracking-[0.1em] text-neutral-700">
+          <span className="font-display text-[11px] font-extrabold uppercase tracking-[0.1em] text-app-muted">
             {viewMode === "history"
               ? t("library.history")
               : viewMode === "bookmarks"
                 ? t("library.bookmarks")
                 : t("library.title")}
           </span>
-          <span className="text-[11px] text-[var(--accent)] opacity-60 transition-opacity hover:opacity-100">
+          <span className="text-[11px] text-app-accent opacity-60 transition-opacity hover:opacity-100">
             {libraryStats.visibleComics} item
           </span>
         </div>
@@ -561,11 +626,13 @@ export function LibraryPage() {
             }
           />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+          <div className="overflow-hidden rounded-xl border border-app-border">
             <VirtualList
               count={currentItems.length}
               estimateSize={ROW_HEIGHT}
               scrollElement={scrollEl}
+              columns={displayMode === "grid" ? 2 : 1}
+              gap={1}
               items={currentItems as unknown[]}
               getItemKey={(i) => {
                 if (viewMode === "history") return `${(currentItems[i] as ReadingHistoryEntry).comic_source_path}-${(currentItems[i] as ReadingHistoryEntry).chapter_id}`;

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Moon, Settings, Sun } from "lucide-react";
+import { Home, Moon, Settings, Sun } from "lucide-react";
 import { listSettings, setSetting } from "../api/tauri";
 import { activateLocale, resolveLocalePreference, useAppI18n } from "../i18n";
 import { cn } from "../lib/utils";
@@ -81,7 +81,11 @@ export function Layout() {
   const activeLocale = resolveLocalePreference(localePreference);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
   }, [theme]);
 
   useEffect(() => {
@@ -123,8 +127,15 @@ export function Layout() {
       {!isReaderRoute ? (
         <>
           {/* TitleBar */}
-          <div className="flex h-10 items-center justify-between border-b border-[var(--border)] bg-black/60 px-4">
-            <div className="flex items-center gap-1.5">
+          <div className="flex h-10 items-center justify-between border-b border-app-border bg-app-surface px-4">
+            <div className="flex items-center gap-2">
+              <Link
+                to="/"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 transition-all hover:bg-white/5 hover:text-neutral-300"
+                title="Home"
+              >
+                <Home size={14} />
+              </Link>
               <span className="font-display text-xs font-bold tracking-widest text-neutral-500">
                 ComicRD
               </span>
@@ -152,9 +163,7 @@ export function Layout() {
         {isReaderRoute ? (
           <Outlet />
         ) : (
-          <div className="mx-auto max-w-[1680px]">
-            <Outlet />
-          </div>
+          <Outlet />
         )}
       </main>
     </div>

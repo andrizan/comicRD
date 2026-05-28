@@ -44,17 +44,17 @@ export function ContextMenu({ state, onClose }: ContextMenuProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-[100] min-w-[180px] rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-lg"
+      className="fixed z-[100] min-w-[180px] rounded-lg border border-app-border bg-app-surface py-1 shadow-lg"
       style={{ left: state.x, top: state.y }}
     >
       {state.items.map((item, i) => (
         <button
           key={i}
           type="button"
-          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-[var(--muted)] ${
+          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-app-surface ${
             item.danger
               ? "text-red-500 hover:text-red-600"
-              : "text-[var(--foreground)]"
+              : "text-app-text"
           }`}
           onClick={() => {
             item.onClick();

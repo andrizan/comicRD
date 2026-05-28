@@ -23,7 +23,7 @@ export function ScrollToTop() {
           behavior: "smooth",
         });
       }}
-      className="fixed bottom-6 right-6 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-lg transition hover:bg-[var(--muted)]"
+      className="fixed bottom-6 right-6 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-app-border bg-app-surface text-app-text shadow-lg transition hover:bg-app-surface"
       title="Scroll to top"
     >
       <ArrowUp size={18} />
