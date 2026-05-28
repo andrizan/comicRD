@@ -186,8 +186,8 @@ export function ComicPage() {
           : "cursor-pointer hover:bg-[var(--accent)]/5"
       }`}
     >
-      <div className="min-w-[220px] flex-1">
-        <p className="font-semibold text-[var(--accent)] hover:underline">{chapter.title}</p>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-[var(--accent)] hover:underline">{chapter.title}</p>
         <p className="text-xs text-[var(--muted-foreground)]">
           {chapter.page_count
             ? t("comic.pages", { count: chapter.page_count })
@@ -195,7 +195,7 @@ export function ComicPage() {
         </p>
       </div>
       <span
-        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${chapterStatusClass(chapter)}`}
+        className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${chapterStatusClass(chapter)}`}
       >
         {chapterStatusLabel(chapter)}
       </span>
@@ -206,16 +206,16 @@ export function ComicPage() {
     <section className="space-y-4">
       <Card>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => navigate({ to: "/" })} className="gap-1.5 px-2">
+          <div className="flex min-w-0 items-center gap-3 overflow-hidden">
+            <Button variant="ghost" onClick={() => navigate({ to: "/" })} className="shrink-0 gap-1.5 px-2">
               <ArrowLeft size={16} />
             </Button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 overflow-hidden">
               <h2 className="truncate text-xl font-bold">{comicTitle}</h2>
               <p className="truncate text-xs text-[var(--muted-foreground)]">{comicSourcePath}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-semibold">
               {t("comic.chapters", { count: totalChapters })}
             </span>
