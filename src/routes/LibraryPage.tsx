@@ -101,6 +101,7 @@ export function LibraryPage() {
   const historyQuery = useQuery({
     queryKey: ["reading-history"],
     queryFn: listReadingHistory,
+    staleTime: 0,
   });
 
   const bookmarkSet = useMemo(() => {

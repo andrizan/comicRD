@@ -180,6 +180,9 @@ export function ReaderPage() {
       await queryClient.invalidateQueries({
         queryKey: ["raw-chapters", chapterContext.comic_source_path],
       });
+      await queryClient.invalidateQueries({
+        queryKey: ["reading-history"],
+      });
       navigate({
         to: "/comic/$comicId",
         params: { comicId: encodeURIComponent(chapterContext.comic_source_path) },
