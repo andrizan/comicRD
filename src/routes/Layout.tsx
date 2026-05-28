@@ -81,6 +81,7 @@ export function Layout() {
   const theme = parseTheme(settingMap.get("app_theme"));
   const localePreference = parseSettingString(settingMap.get("app_locale"), "en");
   const activeLocale = resolveLocalePreference(localePreference);
+  const isLibrarySourceEmpty = !parseSettingString(settingMap.get("library_source_input"), "").trim();
 
   useEffect(() => {
     if (theme === "dark") {
@@ -153,7 +154,11 @@ export function Layout() {
               type="button"
               onClick={() => setSettingsOpen((v) => !v)}
               className={`flex h-7 w-7 items-center justify-center rounded-md transition-all hover:bg-app-bg ${
-                settingsOpen ? "bg-app-accent/10 text-app-accent" : "text-app-muted hover:text-app-text"
+                settingsOpen
+                  ? "bg-app-accent/10 text-app-accent"
+                  : isLibrarySourceEmpty
+                    ? "text-red-400 hover:text-red-500"
+                    : "text-app-muted hover:text-app-text"
               }`}
               title={t("nav.settings")}
             >
