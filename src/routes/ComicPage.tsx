@@ -62,16 +62,16 @@ export function ComicPage() {
   const comicTitle = titleFromPath(comicSourcePath);
   const [searchText, setSearchText] = useState("");
   const { chapterSortDir, setChapterSortDir } = useChapterSort();
-  const scrollEl = useRef<HTMLElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const virtualListRef = useRef<VirtualListHandle>(null);
   const hasScrolledRef = useRef(false);
 
   useEffect(() => {
-    scrollEl.current = document.querySelector<HTMLElement>(".content-scroll");
+    const container = document.querySelector<HTMLElement>(".content-scroll");
+    setScrollEl(container);
     const key = `comic:${comicSourcePath}`;
     setScrollKey(key);
     restoreScroll(key);
-    const container = scrollEl.current;
     if (container && !scrollPositions.has(key)) {
       container.scrollTo({ top: 0, behavior: "instant" });
     }

@@ -1,6 +1,5 @@
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { useCallback, useImperativeHandle, useRef } from "react";
-import type { RefObject } from "react";
 
 export interface VirtualListHandle {
   scrollToIndex: (index: number, opts?: { align?: "start" | "center" | "end" | "auto" }) => void;
@@ -9,7 +8,7 @@ export interface VirtualListHandle {
 interface VirtualListProps<T> {
   count: number;
   estimateSize: number;
-  scrollElement: RefObject<HTMLElement | null>;
+  scrollElement: HTMLElement | null;
   overscan?: number;
   getItemKey: (index: number) => string | number;
   renderItem: (index: number, item: T, virtualRow: VirtualItem) => React.ReactNode;
@@ -36,7 +35,7 @@ export function VirtualList<T>({
   const virtualizer = useVirtualizer({
     count,
     estimateSize: () => estimateSize,
-    getScrollElement: () => scrollElement.current,
+    getScrollElement: () => scrollElement,
     overscan,
     getItemKey,
     ...(measureElement ? { measureElement: (node) => node.getBoundingClientRect().height } : {}),

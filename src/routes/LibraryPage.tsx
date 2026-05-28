@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Bookmark, BookmarkCheck, Copy, FolderOpen, RefreshCw, Search, Type } from "lucide-react";
@@ -28,7 +28,7 @@ export function LibraryPage() {
   const { t } = useAppI18n();
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState("");
-  const scrollEl = useRef<HTMLElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
 
   const {
     sortBy,
@@ -43,7 +43,7 @@ export function LibraryPage() {
   const activeLibraryPath = inputPath.trim();
 
   useEffect(() => {
-    scrollEl.current = document.querySelector<HTMLElement>(".content-scroll");
+    setScrollEl(document.querySelector<HTMLElement>(".content-scroll"));
   }, []);
 
   useEffect(() => {
