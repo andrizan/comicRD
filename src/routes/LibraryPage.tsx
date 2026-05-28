@@ -520,14 +520,15 @@ export function LibraryPage() {
             />
           ) : (
             <div className="rounded-md border border-[var(--border)] bg-[var(--card)]">
-              <VirtualList
-                count={bookmarkedComics.length}
-                estimateSize={ROW_HEIGHT}
-                scrollElement={scrollEl}
-                items={bookmarkedComics}
-                getItemKey={(i) => bookmarkedComics[i].id}
-                renderItem={renderBookmarkItem}
-              />
+            <VirtualList
+              count={bookmarkedComics.length}
+              estimateSize={ROW_HEIGHT}
+              scrollElement={scrollEl}
+              items={bookmarkedComics}
+              getItemKey={(i) => bookmarkedComics[i].id}
+              renderItem={renderBookmarkItem}
+              measureElement
+            />
             </div>
           )
         ) : filteredComics.length === 0 ? (
@@ -544,6 +545,7 @@ export function LibraryPage() {
               items={filteredComics}
               getItemKey={(i) => filteredComics[i].key}
               renderItem={renderComicItem}
+              measureElement
             />
           </div>
         )}

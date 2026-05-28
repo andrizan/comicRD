@@ -291,6 +291,7 @@ export function ComicPage() {
             items={filteredChapters}
             getItemKey={(i) => filteredChapters[i].key}
             renderItem={renderChapterItem}
+            measureElement
           />
         )}
       </Card>
