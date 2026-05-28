@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, RefreshCw, Search } from "lucide-react";
 import { listComicChaptersRaw, openChapterForReading } from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
@@ -136,6 +136,19 @@ export function ComicPage() {
                 {filteredChapters.length} shown
               </span>
             ) : null}
+            <Button
+              variant="ghost"
+              onClick={() => void chaptersQuery.refetch()}
+              disabled={chaptersQuery.isFetching}
+              title="Refresh chapters"
+              aria-label="Refresh chapters"
+              className="gap-1.5 px-2.5"
+            >
+              <RefreshCw
+                size={14}
+                className={chaptersQuery.isFetching ? "animate-spin" : undefined}
+              />
+            </Button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
