@@ -184,7 +184,7 @@ export function ComicPage() {
           void onOpenChapter(chapter.source_path);
         }
       }}
-      className={`flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--card)] p-3 ${
+      className={`mb-2 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--card)] p-3 ${
         openChapterMutation.isPending
           ? "pointer-events-none opacity-60"
           : "cursor-pointer hover:bg-[var(--accent)]/5"
