@@ -1,97 +1,76 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 import {
   addComicBookmark,
-  getSetting,
   initDb,
   listAllBookmarks,
   listLibraryComicsRaw,
   listReadingHistory,
   removeComicBookmark,
-  setSetting,
 } from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { useAppI18n } from "../i18n";
 import { unixToLocale } from "../lib/utils";
+import { usePreferencesStore } from "../stores/libraryStore";
 import type { ReadingHistoryEntry, SortBy, SortDir } from "../types";
-
-function parseStoredString(value: string | null): string {
-  if (!value) return "";
-  try {
-    const parsed = JSON.parse(value);
-    return typeof parsed === "string" ? parsed : "";
-  } catch {
-    return "";
-  }
-}
-
-function isViewMode(value: string): value is "history" | "library" | "bookmarks" {
-  return value === "history" || value === "library" || value === "bookmarks";
-}
 
 export function LibraryPage() {
   const { t } = useAppI18n();
   const queryClient = useQueryClient();
-  const [inputPath, setInputPath] = useState("");
-  const [sortBy, setSortBy] = useState<SortBy>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [viewMode, setViewMode] = useState<"history" | "library" | "bookmarks">("library");
   const [searchText, setSearchText] = useState("");
-  const [preferencesReady, setPreferencesReady] = useState(false);
+
+  const sortBy = usePreferencesStore((s) => s.sortBy);
+  const sortDir = usePreferencesStore((s) => s.sortDir);
+  const viewMode = usePreferencesStore((s) => s.viewMode);
+  const inputPath = usePreferencesStore((s) => s.inputPath);
+  const setSortBy = usePreferencesStore((s) => s.setSortBy);
+  const setSortDir = usePreferencesStore((s) => s.setSortDir);
+  const setViewMode = usePreferencesStore((s) => s.setViewMode);
+  const loadPreferences = usePreferencesStore((s) => s.loadPreferences);
   const activeLibraryPath = inputPath.trim();
+  const hasRestoredScroll = useRef(false);
 
   useEffect(() => {
     initDb().catch(console.error);
   }, []);
 
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      const savedPath = parseStoredString(await getSetting("library_source_input"));
-      const savedSortBy = parseStoredString(await getSetting("library_sort_by"));
-      const savedSortDir = parseStoredString(await getSetting("library_sort_dir"));
-      const savedViewMode = parseStoredString(await getSetting("library_view_mode"));
-      if (!active) return;
-      if (savedPath.trim()) setInputPath(savedPath.trim());
-      if (savedSortBy === "name" || savedSortBy === "folder_date") {
-        setSortBy(savedSortBy);
-      }
-      if (savedSortDir === "asc" || savedSortDir === "desc") {
-        setSortDir(savedSortDir);
-      }
-      if (isViewMode(savedViewMode)) {
-        setViewMode(savedViewMode);
-      }
-      setPreferencesReady(true);
-    })();
-    return () => {
-      active = false;
+    void loadPreferences();
+  }, [loadPreferences]);
+
+  useEffect(() => {
+    const container = document.querySelector<HTMLElement>(".content-scroll");
+    if (!container) return;
+    const onScroll = () => {
+      window.sessionStorage.setItem("comicrd:library-scroll", String(container.scrollTop));
     };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
   }, []);
-
-  useEffect(() => {
-    if (!preferencesReady) return;
-    void setSetting("library_sort_by", sortBy);
-  }, [preferencesReady, sortBy]);
-
-  useEffect(() => {
-    if (!preferencesReady) return;
-    void setSetting("library_sort_dir", sortDir);
-  }, [preferencesReady, sortDir]);
-
-  useEffect(() => {
-    if (!preferencesReady) return;
-    void setSetting("library_view_mode", viewMode);
-  }, [preferencesReady, viewMode]);
 
   const comicsQuery = useQuery({
     queryKey: ["raw-comics", sortBy, sortDir, activeLibraryPath],
     enabled: activeLibraryPath.length > 0,
     queryFn: () => listLibraryComicsRaw(sortBy, sortDir),
   });
+
+  useEffect(() => {
+    if (!comicsQuery.isSuccess || comicsQuery.data.length === 0) return;
+    if (hasRestoredScroll.current) return;
+    hasRestoredScroll.current = true;
+    const saved = window.sessionStorage.getItem("comicrd:library-scroll");
+    if (!saved) return;
+    const top = Number(saved);
+    if (!Number.isFinite(top) || top <= 0) return;
+    const container = document.querySelector<HTMLElement>(".content-scroll");
+    if (!container) return;
+    requestAnimationFrame(() => {
+      container.scrollTo({ top, behavior: "instant" });
+    });
+  }, [comicsQuery.isSuccess, comicsQuery.data]);
 
   const bookmarksQuery = useQuery({
     queryKey: ["comic-bookmarks"],

@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/sta
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { t as translate, useAppI18n } from "../i18n";
+import { usePreferencesStore } from "../stores/libraryStore";
 import type { RawChapter, SortDir } from "../types";
 
 function decodeComicPath(value: string): string {
@@ -54,8 +55,14 @@ export function ComicPage() {
   const comicSourcePath = decodeComicPath(comicId);
   const comicTitle = titleFromPath(comicSourcePath);
   const [searchText, setSearchText] = useState("");
-  const [chapterSortDir, setChapterSortDir] = useState<SortDir>("asc");
+  const chapterSortDir = usePreferencesStore((s) => s.chapterSortDir);
+  const setChapterSortDir = usePreferencesStore((s) => s.setChapterSortDir);
   const chapterRefs = useRef(new Map<string, HTMLDivElement>());
+  const hasScrolledRef = useRef(false);
+
+  useEffect(() => {
+    hasScrolledRef.current = false;
+  }, [comicSourcePath]);
 
   const chaptersQuery = useQuery({
     queryKey: ["raw-chapters", comicSourcePath],
@@ -99,8 +106,10 @@ export function ComicPage() {
 
   useEffect(() => {
     if (!chaptersQuery.isSuccess || filteredChapters.length === 0) return;
+    if (hasScrolledRef.current) return;
     const lastChapter = window.sessionStorage.getItem(lastChapterStorageKey(comicSourcePath));
     if (!lastChapter) return;
+    hasScrolledRef.current = true;
     window.requestAnimationFrame(() => {
       chapterRefs.current.get(lastChapter)?.scrollIntoView({
         block: "center",
