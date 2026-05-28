@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { localeOptions, type LocalePreference, useAppI18n } from "../i18n";
 import { isLibrarySourceSaveDisabled } from "../lib/settings-state";
+import { setScrollKey, restoreScroll } from "./Layout";
 
 function parse<T>(value: string | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -37,6 +38,11 @@ export function SettingsPage() {
     queryKey: ["settings"],
     queryFn: listSettings,
   });
+
+  useEffect(() => {
+    setScrollKey("settings");
+    restoreScroll("settings");
+  }, []);
 
   const [defaultZoom, setDefaultZoom] = useState(1);
   const [pageGap, setPageGap] = useState(10);

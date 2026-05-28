@@ -1,37 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
+import { Bookmark, BookmarkCheck, Copy, FolderOpen, RefreshCw, Search, Type } from "lucide-react";
 import {
   addComicBookmark,
   initDb,
   listAllBookmarks,
   listLibraryComicsRaw,
   listReadingHistory,
+  openContainingFolder,
   removeComicBookmark,
 } from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
+import { ContextMenu, useContextMenu, type ContextMenuItem } from "../components/ui/context-menu";
+import { ScrollToTop } from "../components/ui/scroll-to-top";
+import { VirtualList } from "../components/ui/virtual-list";
 import { useAppI18n } from "../i18n";
 import { unixToLocale } from "../lib/utils";
-import { usePreferencesStore } from "../stores/libraryStore";
-import type { ReadingHistoryEntry, SortBy, SortDir } from "../types";
+import { useLibraryPreferences } from "../stores/libraryStore";
+import { saveScroll, restoreScroll, setScrollKey } from "./Layout";
+import type { ComicBookmark, RawComic, ReadingHistoryEntry, SortBy, SortDir } from "../types";
+
+const ROW_HEIGHT = 88;
 
 export function LibraryPage() {
   const { t } = useAppI18n();
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState("");
+  const scrollEl = useRef<HTMLElement | null>(null);
 
-  const sortBy = usePreferencesStore((s) => s.sortBy);
-  const sortDir = usePreferencesStore((s) => s.sortDir);
-  const viewMode = usePreferencesStore((s) => s.viewMode);
-  const inputPath = usePreferencesStore((s) => s.inputPath);
-  const setSortBy = usePreferencesStore((s) => s.setSortBy);
-  const setSortDir = usePreferencesStore((s) => s.setSortDir);
-  const setViewMode = usePreferencesStore((s) => s.setViewMode);
-  const loadPreferences = usePreferencesStore((s) => s.loadPreferences);
+  const {
+    sortBy,
+    sortDir,
+    viewMode,
+    inputPath,
+    setSortBy,
+    setSortDir,
+    setViewMode,
+    loadPreferences,
+  } = useLibraryPreferences();
   const activeLibraryPath = inputPath.trim();
-  const hasRestoredScroll = useRef(false);
+
+  useEffect(() => {
+    scrollEl.current = document.querySelector<HTMLElement>(".content-scroll");
+  }, []);
 
   useEffect(() => {
     initDb().catch(console.error);
@@ -42,13 +55,8 @@ export function LibraryPage() {
   }, [loadPreferences]);
 
   useEffect(() => {
-    const container = document.querySelector<HTMLElement>(".content-scroll");
-    if (!container) return;
-    const onScroll = () => {
-      window.sessionStorage.setItem("comicrd:library-scroll", String(container.scrollTop));
-    };
-    container.addEventListener("scroll", onScroll, { passive: true });
-    return () => container.removeEventListener("scroll", onScroll);
+    setScrollKey(`library:${viewMode}`);
+    restoreScroll(`library:${viewMode}`);
   }, []);
 
   const comicsQuery = useQuery({
@@ -56,21 +64,6 @@ export function LibraryPage() {
     enabled: activeLibraryPath.length > 0,
     queryFn: () => listLibraryComicsRaw(sortBy, sortDir),
   });
-
-  useEffect(() => {
-    if (!comicsQuery.isSuccess || comicsQuery.data.length === 0) return;
-    if (hasRestoredScroll.current) return;
-    hasRestoredScroll.current = true;
-    const saved = window.sessionStorage.getItem("comicrd:library-scroll");
-    if (!saved) return;
-    const top = Number(saved);
-    if (!Number.isFinite(top) || top <= 0) return;
-    const container = document.querySelector<HTMLElement>(".content-scroll");
-    if (!container) return;
-    requestAnimationFrame(() => {
-      container.scrollTo({ top, behavior: "instant" });
-    });
-  }, [comicsQuery.isSuccess, comicsQuery.data]);
 
   const bookmarksQuery = useQuery({
     queryKey: ["comic-bookmarks"],
@@ -107,6 +100,85 @@ export function LibraryPage() {
     } else {
       addBookmarkMutation.mutate(comicSourcePath);
     }
+  }
+
+  const ctxMenu = useContextMenu();
+
+  function comicContextItems(item: RawComic): ContextMenuItem[] {
+    const isBookmarked = bookmarkSet.has(item.source_path);
+    return [
+      {
+        label: t("library.openFolder"),
+        icon: <FolderOpen size={14} />,
+        onClick: () => void openContainingFolder(item.source_path),
+      },
+      {
+        label: isBookmarked ? t("library.removeBookmark") : t("library.addBookmark"),
+        icon: isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />,
+        onClick: () => toggleBookmark(item.source_path),
+      },
+      {
+        label: t("library.copyTitle"),
+        icon: <Type size={14} />,
+        onClick: () => void navigator.clipboard.writeText(item.title),
+      },
+      {
+        label: t("library.copyPath"),
+        icon: <Copy size={14} />,
+        onClick: () => void navigator.clipboard.writeText(item.source_path),
+      },
+    ];
+  }
+
+  function bookmarkContextItems(bm: ComicBookmark): ContextMenuItem[] {
+    return [
+      {
+        label: t("library.openFolder"),
+        icon: <FolderOpen size={14} />,
+        onClick: () => void openContainingFolder(bm.comic_source_path),
+      },
+      {
+        label: t("library.removeBookmark"),
+        icon: <BookmarkCheck size={14} />,
+        onClick: () => toggleBookmark(bm.comic_source_path),
+      },
+      {
+        label: t("library.copyTitle"),
+        icon: <Type size={14} />,
+        onClick: () => void navigator.clipboard.writeText(bm.comic_title),
+      },
+      {
+        label: t("library.copyPath"),
+        icon: <Copy size={14} />,
+        onClick: () => void navigator.clipboard.writeText(bm.comic_source_path),
+      },
+    ];
+  }
+
+  function historyContextItems(entry: ReadingHistoryEntry): ContextMenuItem[] {
+    const isBookmarked = bookmarkSet.has(entry.comic_source_path);
+    return [
+      {
+        label: t("library.openFolder"),
+        icon: <FolderOpen size={14} />,
+        onClick: () => void openContainingFolder(entry.comic_source_path),
+      },
+      {
+        label: isBookmarked ? t("library.removeBookmark") : t("library.addBookmark"),
+        icon: isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />,
+        onClick: () => toggleBookmark(entry.comic_source_path),
+      },
+      {
+        label: t("library.copyTitle"),
+        icon: <Type size={14} />,
+        onClick: () => void navigator.clipboard.writeText(entry.comic_title),
+      },
+      {
+        label: t("library.copyPath"),
+        icon: <Copy size={14} />,
+        onClick: () => void navigator.clipboard.writeText(entry.comic_source_path),
+      },
+    ];
   }
 
   const filteredComics = useMemo(
@@ -179,6 +251,128 @@ export function LibraryPage() {
     return { totalComics: allComics.length, visibleComics: visible };
   }, [comicsQuery.data, filteredComics, bookmarkedComics, historyEntries, viewMode]);
 
+  function switchViewMode(mode: typeof viewMode) {
+    if (mode === viewMode) return;
+    saveScroll(`library:${viewMode}`);
+    setViewMode(mode);
+    setScrollKey(`library:${mode}`);
+    restoreScroll(`library:${mode}`);
+  }
+
+  useEffect(() => {
+    setScrollKey(`library:${viewMode}`);
+    restoreScroll(`library:${viewMode}`);
+  }, []);
+
+  const renderHistoryItem = (_index: number, entry: ReadingHistoryEntry) => (
+    <div
+      className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3"
+      onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
+    >
+      <div className="min-w-0 flex-1">
+        <Link
+          to="/comic/$comicId"
+          params={{ comicId: encodeURIComponent(entry.comic_source_path) }}
+          className="text-base font-semibold text-[var(--accent)] hover:underline"
+        >
+          {entry.comic_title}
+        </Link>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {entry.chapter_title}
+          {!entry.is_read && entry.total_pages > 0
+            ? ` — p.${entry.last_page + 1}/${entry.total_pages}`
+            : entry.is_read
+              ? ` — ${t("comic.status.read")}`
+              : ""}
+        </p>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {t("library.readAt", { value: unixToLocale(entry.updated_at) })}
+        </p>
+      </div>
+      <button
+        onClick={() => toggleBookmark(entry.comic_source_path)}
+        className={
+          bookmarkSet.has(entry.comic_source_path)
+            ? "text-[var(--accent)] hover:opacity-70"
+            : "text-[var(--muted-foreground)] hover:text-[var(--accent)]"
+        }
+        title={
+          bookmarkSet.has(entry.comic_source_path)
+            ? t("library.removeBookmark")
+            : t("library.addBookmark")
+        }
+      >
+        {bookmarkSet.has(entry.comic_source_path) ? (
+          <BookmarkCheck size={18} />
+        ) : (
+          <Bookmark size={18} />
+        )}
+      </button>
+    </div>
+  );
+
+  const renderBookmarkItem = (_index: number, bm: ComicBookmark) => (
+    <div
+      className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3"
+      onContextMenu={(e) => ctxMenu.show(e, bookmarkContextItems(bm))}
+    >
+      <div className="min-w-0 flex-1">
+        <Link
+          to="/comic/$comicId"
+          params={{ comicId: encodeURIComponent(bm.comic_source_path) }}
+          className="text-base font-semibold text-[var(--accent)] hover:underline"
+        >
+          {bm.comic_title || bm.comic_source_path}
+        </Link>
+        <p className="text-xs text-[var(--muted-foreground)]">{bm.comic_source_path}</p>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {t("library.bookmarked", { value: unixToLocale(bm.created_at) })}
+        </p>
+      </div>
+      <button
+        onClick={() => toggleBookmark(bm.comic_source_path)}
+        className="text-[var(--accent)] hover:opacity-70"
+        title={t("library.removeBookmark")}
+      >
+        <BookmarkCheck size={18} />
+      </button>
+    </div>
+  );
+
+  const renderComicItem = (_index: number, item: RawComic) => (
+    <div
+      className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3"
+      onContextMenu={(e) => ctxMenu.show(e, comicContextItems(item))}
+    >
+      <div className="min-w-0 flex-1">
+        <Link
+          to="/comic/$comicId"
+          params={{ comicId: encodeURIComponent(item.source_path) }}
+          className="text-base font-semibold text-[var(--accent)] hover:underline"
+        >
+          {item.title}
+        </Link>
+        <p className="text-xs text-[var(--muted-foreground)]">{item.source_path}</p>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {t("library.modified", { value: unixToLocale(item.date_modified) })}
+        </p>
+      </div>
+      <button
+        onClick={() => toggleBookmark(item.source_path)}
+        className={
+          bookmarkSet.has(item.source_path)
+            ? "text-[var(--accent)] hover:opacity-70"
+            : "text-[var(--muted-foreground)] hover:text-[var(--accent)]"
+        }
+        title={
+          bookmarkSet.has(item.source_path) ? t("library.removeBookmark") : t("library.addBookmark")
+        }
+      >
+        {bookmarkSet.has(item.source_path) ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
+      </button>
+    </div>
+  );
+
   return (
     <section className="space-y-3">
       {!activeLibraryPath ? (
@@ -206,7 +400,7 @@ export function LibraryPage() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center rounded-md border border-[var(--border)] p-0.5">
               <button
-                onClick={() => setViewMode("history")}
+                onClick={() => switchViewMode("history")}
                 className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
                   viewMode === "history"
                     ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
@@ -216,7 +410,7 @@ export function LibraryPage() {
                 {t("library.history")}
               </button>
               <button
-                onClick={() => setViewMode("library")}
+                onClick={() => switchViewMode("library")}
                 className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
                   viewMode === "library"
                     ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
@@ -226,7 +420,7 @@ export function LibraryPage() {
                 {t("library.library")}
               </button>
               <button
-                onClick={() => setViewMode("bookmarks")}
+                onClick={() => switchViewMode("bookmarks")}
                 className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
                   viewMode === "bookmarks"
                     ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
@@ -306,52 +500,16 @@ export function LibraryPage() {
             />
           ) : (
             <div className="rounded-md border border-[var(--border)] bg-[var(--card)]">
-              {historyEntries.map((entry) => (
-                <div
-                  key={`${entry.comic_source_path}-${entry.chapter_id}`}
-                  className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3 last:border-b-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      to="/comic/$comicId"
-                      params={{ comicId: encodeURIComponent(entry.comic_source_path) }}
-                      className="text-base font-semibold text-[var(--accent)] hover:underline"
-                    >
-                      {entry.comic_title}
-                    </Link>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {entry.chapter_title}
-                      {!entry.is_read && entry.total_pages > 0
-                        ? ` — p.${entry.last_page + 1}/${entry.total_pages}`
-                        : entry.is_read
-                          ? ` — ${t("comic.status.read")}`
-                          : ""}
-                    </p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {t("library.readAt", { value: unixToLocale(entry.updated_at) })}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => toggleBookmark(entry.comic_source_path)}
-                    className={
-                      bookmarkSet.has(entry.comic_source_path)
-                        ? "text-[var(--accent)] hover:opacity-70"
-                        : "text-[var(--muted-foreground)] hover:text-[var(--accent)]"
-                    }
-                    title={
-                      bookmarkSet.has(entry.comic_source_path)
-                        ? t("library.removeBookmark")
-                        : t("library.addBookmark")
-                    }
-                  >
-                    {bookmarkSet.has(entry.comic_source_path) ? (
-                      <BookmarkCheck size={18} />
-                    ) : (
-                      <Bookmark size={18} />
-                    )}
-                  </button>
-                </div>
-              ))}
+              <VirtualList
+                count={historyEntries.length}
+                estimateSize={ROW_HEIGHT}
+                scrollElement={scrollEl}
+                items={historyEntries}
+                getItemKey={(i) =>
+                  `${historyEntries[i].comic_source_path}-${historyEntries[i].chapter_id}`
+                }
+                renderItem={renderHistoryItem}
+              />
             </div>
           )
         ) : viewMode === "bookmarks" ? (
@@ -362,33 +520,14 @@ export function LibraryPage() {
             />
           ) : (
             <div className="rounded-md border border-[var(--border)] bg-[var(--card)]">
-              {bookmarkedComics.map((bm) => (
-                <div
-                  key={bm.id}
-                  className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3 last:border-b-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      to="/comic/$comicId"
-                      params={{ comicId: encodeURIComponent(bm.comic_source_path) }}
-                      className="text-base font-semibold text-[var(--accent)] hover:underline"
-                    >
-                      {bm.comic_title || bm.comic_source_path}
-                    </Link>
-                    <p className="text-xs text-[var(--muted-foreground)]">{bm.comic_source_path}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {t("library.bookmarked", { value: unixToLocale(bm.created_at) })}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => toggleBookmark(bm.comic_source_path)}
-                    className="text-[var(--accent)] hover:opacity-70"
-                    title={t("library.removeBookmark")}
-                  >
-                    <BookmarkCheck size={18} />
-                  </button>
-                </div>
-              ))}
+              <VirtualList
+                count={bookmarkedComics.length}
+                estimateSize={ROW_HEIGHT}
+                scrollElement={scrollEl}
+                items={bookmarkedComics}
+                getItemKey={(i) => bookmarkedComics[i].id}
+                renderItem={renderBookmarkItem}
+              />
             </div>
           )
         ) : filteredComics.length === 0 ? (
@@ -398,48 +537,19 @@ export function LibraryPage() {
           />
         ) : (
           <div className="rounded-md border border-[var(--border)] bg-[var(--card)]">
-            {filteredComics.map((item) => (
-              <div
-                key={item.key}
-                className="library-row flex items-center gap-3 border-b border-[var(--border)] p-3 last:border-b-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to="/comic/$comicId"
-                    params={{ comicId: encodeURIComponent(item.source_path) }}
-                    className="text-base font-semibold text-[var(--accent)] hover:underline"
-                  >
-                    {item.title}
-                  </Link>
-                  <p className="text-xs text-[var(--muted-foreground)]">{item.source_path}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    {t("library.modified", { value: unixToLocale(item.date_modified) })}
-                  </p>
-                </div>
-                <button
-                  onClick={() => toggleBookmark(item.source_path)}
-                  className={
-                    bookmarkSet.has(item.source_path)
-                      ? "text-[var(--accent)] hover:opacity-70"
-                      : "text-[var(--muted-foreground)] hover:text-[var(--accent)]"
-                  }
-                  title={
-                    bookmarkSet.has(item.source_path)
-                      ? t("library.removeBookmark")
-                      : t("library.addBookmark")
-                  }
-                >
-                  {bookmarkSet.has(item.source_path) ? (
-                    <BookmarkCheck size={18} />
-                  ) : (
-                    <Bookmark size={18} />
-                  )}
-                </button>
-              </div>
-            ))}
+            <VirtualList
+              count={filteredComics.length}
+              estimateSize={ROW_HEIGHT}
+              scrollElement={scrollEl}
+              items={filteredComics}
+              getItemKey={(i) => filteredComics[i].key}
+              renderItem={renderComicItem}
+            />
           </div>
         )}
       </section>
+      <ScrollToTop />
+      <ContextMenu state={ctxMenu.state} onClose={ctxMenu.close} />
     </section>
   );
 }

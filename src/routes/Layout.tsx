@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { FolderOpen, Moon, Settings, Sun } from "lucide-react";
@@ -26,6 +26,40 @@ function parseSettingString(value: string | undefined, fallback: string): string
   }
 }
 
+const scrollPositions = new Map<string, number>();
+let activeScrollKey = "";
+let isRestoring = false;
+
+export function getScrollKey(): string {
+  return activeScrollKey;
+}
+
+export function setScrollKey(key: string): void {
+  activeScrollKey = key;
+}
+
+export function saveScroll(key: string): void {
+  const container = document.querySelector<HTMLElement>(".content-scroll");
+  if (container) scrollPositions.set(key, container.scrollTop);
+}
+
+export function restoreScroll(key: string): void {
+  const container = document.querySelector<HTMLElement>(".content-scroll");
+  if (!container) return;
+  const saved = scrollPositions.get(key);
+  if (saved === undefined || saved <= 0) return;
+  isRestoring = true;
+  const doRestore = () => {
+    container.scrollTo({ top: saved, behavior: "instant" });
+  };
+  doRestore();
+  const delays = [16, 50, 100, 200, 400, 800, 1200, 2000];
+  delays.forEach((d) => setTimeout(doRestore, d));
+  setTimeout(() => {
+    isRestoring = false;
+  }, 2500);
+}
+
 export function Layout() {
   const { t } = useAppI18n();
   const queryClient = useQueryClient();
@@ -37,6 +71,7 @@ export function Layout() {
     select: (state) => state.location.pathname,
   });
   const isReaderRoute = pathname.startsWith("/reader/");
+  const prevPath = useRef(pathname);
   const settingMap = useMemo(
     () => new Map((settingsQuery.data ?? []).map((setting) => [setting.key, setting.value_json])),
     [settingsQuery.data],
@@ -52,6 +87,30 @@ export function Layout() {
   useEffect(() => {
     activateLocale(activeLocale);
   }, [activeLocale]);
+
+  useEffect(() => {
+    if (isReaderRoute) return;
+    const container = document.querySelector<HTMLElement>(".content-scroll");
+    if (!container) return;
+    const onScroll = () => {
+      if (isRestoring) return;
+      if (activeScrollKey) {
+        scrollPositions.set(activeScrollKey, container.scrollTop);
+      }
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
+  }, [isReaderRoute]);
+
+  useLayoutEffect(() => {
+    if (isReaderRoute) return;
+    if (prevPath.current === pathname) return;
+    const oldKey = activeScrollKey;
+    if (oldKey) saveScroll(oldKey);
+    prevPath.current = pathname;
+    const newKey = activeScrollKey;
+    if (newKey) restoreScroll(newKey);
+  }, [pathname, isReaderRoute]);
 
   async function toggleTheme() {
     await setSetting("app_theme", theme === "dark" ? "light" : "dark");

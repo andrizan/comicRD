@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, RefreshCw, Search } from "lucide-react";
-import { listComicChaptersRaw, openChapterForReading } from "../api/tauri";
+import { ArrowLeft, Copy, FolderOpen, RefreshCw, Search, Type } from "lucide-react";
+import { listComicChaptersRaw, openChapterForReading, openContainingFolder } from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { ContextMenu, useContextMenu, type ContextMenuItem } from "../components/ui/context-menu";
+import { ScrollToTop } from "../components/ui/scroll-to-top";
+import { VirtualList, type VirtualListHandle } from "../components/ui/virtual-list";
 import { t as translate, useAppI18n } from "../i18n";
-import { usePreferencesStore } from "../stores/libraryStore";
+import { useChapterSort } from "../stores/libraryStore";
+import { setScrollKey, restoreScroll } from "./Layout";
 import type { RawChapter, SortDir } from "../types";
 
 function decodeComicPath(value: string): string {
@@ -48,6 +52,8 @@ function lastChapterStorageKey(comicSourcePath: string): string {
   return `comicrd:last-chapter:${comicSourcePath}`;
 }
 
+const CHAPTER_ROW_HEIGHT = 72;
+
 export function ComicPage() {
   const { t } = useAppI18n();
   const { comicId } = useParams({ from: "/comic/$comicId" });
@@ -55,10 +61,17 @@ export function ComicPage() {
   const comicSourcePath = decodeComicPath(comicId);
   const comicTitle = titleFromPath(comicSourcePath);
   const [searchText, setSearchText] = useState("");
-  const chapterSortDir = usePreferencesStore((s) => s.chapterSortDir);
-  const setChapterSortDir = usePreferencesStore((s) => s.setChapterSortDir);
-  const chapterRefs = useRef(new Map<string, HTMLDivElement>());
+  const { chapterSortDir, setChapterSortDir } = useChapterSort();
+  const scrollEl = useRef<HTMLElement | null>(null);
+  const virtualListRef = useRef<VirtualListHandle>(null);
   const hasScrolledRef = useRef(false);
+
+  useEffect(() => {
+    scrollEl.current = document.querySelector<HTMLElement>(".content-scroll");
+    const key = `comic:${comicSourcePath}`;
+    setScrollKey(key);
+    restoreScroll(key);
+  }, [comicSourcePath]);
 
   useEffect(() => {
     hasScrolledRef.current = false;
@@ -104,16 +117,43 @@ export function ComicPage() {
     });
   }
 
+  const ctxMenu = useContextMenu();
+
+  function chapterContextItems(chapter: RawChapter): ContextMenuItem[] {
+    return [
+      {
+        label: t("comic.openChapter"),
+        icon: <FolderOpen size={14} />,
+        onClick: () => void onOpenChapter(chapter.source_path),
+      },
+      {
+        label: t("library.openFolder"),
+        icon: <FolderOpen size={14} />,
+        onClick: () => void openContainingFolder(chapter.source_path),
+      },
+      {
+        label: t("library.copyTitle"),
+        icon: <Type size={14} />,
+        onClick: () => void navigator.clipboard.writeText(chapter.title),
+      },
+      {
+        label: t("library.copyPath"),
+        icon: <Copy size={14} />,
+        onClick: () => void navigator.clipboard.writeText(chapter.source_path),
+      },
+    ];
+  }
+
   useEffect(() => {
     if (!chaptersQuery.isSuccess || filteredChapters.length === 0) return;
     if (hasScrolledRef.current) return;
     const lastChapter = window.sessionStorage.getItem(lastChapterStorageKey(comicSourcePath));
     if (!lastChapter) return;
+    const idx = filteredChapters.findIndex((c) => c.source_path === lastChapter);
+    if (idx < 0) return;
     hasScrolledRef.current = true;
-    window.requestAnimationFrame(() => {
-      chapterRefs.current.get(lastChapter)?.scrollIntoView({
-        block: "center",
-      });
+    requestAnimationFrame(() => {
+      virtualListRef.current?.scrollToIndex(idx, { align: "center" });
     });
   }, [chaptersQuery.isSuccess, comicSourcePath, filteredChapters]);
 
@@ -127,6 +167,40 @@ export function ComicPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [navigate]);
+
+  const renderChapterItem = (_index: number, chapter: RawChapter) => (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => void onOpenChapter(chapter.source_path)}
+      onContextMenu={(e) => ctxMenu.show(e, chapterContextItems(chapter))}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          void onOpenChapter(chapter.source_path);
+        }
+      }}
+      className={`flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--card)] p-3 ${
+        openChapterMutation.isPending
+          ? "pointer-events-none opacity-60"
+          : "cursor-pointer hover:bg-[var(--accent)]/5"
+      }`}
+    >
+      <div className="min-w-[220px] flex-1">
+        <p className="font-semibold text-[var(--accent)] hover:underline">{chapter.title}</p>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {chapter.page_count
+            ? t("comic.pages", { count: chapter.page_count })
+            : t("comic.pagesEmpty")}
+        </p>
+      </div>
+      <span
+        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${chapterStatusClass(chapter)}`}
+      >
+        {chapterStatusLabel(chapter)}
+      </span>
+    </div>
+  );
 
   return (
     <section className="space-y-4">
@@ -205,50 +279,19 @@ export function ComicPage() {
             description={t("comic.emptyFilter.description")}
           />
         ) : (
-          filteredChapters.map((chapter) => (
-            <div
-              key={chapter.key}
-              ref={(node) => {
-                if (node) {
-                  chapterRefs.current.set(chapter.source_path, node);
-                  return;
-                }
-                chapterRefs.current.delete(chapter.source_path);
-              }}
-              role="button"
-              tabIndex={0}
-              onClick={() => void onOpenChapter(chapter.source_path)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  void onOpenChapter(chapter.source_path);
-                }
-              }}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--card)] p-3 ${
-                openChapterMutation.isPending
-                  ? "pointer-events-none opacity-60"
-                  : "cursor-pointer hover:bg-[var(--accent)]/5"
-              }`}
-            >
-              <div className="min-w-[220px] flex-1">
-                <p className="font-semibold text-[var(--accent)] hover:underline">
-                  {chapter.title}
-                </p>
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  {chapter.page_count
-                    ? t("comic.pages", { count: chapter.page_count })
-                    : t("comic.pagesEmpty")}
-                </p>
-              </div>
-              <span
-                className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${chapterStatusClass(chapter)}`}
-              >
-                {chapterStatusLabel(chapter)}
-              </span>
-            </div>
-          ))
+          <VirtualList
+            ref={virtualListRef}
+            count={filteredChapters.length}
+            estimateSize={CHAPTER_ROW_HEIGHT}
+            scrollElement={scrollEl}
+            items={filteredChapters}
+            getItemKey={(i) => filteredChapters[i].key}
+            renderItem={renderChapterItem}
+          />
         )}
       </Card>
+      <ScrollToTop />
+      <ContextMenu state={ctxMenu.state} onClose={ctxMenu.close} />
     </section>
   );
 }

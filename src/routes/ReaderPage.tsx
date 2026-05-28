@@ -7,6 +7,7 @@ import {
   Fullscreen,
   Maximize2,
   Minimize2,
+  Settings,
   Shrink,
   X,
   ZoomIn,
@@ -300,6 +301,12 @@ export function ReaderPage() {
     if (bottomDistance <= 24) {
       syncCurrentPage(totalPages - 1);
     }
+    if (!toolbarVisible) return;
+    setToolbarVisible(false);
+  };
+
+  const showToolbar = () => {
+    setToolbarVisible(true);
   };
 
   useEffect(() => {
@@ -326,6 +333,7 @@ export function ReaderPage() {
   }, [pageGap, zoom]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [toolbarVisible, setToolbarVisible] = useState(true);
   useEffect(() => {
     const onFullscreenChange = () => {
       setIsFullscreen(Boolean(document.fullscreenElement));
@@ -422,7 +430,7 @@ export function ReaderPage() {
   if (totalPages === 0) {
     return (
       <section className="min-h-[100dvh] bg-[#0f1115] text-[#f4f4f5]">
-        <div className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#151922]/95 px-3 py-2 backdrop-blur">
+        <div className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#151922]/60 px-3 py-2 backdrop-blur-md">
           <div className="mx-auto flex max-w-[1400px] items-center gap-3">
             <Button
               variant="outline"
@@ -450,15 +458,25 @@ export function ReaderPage() {
 
   return (
     <section className="fixed inset-0 overflow-hidden bg-black text-[#f4f4f5]">
-      <div className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#151922]/95 px-3 py-2 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            className="border-white/20 bg-transparent text-white hover:bg-white/10"
-            onClick={() => void closeReader()}
-          >
-            <X size={14} />
-          </Button>
+      <div
+        className="group/tb fixed inset-x-0 top-0 z-50"
+        onMouseEnter={showToolbar}
+      >
+        <div
+          className={`border-b border-white/5 bg-[#151922]/60 px-3 py-2 backdrop-blur-md transition-all duration-300 ${
+            toolbarVisible
+              ? "translate-y-0 opacity-100"
+              : "-translate-y-full opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              className="border-white/20 bg-transparent text-white hover:bg-white/10"
+              onClick={() => void closeReader()}
+            >
+              <X size={14} />
+            </Button>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
               {chapterContextQuery.data?.comic_title ?? t("reader.comicFallback")}
@@ -551,24 +569,36 @@ export function ReaderPage() {
                 void document.documentElement.requestFullscreen();
               }}
             >
-              <Fullscreen size={14} className={isFullscreen ? "text-[#ff6a3d]" : ""} />
+              <Fullscreen size={14} className={isFullscreen ? "text-[var(--accent)]" : ""} />
             </Button>
             <span className="w-10 text-center text-xs font-semibold text-white/80">
               {pageGap}px
             </span>
           </div>
         </div>
+        </div>
       </div>
 
-      <div className="h-full bg-black px-2 pt-20">
+      <button
+        type="button"
+        className={`fixed right-3 top-3 z-50 rounded-full bg-[#151922]/60 p-2 text-white/50 backdrop-blur transition-all duration-300 hover:bg-[#151922]/90 hover:text-white ${
+          toolbarVisible ? "pointer-events-none opacity-0" : "opacity-100"
+        }`}
+        onMouseEnter={showToolbar}
+        onClick={showToolbar}
+      >
+        <Settings size={16} />
+      </button>
+
+      <div className="h-full bg-black">
         <div
           key={chapterIdNum}
           ref={scrollRef}
-          className="reader-scrollbar h-[calc(100dvh-120px)] overflow-x-hidden overflow-y-auto bg-black pr-1"
+          className="reader-scrollbar h-dvh overflow-x-hidden overflow-y-auto bg-black"
           style={{ scrollBehavior: "smooth" }}
           onScroll={handleReaderScroll}
         >
-          <div className="mx-auto w-full">
+          <div className="w-full">
             {Array.from({ length: totalPages }).map((_, index) => (
               <div
                 key={`${chapterIdNum}-${index}`}
@@ -592,7 +622,17 @@ export function ReaderPage() {
         </div>
       </div>
 
-      <div className="group fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#151922d9] px-6 py-1 opacity-80 transition-all duration-150 hover:bg-[#151922f0] hover:py-3 hover:opacity-100">
+      <div
+        className="group fixed inset-x-0 bottom-0 z-40"
+        onMouseMove={showToolbar}
+      >
+        <div
+          className={`border-t border-white/5 bg-[#151922]/50 px-6 py-1 backdrop-blur-md transition-all duration-300 hover:bg-[#151922]/70 hover:py-3 ${
+            toolbarVisible
+              ? "translate-y-0 opacity-100"
+              : "translate-y-full opacity-0 pointer-events-none"
+          }`}
+        >
         <div className="mx-auto flex w-full max-w-[1400px] items-center gap-3">
           <span className="w-0 overflow-hidden text-left text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
             {pageIndicator}
@@ -604,7 +644,7 @@ export function ReaderPage() {
                 type="button"
                 title={t("reader.pageTitle", { page: idx + 1 })}
                 className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
-                  idx <= activeSegment ? "bg-[#ff6a3d]" : "bg-white/20"
+                  idx <= activeSegment ? "bg-[var(--accent)]" : "bg-white/20"
                 }`}
                 onClick={() => {
                   goToPage(idx);
@@ -615,6 +655,7 @@ export function ReaderPage() {
           <span className="w-0 overflow-hidden text-right text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
             {Math.max(totalPages, 1)}
           </span>
+        </div>
         </div>
       </div>
     </section>

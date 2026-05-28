@@ -16,32 +16,38 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 - **Page Indicator** — Segmented bottom progress bar with clickable segments for quick page jumping
 - **Responsive Toolbar** — Top toolbar with close, title, navigation, zoom, gap, fullscreen, and bookmark controls
 - **`Esc` Navigation** — Returns to the chapter page based on `comic_source_path`
+- **Scroll Restoration** — Scroll position is maintained per page and per library tab when navigating away and back
 
 ## Performance
 
 - **Incremental Library Scan** — Titles scanned first; chapters scanned only when a title is opened
 - **Lazy Database Writes** — Comic, chapter, and progress records created only when a chapter is read
 - **Relative History Paths** — Progress keys are relative to the library source, so history survives folder moves
+- **Virtual List Rendering** — Library and chapter lists use `@tanstack/react-virtual` to render only visible rows, keeping memory usage constant regardless of list size
 - **Stable Webtoon Rendering** — Pages are rendered as a normal vertical document with lazy `<img>` loading to avoid dynamic-height virtualization overlap
 - **Custom Page Protocol** — Comic page bytes are served directly to `<img>` tags through Tauri's registered `comicrd` protocol. Linux/macOS use `comicrd://localhost/...`; Windows/Android use Wry's `http://comicrd.localhost/...` custom-protocol workaround.
 - **Persistent Settings** — Reader, library, theme, and locale preferences are stored in SQLite `app_settings`
 
 ## Tech Stack
 
-| Layer           | Technology                                                              |
-| --------------- | ----------------------------------------------------------------------- |
-| Runtime         | [Tauri 2](https://v2.tauri.app/)                                        |
-| Backend         | Rust + [`rusqlite`](https://github.com/rusqlite/rusqlite) (SQLite)      |
-| Frontend        | [React 19](https://react.dev/) + [Vite](https://vite.dev/) + TypeScript |
-| Styling         | [TailwindCSS v4](https://tailwindcss.com/)                              |
-| Routing         | [TanStack Router](https://tanstack.com/router)                          |
-| Data Fetching   | [TanStack Query](https://tanstack.com/query)                            |
-| i18n            | [Lingui](https://lingui.dev/)                                           |
-| Icons           | [Lucide React](https://lucide.dev/)                                     |
-| Linting         | [oxlint](https://oxc-project.github.io/)                                |
-| Formatting      | [oxfmt](https://oxc-project.github.io/)                                 |
-| Testing         | [Vitest](https://vitest.dev/) (frontend), `cargo test` (Rust)           |
-| Package Manager | [pnpm](https://pnpm.io/)                                                |
+| Layer               | Technology                                                              |
+| ------------------- | ----------------------------------------------------------------------- |
+| Runtime             | [Tauri 2](https://v2.tauri.app/)                                        |
+| Backend             | Rust + [`rusqlite`](https://github.com/rusqlite/rusqlite) (SQLite)      |
+| Frontend            | [React 19](https://react.dev/) + [Vite](https://vite.dev/) + TypeScript |
+| Styling             | [TailwindCSS v4](https://tailwindcss.com/)                              |
+| Routing             | [TanStack Router](https://tanstack.com/router)                          |
+| Data Fetching       | [TanStack Query](https://tanstack.com/query)                            |
+| State Management    | [Zustand](https://zustand-demo.pmnd.rs/)                                |
+| List Virtualization | [TanStack Virtual](https://tanstack.com/virtual)                        |
+| i18n                | [Lingui](https://lingui.dev/)                                           |
+| Icons               | [Lucide React](https://lucide.dev/)                                     |
+| Linting             | [oxlint](https://oxc-project.github.io/)                                |
+| Formatting          | [oxfmt](https://oxc-project.github.io/)                                 |
+| Unit Testing        | [Vitest](https://vitest.dev/)                                           |
+| E2E Testing         | [Playwright](https://playwright.dev/)                                   |
+| Rust Testing        | `cargo test`                                                            |
+| Package Manager     | [pnpm](https://pnpm.io/)                                                |
 
 ## Getting Started
 
@@ -68,6 +74,7 @@ pnpm format        # Format code with oxfmt
 pnpm lint          # Lint with oxlint
 pnpm typecheck     # TypeScript type checking
 pnpm test          # Run Vitest tests
+npx playwright test # Run Playwright E2E tests
 ```
 
 ## Building
@@ -112,11 +119,19 @@ CI workflows for multi-platform builds are defined in `.github/workflows/desktop
 ```
 comicrd/
 ├── .github/workflows/   # CI/CD workflows
+├── e2e/                 # Playwright E2E tests
 ├── public/              # Static assets
 ├── src/                 # React frontend (TypeScript)
+│   ├── api/             # Tauri IPC wrappers
+│   ├── components/      # UI components (virtual-list, card, button, feedback)
+│   ├── lib/             # Utilities and pure functions
+│   ├── routes/          # Page components (Layout, Library, Comic, Reader, Settings)
+│   └── stores/          # Zustand state stores
 ├── src-tauri/           # Tauri backend (Rust)
 ├── AGENTS.md            # Agent coding guidelines
 ├── package.json
+├── playwright.config.ts
+├── vitest.config.ts
 ├── vite.config.ts
 ├── tsconfig.json
 └── README.md

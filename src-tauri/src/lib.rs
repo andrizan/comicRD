@@ -1896,6 +1896,40 @@ fn import_database_backup(app: AppHandle, input_path: String) -> Result<(), Stri
     Ok(())
 }
 
+#[tauri::command]
+fn open_containing_folder(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    let dir = if p.is_dir() {
+        p.to_path_buf()
+    } else {
+        p.parent()
+            .map(|d| d.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+    };
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| format!("failed to open folder: {e}"))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| format!("failed to open folder: {e}"))?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| format!("failed to open folder: {e}"))?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1942,7 +1976,8 @@ pub fn run() {
             get_setting,
             list_settings,
             export_database_backup,
-            import_database_backup
+            import_database_backup,
+            open_containing_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

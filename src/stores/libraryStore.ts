@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { getSetting, setSetting } from "../api/tauri";
 import type { SortBy, SortDir } from "../types";
 
@@ -83,3 +84,34 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     set(patch);
   },
 }));
+
+const selectorActions = (s: PreferencesState) => ({
+  setSortBy: s.setSortBy,
+  setSortDir: s.setSortDir,
+  setViewMode: s.setViewMode,
+  setInputPath: s.setInputPath,
+  setChapterSortDir: s.setChapterSortDir,
+  loadPreferences: s.loadPreferences,
+});
+
+const selectorLibraryView = (s: PreferencesState) => ({
+  sortBy: s.sortBy,
+  sortDir: s.sortDir,
+  viewMode: s.viewMode,
+  inputPath: s.inputPath,
+  setSortBy: s.setSortBy,
+  setSortDir: s.setSortDir,
+  setViewMode: s.setViewMode,
+  loadPreferences: s.loadPreferences,
+});
+
+const selectorChapterSort = (s: PreferencesState) => ({
+  chapterSortDir: s.chapterSortDir,
+  setChapterSortDir: s.setChapterSortDir,
+});
+
+export const useLibraryPreferences = () => usePreferencesStore(useShallow(selectorLibraryView));
+
+export const useChapterSort = () => usePreferencesStore(useShallow(selectorChapterSort));
+
+export const usePreferencesActions = () => usePreferencesStore(useShallow(selectorActions));
