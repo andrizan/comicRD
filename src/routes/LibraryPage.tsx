@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Bookmark, BookmarkCheck, Copy, FolderOpen, RefreshCw, Search, Type } from "lucide-react";
+import { Bookmark, BookmarkCheck, BookOpen, Clock, Copy, FolderOpen, RefreshCw, Search, Type } from "lucide-react";
 import {
   addComicBookmark,
   initDb,
@@ -382,8 +382,8 @@ export function LibraryPage() {
         />
       ) : null}
 
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--card)]">
+        <div className="flex flex-col gap-3 p-4 pb-0 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-bold">{t("library.title")}</h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
@@ -397,57 +397,47 @@ export function LibraryPage() {
               ) : null}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-md border border-[var(--border)] p-0.5">
-              <button
-                onClick={() => switchViewMode("history")}
-                className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
-                  viewMode === "history"
-                    ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                }`}
-              >
-                {t("library.history")}
-              </button>
-              <button
-                onClick={() => switchViewMode("library")}
-                className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
-                  viewMode === "library"
-                    ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                }`}
-              >
-                {t("library.library")}
-              </button>
-              <button
-                onClick={() => switchViewMode("bookmarks")}
-                className={`rounded px-2.5 py-1 text-xs font-semibold transition ${
-                  viewMode === "bookmarks"
-                    ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                }`}
-              >
-                {t("library.bookmarks")}
-              </button>
-            </div>
-            <Button
-              onClick={() => {
-                void comicsQuery.refetch();
-                void historyQuery.refetch();
-                void bookmarksQuery.refetch();
-              }}
-              variant="ghost"
-              disabled={!activeLibraryPath}
-              title={t("library.refresh")}
-              aria-label={t("library.refresh")}
-              className="gap-1.5 px-2.5"
+        </div>
+
+        <div className="flex items-center justify-between border-b border-[var(--border)]">
+          <div className="flex">
+            <button
+              onClick={() => switchViewMode("history")}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition ${
+                viewMode === "history"
+                  ? "border-b-2 border-[var(--accent)] text-[var(--foreground)]"
+                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              }`}
             >
-              <RefreshCw size={14} />
-            </Button>
+              <Clock size={15} />
+              {t("library.history")}
+            </button>
+            <button
+              onClick={() => switchViewMode("library")}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition ${
+                viewMode === "library"
+                  ? "border-b-2 border-[var(--accent)] text-[var(--foreground)]"
+                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              <BookOpen size={15} />
+              {t("library.library")}
+            </button>
+            <button
+              onClick={() => switchViewMode("bookmarks")}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition ${
+                viewMode === "bookmarks"
+                  ? "border-b-2 border-[var(--accent)] text-[var(--foreground)]"
+                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              <Bookmark size={15} />
+              {t("library.bookmarks")}
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2 p-4">
           <div className="relative min-w-0 flex-1">
             <Search
               size={14}
@@ -456,7 +446,7 @@ export function LibraryPage() {
             <input
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
+              className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
               placeholder={t("library.searchPlaceholder")}
             />
           </div>
@@ -465,7 +455,7 @@ export function LibraryPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
-                className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
+                className="h-9 shrink-0 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
               >
                 <option value="name">{t("common.name")}</option>
                 <option value="folder_date">{sortLabel}</option>
@@ -473,13 +463,27 @@ export function LibraryPage() {
               <select
                 value={sortDir}
                 onChange={(e) => setSortDir(e.target.value as SortDir)}
-                className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
+                className="h-9 shrink-0 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
               >
                 <option value="asc">{t("common.asc")}</option>
                 <option value="desc">{t("common.desc")}</option>
               </select>
             </>
           ) : null}
+          <Button
+            onClick={() => {
+              void comicsQuery.refetch();
+              void historyQuery.refetch();
+              void bookmarksQuery.refetch();
+            }}
+            variant="outline"
+            disabled={!activeLibraryPath}
+            title={t("library.refresh")}
+            aria-label={t("library.refresh")}
+            className="h-9 w-9 shrink-0"
+          >
+            <RefreshCw size={14} />
+          </Button>
         </div>
 
         {comicsQuery.isPending ? (

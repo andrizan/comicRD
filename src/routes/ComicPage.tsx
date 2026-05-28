@@ -150,7 +150,7 @@ export function ComicPage() {
       return chapterSortDir === "desc" ? -order : order;
     });
     return filtered;
-  }, [chapterSortDir, chaptersQuery.data, searchText]);
+  }, [chapterSortDir, chaptersQuery.data, searchText, showFavoritesOnly, favoriteSet]);
   const totalChapters = chaptersQuery.data?.length ?? 0;
 
   async function onOpenChapter(chapterSourcePath: string) {
@@ -319,14 +319,14 @@ export function ComicPage() {
             <input
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
+              className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
               placeholder={t("comic.searchPlaceholder")}
             />
           </div>
           <select
             value={chapterSortDir}
             onChange={(e) => setChapterSortDir(e.target.value as SortDir)}
-            className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
+            className="h-9 shrink-0 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
           >
             <option value="asc">{t("comic.nameAsc")}</option>
             <option value="desc">{t("comic.nameDesc")}</option>
