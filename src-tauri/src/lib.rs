@@ -302,6 +302,7 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
         ("library_sort_dir", "\"asc\""),
         ("library_view_mode", "\"all\""),
         ("app_theme", "\"light\""),
+        ("app_locale", "\"en\""),
     ];
     for (key, value_json) in defaults {
         conn.execute(
@@ -1820,9 +1821,18 @@ mod tests {
     fn smoke_scan_progress_and_continue_flow() {
         let conn = Connection::open_in_memory().expect("open in memory db");
         run_migrations(&conn).expect("migrations");
+        let default_locale: String = conn
+            .query_row(
+                "SELECT value_json FROM app_settings WHERE key = 'app_locale'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("default locale setting");
+        assert_eq!(default_locale, "\"en\"");
 
         let tmp = tempdir().expect("tempdir");
         let library_path = tmp.path().join("library");
+        let library_path_str = library_path.to_string_lossy().to_string();
         let comic_path = library_path.join("Comic A");
         let chapter_a = comic_path.join("Chapter 001");
         let chapter_b = comic_path.join("Chapter 002");
@@ -1836,13 +1846,13 @@ mod tests {
         let ts = now_ts();
         conn.execute(
             "INSERT INTO libraries (path, created_at, updated_at) VALUES (?1, ?2, ?3)",
-            params![library_path.to_string_lossy().to_string(), ts, ts],
+            params![library_path_str, ts, ts],
         )
         .expect("insert library");
         let library_id = conn.last_insert_rowid();
 
         let (comic_count, chapter_count) =
-            scan_comic_dir(&conn, library_id, &comic_path).expect("scan comic");
+            scan_comic_dir(&conn, library_id, &library_path_str, &comic_path).expect("scan comic");
         assert_eq!(comic_count, 1);
         assert_eq!(chapter_count, 2);
 

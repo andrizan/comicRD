@@ -24,6 +24,7 @@ import {
 } from "../api/tauri";
 import { ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
+import { useAppI18n } from "../i18n";
 import { comicPageSrc } from "../lib/comic-protocol";
 
 function parseSettingMap(entries: { key: string; value_json: string }[]) {
@@ -83,6 +84,7 @@ function PageImage({
 }
 
 export function ReaderPage() {
+  const { t } = useAppI18n();
   const { chapterId } = useParams({ from: "/reader/$chapterId" });
   const navigate = useNavigate({ from: "/reader/$chapterId" });
   const chapterIdNum = Number(chapterId);
@@ -347,8 +349,8 @@ export function ReaderPage() {
     return (
       <section className="space-y-3">
         <ErrorState
-          title="Gagal memuat reader"
-          description="Terjadi error saat mengambil data chapter/page. Coba reload chapter ini."
+          title={t("reader.loadError.title")}
+          description={t("reader.loadError.description")}
           onRetry={() => {
             void settingsQuery.refetch();
             void pagesQuery.refetch();
@@ -383,18 +385,18 @@ export function ReaderPage() {
             </Button>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">
-                {chapterContextQuery.data?.comic_title ?? "Comic"}
+                {chapterContextQuery.data?.comic_title ?? t("reader.comicFallback")}
               </p>
               <p className="truncate text-xs text-white/70">
-                {chapterContextQuery.data?.title ?? "Chapter"}
+                {chapterContextQuery.data?.title ?? t("reader.chapterFallback")}
               </p>
             </div>
           </div>
         </div>
         <div className="mx-auto max-w-[980px] px-3 pt-24">
           <ErrorState
-            title="Chapter kosong"
-            description="Tidak ada halaman gambar untuk chapter ini."
+            title={t("reader.empty.title")}
+            description={t("reader.empty.description")}
           />
         </div>
       </section>
@@ -414,19 +416,21 @@ export function ReaderPage() {
           </Button>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
-              {chapterContextQuery.data?.comic_title ?? "Comic"}
+              {chapterContextQuery.data?.comic_title ?? t("reader.comicFallback")}
             </p>
             <p className="truncate text-xs text-white/70">
-              {chapterContextQuery.data?.title ?? "Chapter"} · Chapter{" "}
-              {chapterContextQuery.data?.chapter_position ?? "-"} /{" "}
-              {chapterContextQuery.data?.chapter_total ?? "-"}
+              {chapterContextQuery.data?.title ?? t("reader.chapterFallback")} ·{" "}
+              {t("reader.chapterPosition", {
+                position: chapterContextQuery.data?.chapter_position ?? "-",
+                total: chapterContextQuery.data?.chapter_total ?? "-",
+              })}
             </p>
           </div>
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title="Kurangi gap"
+              title={t("reader.decreaseGap")}
               onClick={() => setPageGap((value) => Math.max(0, value - 10))}
             >
               <Minimize2 size={14} />
@@ -434,7 +438,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title="Tambah gap"
+              title={t("reader.increaseGap")}
               onClick={() => setPageGap((value) => Math.min(100, value + 10))}
             >
               <Maximize2 size={14} />
@@ -485,7 +489,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title="Reset zoom"
+              title={t("reader.resetZoom")}
               onClick={() => setZoom(1)}
             >
               <Shrink size={14} />
@@ -493,7 +497,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title="Fullscreen"
+              title={t("reader.fullscreen")}
               onClick={() => {
                 if (document.fullscreenElement) {
                   void document.exitFullscreen();
@@ -561,7 +565,7 @@ export function ReaderPage() {
               <button
                 key={idx}
                 type="button"
-                title={`Page ${idx + 1}`}
+                title={t("reader.pageTitle", { page: idx + 1 })}
                 className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
                   idx <= activeSegment ? "bg-[#ff6a3d]" : "bg-white/20"
                 }`}

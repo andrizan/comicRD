@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { FolderOpen, Moon, Settings, Sun } from "lucide-react";
 import { listSettings, setSetting } from "../api/tauri";
+import { activateLocale, resolveLocalePreference, useAppI18n } from "../i18n";
 import { cn } from "../lib/utils";
 
 function parseTheme(value: string | undefined): "light" | "dark" {
@@ -15,7 +16,18 @@ function parseTheme(value: string | undefined): "light" | "dark" {
   }
 }
 
+function parseSettingString(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "string" ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function Layout() {
+  const { t } = useAppI18n();
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -30,10 +42,16 @@ export function Layout() {
     [settingsQuery.data],
   );
   const theme = parseTheme(settingMap.get("app_theme"));
+  const localePreference = parseSettingString(settingMap.get("app_locale"), "en");
+  const activeLocale = resolveLocalePreference(localePreference);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    activateLocale(activeLocale);
+  }, [activeLocale]);
 
   async function toggleTheme() {
     await setSetting("app_theme", theme === "dark" ? "light" : "dark");
@@ -51,7 +69,7 @@ export function Layout() {
                 type="button"
                 onClick={() => void toggleTheme()}
                 className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition hover:bg-[var(--muted)]"
-                title="Toggle dark mode"
+                title={t("app.toggleTheme")}
               >
                 {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
               </button>
@@ -63,7 +81,7 @@ export function Layout() {
                     "inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-2.5 py-1.5 text-sm font-medium text-[var(--accent-foreground)]",
                 }}
               >
-                <FolderOpen size={15} /> Library
+                <FolderOpen size={15} /> {t("nav.library")}
               </Link>
               <Link
                 to="/settings"
@@ -73,7 +91,7 @@ export function Layout() {
                     "inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-2.5 py-1.5 text-sm font-medium text-[var(--accent-foreground)]",
                 }}
               >
-                <Settings size={15} /> Settings
+                <Settings size={15} /> {t("nav.settings")}
               </Link>
             </nav>
           </div>

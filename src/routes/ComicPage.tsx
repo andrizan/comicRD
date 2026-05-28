@@ -6,6 +6,7 @@ import { listComicChaptersRaw, openChapterForReading } from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { t as translate, useAppI18n } from "../i18n";
 import type { RawChapter, SortDir } from "../types";
 
 function decodeComicPath(value: string): string {
@@ -23,12 +24,15 @@ function titleFromPath(path: string): string {
 }
 
 function chapterStatusLabel(chapter: RawChapter): string {
-  if (chapter.is_read) return "Read";
+  if (chapter.is_read) return translate("comic.status.read");
   if (chapter.total_pages > 0 || chapter.page_count > 0) {
     const total = chapter.total_pages || chapter.page_count;
-    return `Reading p.${Math.min(chapter.last_page + 1, Math.max(total, 1))}/${total}`;
+    return translate("comic.status.reading", {
+      page: Math.min(chapter.last_page + 1, Math.max(total, 1)),
+      total,
+    });
   }
-  return "Unread";
+  return translate("comic.status.unread");
 }
 
 function chapterStatusClass(chapter: RawChapter): string {
@@ -44,6 +48,7 @@ function lastChapterStorageKey(comicSourcePath: string): string {
 }
 
 export function ComicPage() {
+  const { t } = useAppI18n();
   const { comicId } = useParams({ from: "/comic/$comicId" });
   const navigate = useNavigate();
   const comicSourcePath = decodeComicPath(comicId);
@@ -129,19 +134,19 @@ export function ComicPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-semibold">
-              {totalChapters} chapters
+              {t("comic.chapters", { count: totalChapters })}
             </span>
             {searchText.trim() ? (
               <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-semibold text-[var(--muted-foreground)]">
-                {filteredChapters.length} shown
+                {t("comic.shown", { count: filteredChapters.length })}
               </span>
             ) : null}
             <Button
               variant="ghost"
               onClick={() => void chaptersQuery.refetch()}
               disabled={chaptersQuery.isFetching}
-              title="Refresh chapters"
-              aria-label="Refresh chapters"
+              title={t("comic.refreshChapters")}
+              aria-label={t("comic.refreshChapters")}
               className="gap-1.5 px-2.5"
             >
               <RefreshCw
@@ -161,7 +166,7 @@ export function ComicPage() {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
-              placeholder="Search chapters..."
+              placeholder={t("comic.searchPlaceholder")}
             />
           </div>
           <select
@@ -169,8 +174,8 @@ export function ComicPage() {
             onChange={(e) => setChapterSortDir(e.target.value as SortDir)}
             className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
           >
-            <option value="asc">Name Asc</option>
-            <option value="desc">Name Desc</option>
+            <option value="asc">{t("comic.nameAsc")}</option>
+            <option value="desc">{t("comic.nameDesc")}</option>
           </select>
         </div>
       </Card>
@@ -179,19 +184,19 @@ export function ComicPage() {
           <SkeletonList rows={5} />
         ) : chaptersQuery.isError ? (
           <ErrorState
-            title="Gagal memuat chapter"
-            description="Coba buka ulang komik."
+            title={t("comic.loadError.title")}
+            description={t("comic.loadError.description")}
             onRetry={() => void chaptersQuery.refetch()}
           />
         ) : (chaptersQuery.data?.length ?? 0) === 0 ? (
           <EmptyState
-            title="Chapter tidak ditemukan"
-            description="Folder/arsip komik ini tidak punya chapter yang valid."
+            title={t("comic.empty.title")}
+            description={t("comic.empty.description")}
           />
         ) : filteredChapters.length === 0 ? (
           <EmptyState
-            title="Tidak ada chapter sesuai filter"
-            description="Ubah filter atau kata kunci pencarian."
+            title={t("comic.emptyFilter.title")}
+            description={t("comic.emptyFilter.description")}
           />
         ) : (
           filteredChapters.map((chapter) => (
@@ -209,7 +214,9 @@ export function ComicPage() {
               <div className="min-w-[220px] flex-1">
                 <p className="font-semibold text-[var(--accent)]">{chapter.title}</p>
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  Pages: {chapter.page_count || "-"}
+                  {chapter.page_count
+                    ? t("comic.pages", { count: chapter.page_count })
+                    : t("comic.pagesEmpty")}
                 </p>
               </div>
               <span
@@ -221,7 +228,7 @@ export function ComicPage() {
                 onClick={() => void onOpenChapter(chapter.source_path)}
                 disabled={openChapterMutation.isPending}
               >
-                Baca
+                {t("comic.read")}
               </Button>
             </div>
           ))

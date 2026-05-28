@@ -3,7 +3,7 @@ import comicPage from "../routes/ComicPage.tsx?raw";
 
 describe("ComicPage", () => {
   it("has an icon-only refresh button for the chapter list", () => {
-    expect(comicPage).toContain("Refresh chapters");
+    expect(comicPage).toContain("comic.refreshChapters");
     expect(comicPage).toContain("chaptersQuery.refetch()");
     expect(comicPage).toContain("chaptersQuery.isFetching");
     expect(comicPage).toContain('variant="ghost"');

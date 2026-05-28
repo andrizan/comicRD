@@ -5,6 +5,7 @@ import { exportDatabaseBackup, importDatabaseBackup, listSettings, setSetting } 
 import { ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { localeOptions, type LocalePreference, useAppI18n } from "../i18n";
 import { isLibrarySourceSaveDisabled } from "../lib/settings-state";
 
 function parse<T>(value: string | undefined, fallback: T): T {
@@ -24,7 +25,13 @@ function parseTheme(value: string | undefined): "light" | "dark" {
   return parse<string>(value, "light") === "dark" ? "dark" : "light";
 }
 
+function parseLocalePreference(value: string | undefined): LocalePreference {
+  const parsed = parse<string>(value, "en");
+  return parsed === "id" ? "id" : "en";
+}
+
 export function SettingsPage() {
+  const { t } = useAppI18n();
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -34,6 +41,7 @@ export function SettingsPage() {
   const [defaultZoom, setDefaultZoom] = useState(1);
   const [pageGap, setPageGap] = useState(10);
   const [appTheme, setAppTheme] = useState<"light" | "dark">("light");
+  const [localePreference, setLocalePreference] = useState<LocalePreference>("en");
   const [librarySource, setLibrarySource] = useState("");
   const [savedLibrarySource, setSavedLibrarySource] = useState("");
   const [isLibrarySourceSaving, setIsLibrarySourceSaving] = useState(false);
@@ -45,6 +53,7 @@ export function SettingsPage() {
     setDefaultZoom(parse<number>(map.get("default_zoom"), 1));
     setPageGap(normalizePageGap(parse<number>(map.get("page_gap"), 10)));
     setAppTheme(parseTheme(map.get("app_theme")));
+    setLocalePreference(parseLocalePreference(map.get("app_locale")));
     const storedLibrarySource = parse<string>(map.get("library_source_input"), "");
     setLibrarySource(storedLibrarySource);
     setSavedLibrarySource(storedLibrarySource);
@@ -56,6 +65,7 @@ export function SettingsPage() {
     await setSetting("default_zoom", Number(defaultZoom.toFixed(2)));
     await setSetting("page_gap", normalizePageGap(pageGap));
     await setSetting("app_theme", appTheme);
+    await setSetting("app_locale", localePreference);
     await queryClient.invalidateQueries({ queryKey: ["settings"] });
   }
 
@@ -99,9 +109,9 @@ export function SettingsPage() {
     setIsBackupBusy(true);
     try {
       await exportDatabaseBackup(selected);
-      setBackupMessage(`Backup berhasil diexport: ${selected}`);
+      setBackupMessage(t("settings.backupExportSuccess", { path: selected }));
     } catch (error) {
-      setBackupMessage(`Backup export gagal: ${String(error)}`);
+      setBackupMessage(t("settings.backupExportFailure", { error: String(error) }));
     } finally {
       setIsBackupBusy(false);
     }
@@ -124,9 +134,9 @@ export function SettingsPage() {
     try {
       await importDatabaseBackup(selected);
       await queryClient.invalidateQueries();
-      setBackupMessage(`Backup berhasil diimport: ${selected}`);
+      setBackupMessage(t("settings.backupImportSuccess", { path: selected }));
     } catch (error) {
-      setBackupMessage(`Backup import gagal: ${String(error)}`);
+      setBackupMessage(t("settings.backupImportFailure", { error: String(error) }));
     } finally {
       setIsBackupBusy(false);
     }
@@ -144,8 +154,8 @@ export function SettingsPage() {
     return (
       <section className="space-y-4">
         <ErrorState
-          title="Gagal memuat settings"
-          description="Coba reload halaman settings."
+          title={t("settings.loadError.title")}
+          description={t("settings.loadError.description")}
           onRetry={() => void settingsQuery.refetch()}
         />
       </section>
@@ -161,34 +171,35 @@ export function SettingsPage() {
   return (
     <section className="space-y-4">
       <Card className="space-y-4">
-        <h2 className="text-xl font-bold">Library Source</h2>
+        <h2 className="text-xl font-bold">{t("settings.librarySource.title")}</h2>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Folder ini dipakai sebagai root library. Library page hanya membaca title komik dari sini.
+          {t("settings.librarySource.description")}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={librarySource}
             onChange={(event) => setLibrarySource(event.target.value)}
             className="min-w-[360px] flex-1 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm"
-            placeholder="/path/ke/folder-komik"
+            placeholder={t("settings.librarySource.placeholder")}
           />
           <Button onClick={() => void onPickLibrarySource()} variant="outline">
-            Browse
+            {t("settings.browse")}
           </Button>
           <Button onClick={() => void saveLibrarySource()} disabled={isSetFolderDisabled}>
-            Set Folder
+            {t("settings.setFolder")}
           </Button>
         </div>
       </Card>
 
       <Card className="space-y-4">
-        <h2 className="text-xl font-bold">Reader Settings</h2>
+        <h2 className="text-xl font-bold">{t("settings.reader.title")}</h2>
         <p className="rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm">
-          Reader mode dikunci ke <span className="font-semibold">Webtoon</span>.
+          {t("settings.readerModeLocked")}
+          <span className="font-semibold">{t("settings.webtoon")}</span>.
         </p>
 
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">Default Zoom</span>
+          <span className="mb-1 block text-sm font-semibold">{t("settings.defaultZoom")}</span>
           <input
             min={0.4}
             max={3}
@@ -199,12 +210,12 @@ export function SettingsPage() {
             className="w-full"
           />
           <p className="text-xs text-[var(--muted-foreground)]">
-            Value: {Math.round(defaultZoom * 100)}%
+            {t("common.value", { value: `${Math.round(defaultZoom * 100)}%` })}
           </p>
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">Page Margin / Gap</span>
+          <span className="mb-1 block text-sm font-semibold">{t("settings.pageGap")}</span>
           <input
             min={0}
             max={100}
@@ -214,39 +225,57 @@ export function SettingsPage() {
             onChange={(e) => setPageGap(Number(e.target.value))}
             className="w-full"
           />
-          <p className="text-xs text-[var(--muted-foreground)]">Value: {pageGap}px</p>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            {t("common.value", { value: `${pageGap}px` })}
+          </p>
         </label>
 
-        <Button onClick={saveAll}>Save Settings</Button>
+        <Button onClick={saveAll}>{t("settings.saveSettings")}</Button>
       </Card>
 
       <Card className="space-y-3">
-        <h2 className="text-lg font-bold">Appearance</h2>
+        <h2 className="text-lg font-bold">{t("settings.appearance.title")}</h2>
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">Theme</span>
+          <span className="mb-1 block text-sm font-semibold">{t("settings.theme")}</span>
           <select
             value={appTheme}
             onChange={(event) => setAppTheme(event.target.value === "dark" ? "dark" : "light")}
             className="rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm"
           >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="light">{t("common.light")}</option>
+            <option value="dark">{t("common.dark")}</option>
           </select>
         </label>
-        <Button onClick={saveAll}>Save Appearance</Button>
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">{t("settings.language")}</span>
+          <select
+            value={localePreference}
+            onChange={(event) => setLocalePreference(event.target.value as LocalePreference)}
+            className="rounded-md border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm"
+          >
+            {localeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.value === "id"
+                  ? t("settings.language.indonesian")
+                  : t("settings.language.english")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button onClick={saveAll}>{t("settings.saveAppearance")}</Button>
       </Card>
 
       <Card className="space-y-3">
-        <h2 className="text-lg font-bold">Backup Database</h2>
+        <h2 className="text-lg font-bold">{t("settings.backup.title")}</h2>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Export/import seluruh history baca, bookmark, dan settings.
+          {t("settings.backup.description")}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => void onExportBackup()} disabled={isBackupBusy}>
-            Export Backup
+            {t("settings.exportBackup")}
           </Button>
           <Button onClick={() => void onImportBackup()} variant="outline" disabled={isBackupBusy}>
-            Import Backup
+            {t("settings.importBackup")}
           </Button>
         </div>
         {backupMessage ? (

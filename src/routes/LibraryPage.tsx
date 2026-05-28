@@ -5,6 +5,7 @@ import { RefreshCw, Search } from "lucide-react";
 import { getSetting, initDb, listLibraryComicsRaw, setSetting } from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
+import { useAppI18n } from "../i18n";
 import { unixToLocale } from "../lib/utils";
 import type { RawComic, SortBy, SortDir } from "../types";
 
@@ -23,6 +24,7 @@ function isViewMode(value: string): value is "all" | "by_folder" {
 }
 
 export function LibraryPage() {
+  const { t } = useAppI18n();
   const [inputPath, setInputPath] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -113,22 +115,22 @@ export function LibraryPage() {
     <section className="space-y-3">
       {!activeLibraryPath ? (
         <ErrorState
-          title="Folder Library Belum Diset"
-          description="Set folder library di Settings terlebih dahulu. Setelah diset, list komik langsung diambil dari folder."
+          title={t("library.notSet.title")}
+          description={t("library.notSet.description")}
         />
       ) : null}
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-bold">Comics</h2>
+            <h2 className="text-xl font-bold">{t("library.title")}</h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 font-semibold">
-                {libraryStats.totalComics} comics
+                {t("library.count", { count: libraryStats.totalComics })}
               </span>
               {searchText.trim() ? (
                 <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 font-semibold text-[var(--muted-foreground)]">
-                  {libraryStats.visibleComics} shown
+                  {t("library.shown", { count: libraryStats.visibleComics })}
                 </span>
               ) : null}
             </div>
@@ -143,7 +145,7 @@ export function LibraryPage() {
                     : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                 }`}
               >
-                All
+                {t("library.all")}
               </button>
               <button
                 onClick={() => setViewMode("by_folder")}
@@ -153,13 +155,15 @@ export function LibraryPage() {
                     : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                 }`}
               >
-                Folder
+                {t("library.folder")}
               </button>
             </div>
             <Button
               onClick={() => void comicsQuery.refetch()}
               variant="ghost"
               disabled={!activeLibraryPath}
+              title={t("library.refresh")}
+              aria-label={t("library.refresh")}
               className="gap-1.5 px-2.5"
             >
               <RefreshCw size={14} />
@@ -177,7 +181,7 @@ export function LibraryPage() {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
-              placeholder="Search comics..."
+              placeholder={t("library.searchPlaceholder")}
             />
           </div>
           <select
@@ -185,16 +189,16 @@ export function LibraryPage() {
             onChange={(e) => setSortBy(e.target.value as SortBy)}
             className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
           >
-            <option value="name">Name</option>
-            <option value="folder_date">Folder Date</option>
+            <option value="name">{t("common.name")}</option>
+            <option value="folder_date">{t("library.folderDate")}</option>
           </select>
           <select
             value={sortDir}
             onChange={(e) => setSortDir(e.target.value as SortDir)}
             className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm"
           >
-            <option value="asc">Asc</option>
-            <option value="desc">Desc</option>
+            <option value="asc">{t("common.asc")}</option>
+            <option value="desc">{t("common.desc")}</option>
           </select>
         </div>
 
@@ -202,15 +206,15 @@ export function LibraryPage() {
           <SkeletonList rows={7} />
         ) : comicsQuery.isError ? (
           <ErrorState
-            title="Gagal membaca folder library"
-            description="Pastikan path folder valid dan punya izin akses."
+            title={t("library.readError.title")}
+            description={t("library.readError.description")}
             onRetry={() => void comicsQuery.refetch()}
           />
         ) : viewMode === "all" ? (
           filteredComics.length === 0 ? (
             <EmptyState
-              title="Tidak ada komik sesuai filter"
-              description="Ubah sorting/filter atau cek isi folder library."
+              title={t("library.emptyFilter.title")}
+              description={t("library.emptyFilter.description")}
             />
           ) : (
             <div className="rounded-md border border-[var(--border)] bg-[var(--card)]">
@@ -228,7 +232,7 @@ export function LibraryPage() {
                   </Link>
                   <p className="text-xs text-[var(--muted-foreground)]">{item.source_path}</p>
                   <p className="text-xs text-[var(--muted-foreground)]">
-                    Modified: {unixToLocale(item.date_modified)}
+                    {t("library.modified", { value: unixToLocale(item.date_modified) })}
                   </p>
                 </div>
               ))}
@@ -239,7 +243,9 @@ export function LibraryPage() {
             {Array.from(groupedComics.entries()).map(([libraryPath, items]) => (
               <div key={libraryPath} className="rounded-md border border-[var(--border)] p-3">
                 <p className="text-sm font-bold">{libraryPath}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">Comics: {items.length}</p>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {t("library.groupCount", { count: items.length })}
+                </p>
                 <div className="mt-2 space-y-2">
                   {items.map((item) => (
                     <div
@@ -260,7 +266,7 @@ export function LibraryPage() {
                   ))}
                   {items.length === 0 ? (
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      No comics in this folder.
+                      {t("library.noComicsInFolder")}
                     </p>
                   ) : null}
                 </div>
