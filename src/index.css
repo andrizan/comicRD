@@ -104,3 +104,41 @@ textarea::placeholder {
   scroll-behavior: smooth;
   scrollbar-gutter: stable;
 }
+
+.reader-shell {
+  overflow: hidden;
+  background: #000000;
+  color-scheme: dark;
+  scrollbar-gutter: auto;
+}
+
+.reader-scrollbar {
+  color-scheme: dark;
+  scrollbar-color: #747474 #050505;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.reader-scrollbar::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.reader-scrollbar::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+.reader-scrollbar::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border: 3px solid #050505;
+  border-radius: 999px;
+  background: #747474;
+}
+
+.reader-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9a9a9a;
+}
+
+.reader-scrollbar::-webkit-scrollbar-corner {
+  background: #050505;
+}

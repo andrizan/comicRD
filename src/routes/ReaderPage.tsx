@@ -24,6 +24,7 @@ import {
 } from "../api/tauri";
 import { ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
+import { comicPageSrc } from "../lib/comic-protocol";
 
 function parseSettingMap(entries: { key: string; value_json: string }[]) {
   return new Map(entries.map((item) => [item.key, item.value_json]));
@@ -57,7 +58,7 @@ function PageImage({
     setLoaded(false);
   }, [chapterId, pageIndex]);
 
-  const pageSrc = `comicrd://localhost/page/${chapterId}/${pageIndex}`;
+  const pageSrc = comicPageSrc(chapterId, pageIndex);
 
   return (
     <div
@@ -66,14 +67,14 @@ function PageImage({
         maxWidth: `${Math.round(980 * zoom)}px`,
       }}
     >
-      {!loaded ? <div className="my-2 h-[220px] rounded-md bg-white/10" /> : null}
+      {!loaded ? <div className="my-2 h-[220px] bg-white/10" /> : null}
       <img
         src={pageSrc}
         alt={`Page ${pageIndex + 1}`}
         loading="lazy"
         decoding="async"
         draggable={false}
-        className={`mx-auto block w-full rounded-md ${loaded ? "opacity-100" : "opacity-0"} transition-opacity duration-150`}
+        className={`mx-auto block w-full ${loaded ? "opacity-100" : "opacity-0"} transition-opacity duration-150`}
         onLoad={() => setLoaded(true)}
         onError={() => setLoaded(true)}
       />
@@ -180,7 +181,7 @@ export function ReaderPage() {
     );
     for (const idx of ahead) {
       const image = new Image();
-      image.src = `comicrd://localhost/page/${chapterIdNum}/${idx}`;
+      image.src = comicPageSrc(chapterIdNum, idx);
     }
   }, [chapterIdNum, currentPage, totalPages]);
 
@@ -401,7 +402,7 @@ export function ReaderPage() {
   }
 
   return (
-    <section className="min-h-[100dvh] bg-[#0f1115] text-[#f4f4f5]">
+    <section className="fixed inset-0 overflow-hidden bg-black text-[#f4f4f5]">
       <div className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#151922]/95 px-3 py-2 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2">
           <Button
@@ -519,11 +520,11 @@ export function ReaderPage() {
         </div>
       </div>
 
-      <div className="bg-black px-2 pt-20">
+      <div className="h-full bg-black px-2 pt-20">
         <div
           key={chapterIdNum}
           ref={scrollRef}
-          className="h-[calc(100dvh-120px)] overflow-auto bg-black pr-1"
+          className="reader-scrollbar h-[calc(100dvh-120px)] overflow-x-hidden overflow-y-auto bg-black pr-1"
           style={{ scrollBehavior: "smooth" }}
         >
           <div className="mx-auto w-full">

@@ -79,7 +79,7 @@ export function Layout() {
           </div>
         </header>
       ) : null}
-      <main className="content-scroll">
+      <main className={cn("content-scroll", isReaderRoute && "reader-shell")}>
         {isReaderRoute ? (
           <Outlet />
         ) : (

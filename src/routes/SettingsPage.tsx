@@ -5,6 +5,7 @@ import { exportDatabaseBackup, importDatabaseBackup, listSettings, setSetting } 
 import { ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { isLibrarySourceSaveDisabled } from "../lib/settings-state";
 
 function parse<T>(value: string | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -34,6 +35,8 @@ export function SettingsPage() {
   const [pageGap, setPageGap] = useState(10);
   const [appTheme, setAppTheme] = useState<"light" | "dark">("light");
   const [librarySource, setLibrarySource] = useState("");
+  const [savedLibrarySource, setSavedLibrarySource] = useState("");
+  const [isLibrarySourceSaving, setIsLibrarySourceSaving] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
   const [isBackupBusy, setIsBackupBusy] = useState(false);
 
@@ -42,7 +45,9 @@ export function SettingsPage() {
     setDefaultZoom(parse<number>(map.get("default_zoom"), 1));
     setPageGap(normalizePageGap(parse<number>(map.get("page_gap"), 10)));
     setAppTheme(parseTheme(map.get("app_theme")));
-    setLibrarySource(parse<string>(map.get("library_source_input"), ""));
+    const storedLibrarySource = parse<string>(map.get("library_source_input"), "");
+    setLibrarySource(storedLibrarySource);
+    setSavedLibrarySource(storedLibrarySource);
   }, [settingsQuery.data]);
 
   async function saveAll() {
@@ -65,9 +70,18 @@ export function SettingsPage() {
   }
 
   async function saveLibrarySource() {
-    await setSetting("library_source_input", librarySource.trim());
-    await queryClient.invalidateQueries({ queryKey: ["settings"] });
-    await queryClient.invalidateQueries({ queryKey: ["raw-comics"] });
+    if (isLibrarySourceSaveDisabled(librarySource, savedLibrarySource, isLibrarySourceSaving)) {
+      return;
+    }
+
+    setIsLibrarySourceSaving(true);
+    try {
+      await setSetting("library_source_input", librarySource.trim());
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["raw-comics"] });
+    } finally {
+      setIsLibrarySourceSaving(false);
+    }
   }
 
   async function onExportBackup() {
@@ -138,6 +152,12 @@ export function SettingsPage() {
     );
   }
 
+  const isSetFolderDisabled = isLibrarySourceSaveDisabled(
+    librarySource,
+    savedLibrarySource,
+    isLibrarySourceSaving,
+  );
+
   return (
     <section className="space-y-4">
       <Card className="space-y-4">
@@ -155,7 +175,9 @@ export function SettingsPage() {
           <Button onClick={() => void onPickLibrarySource()} variant="outline">
             Browse
           </Button>
-          <Button onClick={() => void saveLibrarySource()}>Set Folder</Button>
+          <Button onClick={() => void saveLibrarySource()} disabled={isSetFolderDisabled}>
+            Set Folder
+          </Button>
         </div>
       </Card>
 
