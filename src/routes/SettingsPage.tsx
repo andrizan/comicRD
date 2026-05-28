@@ -190,7 +190,8 @@ export function SettingsPage() {
   );
 
   const isAppearanceDisabled =
-    isAppearanceSaving || (appTheme === savedAppTheme && localePreference === savedLocalePreference);
+    isAppearanceSaving ||
+    (appTheme === savedAppTheme && localePreference === savedLocalePreference);
 
   return (
     <section className="space-y-4">
@@ -293,9 +294,7 @@ export function SettingsPage() {
 
       <Card className="space-y-3">
         <h2 className="text-lg font-bold">{t("settings.backup.title")}</h2>
-        <p className="text-sm text-[var(--muted-foreground)]">
-          {t("settings.backup.description")}
-        </p>
+        <p className="text-sm text-[var(--muted-foreground)]">{t("settings.backup.description")}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => void onExportBackup()} disabled={isBackupBusy}>
             {t("settings.exportBackup")}

@@ -7,9 +7,7 @@ describe("isLibrarySourceSaveDisabled", () => {
   });
 
   it("compares trimmed paths", () => {
-    expect(isLibrarySourceSaveDisabled(" D:\\Media\\Manga ", "D:\\Media\\Manga", false)).toBe(
-      true,
-    );
+    expect(isLibrarySourceSaveDisabled(" D:\\Media\\Manga ", "D:\\Media\\Manga", false)).toBe(true);
   });
 
   it("disables saving empty input", () => {
@@ -21,8 +19,6 @@ describe("isLibrarySourceSaveDisabled", () => {
   });
 
   it("enables saving when the input points to a different folder", () => {
-    expect(isLibrarySourceSaveDisabled("D:\\Media\\Other", "D:\\Media\\Manga", false)).toBe(
-      false,
-    );
+    expect(isLibrarySourceSaveDisabled("D:\\Media\\Other", "D:\\Media\\Manga", false)).toBe(false);
   });
 });

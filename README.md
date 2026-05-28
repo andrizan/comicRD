@@ -28,21 +28,21 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Runtime | [Tauri 2](https://v2.tauri.app/) |
-| Backend | Rust + [`rusqlite`](https://github.com/rusqlite/rusqlite) (SQLite) |
-| Frontend | [React 19](https://react.dev/) + [Vite](https://vite.dev/) + TypeScript |
-| Styling | [TailwindCSS v4](https://tailwindcss.com/) |
-| Routing | [TanStack Router](https://tanstack.com/router) |
-| Data Fetching | [TanStack Query](https://tanstack.com/query) |
-| i18n | [Lingui](https://lingui.dev/) |
-| Virtualization | [TanStack Virtual](https://tanstack.com/virtual) |
-| Icons | [Lucide React](https://lucide.dev/) |
-| Linting | [oxlint](https://oxc-project.github.io/) |
-| Formatting | [oxfmt](https://oxc-project.github.io/) |
-| Testing | [Vitest](https://vitest.dev/) (frontend), `cargo test` (Rust) |
-| Package Manager | [pnpm](https://pnpm.io/) |
+| Layer           | Technology                                                              |
+| --------------- | ----------------------------------------------------------------------- |
+| Runtime         | [Tauri 2](https://v2.tauri.app/)                                        |
+| Backend         | Rust + [`rusqlite`](https://github.com/rusqlite/rusqlite) (SQLite)      |
+| Frontend        | [React 19](https://react.dev/) + [Vite](https://vite.dev/) + TypeScript |
+| Styling         | [TailwindCSS v4](https://tailwindcss.com/)                              |
+| Routing         | [TanStack Router](https://tanstack.com/router)                          |
+| Data Fetching   | [TanStack Query](https://tanstack.com/query)                            |
+| i18n            | [Lingui](https://lingui.dev/)                                           |
+| Virtualization  | [TanStack Virtual](https://tanstack.com/virtual)                        |
+| Icons           | [Lucide React](https://lucide.dev/)                                     |
+| Linting         | [oxlint](https://oxc-project.github.io/)                                |
+| Formatting      | [oxfmt](https://oxc-project.github.io/)                                 |
+| Testing         | [Vitest](https://vitest.dev/) (frontend), `cargo test` (Rust)           |
+| Package Manager | [pnpm](https://pnpm.io/)                                                |
 
 ## Getting Started
 

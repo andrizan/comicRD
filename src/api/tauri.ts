@@ -10,6 +10,7 @@ import type {
   LibraryScanStatus,
   Library,
   PageInfo,
+  ReadingHistoryEntry,
   ReadingProgress,
   ReaderMode,
   ScanSummary,
@@ -139,4 +140,8 @@ export async function removeComicBookmark(comicSourcePath: string) {
 
 export async function isComicBookmarked(comicSourcePath: string) {
   return invoke<boolean>("is_comic_bookmarked", { comicSourcePath });
+}
+
+export async function listReadingHistory() {
+  return invoke<ReadingHistoryEntry[]>("list_reading_history");
 }

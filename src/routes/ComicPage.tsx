@@ -189,10 +189,7 @@ export function ComicPage() {
             onRetry={() => void chaptersQuery.refetch()}
           />
         ) : (chaptersQuery.data?.length ?? 0) === 0 ? (
-          <EmptyState
-            title={t("comic.empty.title")}
-            description={t("comic.empty.description")}
-          />
+          <EmptyState title={t("comic.empty.title")} description={t("comic.empty.description")} />
         ) : filteredChapters.length === 0 ? (
           <EmptyState
             title={t("comic.emptyFilter.title")}
@@ -225,7 +222,9 @@ export function ComicPage() {
               }`}
             >
               <div className="min-w-[220px] flex-1">
-                <p className="font-semibold text-[var(--accent)] hover:underline">{chapter.title}</p>
+                <p className="font-semibold text-[var(--accent)] hover:underline">
+                  {chapter.title}
+                </p>
                 <p className="text-xs text-[var(--muted-foreground)]">
                   {chapter.page_count
                     ? t("comic.pages", { count: chapter.page_count })

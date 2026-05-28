@@ -281,7 +281,14 @@ export function ReaderPage() {
       observer.observe(node);
     }
     return () => observer.disconnect();
-  }, [chapterIdNum, progressQuery.data, progressQuery.isFetched, progressQuery.isFetching, totalPages, pagesQuery.data]);
+  }, [
+    chapterIdNum,
+    progressQuery.data,
+    progressQuery.isFetched,
+    progressQuery.isFetching,
+    totalPages,
+    pagesQuery.data,
+  ]);
 
   const handleReaderScroll = () => {
     const root = scrollRef.current;
@@ -417,7 +424,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent text-white hover:bg-white/10"
-          onClick={() => void closeReader()}
+              onClick={() => void closeReader()}
             >
               <X size={14} />
             </Button>
@@ -432,10 +439,7 @@ export function ReaderPage() {
           </div>
         </div>
         <div className="mx-auto max-w-[980px] px-3 pt-24">
-          <ErrorState
-            title={t("reader.empty.title")}
-            description={t("reader.empty.description")}
-          />
+          <ErrorState title={t("reader.empty.title")} description={t("reader.empty.description")} />
         </div>
       </section>
     );
@@ -448,7 +452,7 @@ export function ReaderPage() {
           <Button
             variant="outline"
             className="border-white/20 bg-transparent text-white hover:bg-white/10"
-          onClick={() => void closeReader()}
+            onClick={() => void closeReader()}
           >
             <X size={14} />
           </Button>

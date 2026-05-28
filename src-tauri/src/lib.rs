@@ -125,6 +125,19 @@ struct ComicBookmark {
 }
 
 #[derive(Debug, Serialize)]
+struct ReadingHistoryEntry {
+    comic_source_path: String,
+    comic_title: String,
+    chapter_title: String,
+    chapter_source_path: String,
+    chapter_id: i64,
+    last_page: i64,
+    total_pages: i64,
+    is_read: bool,
+    updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
 struct SettingEntry {
     key: String,
     value_json: String,
@@ -1723,6 +1736,48 @@ fn is_comic_bookmarked(app: AppHandle, comic_source_path: String) -> Result<bool
 }
 
 #[tauri::command]
+fn list_reading_history(app: AppHandle) -> Result<Vec<ReadingHistoryEntry>, String> {
+    let conn = open_conn(&app)?;
+    let mut stmt = conn
+        .prepare(
+          r#"
+          SELECT
+            c.source_path,
+            c.title,
+            ch.title,
+            ch.source_path,
+            ch.id,
+            r.last_page,
+            r.total_pages,
+            r.is_read,
+            r.updated_at
+          FROM reading_progress r
+          INNER JOIN chapters ch ON ch.id = r.chapter_id
+          INNER JOIN comics c ON c.id = ch.comic_id
+          ORDER BY r.updated_at DESC
+          "#,
+        )
+        .map_err(|e| format!("failed preparing reading history query: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ReadingHistoryEntry {
+                comic_source_path: row.get(0)?,
+                comic_title: row.get(1)?,
+                chapter_title: row.get(2)?,
+                chapter_source_path: row.get(3)?,
+                chapter_id: row.get(4)?,
+                last_page: row.get(5)?,
+                total_pages: row.get(6)?,
+                is_read: row.get::<_, i64>(7)? == 1,
+                updated_at: row.get(8)?,
+            })
+        })
+        .map_err(|e| format!("failed querying reading history: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting reading history: {e}"))
+}
+
+#[tauri::command]
 fn set_setting(app: AppHandle, key: String, value_json: String) -> Result<(), String> {
     let conn = open_conn(&app)?;
     conn.execute(
@@ -1882,6 +1937,7 @@ pub fn run() {
             add_comic_bookmark,
             remove_comic_bookmark,
             is_comic_bookmarked,
+            list_reading_history,
             set_setting,
             get_setting,
             list_settings,

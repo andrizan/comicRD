@@ -79,6 +79,18 @@ export type ComicBookmark = {
   created_at: number;
 };
 
+export type ReadingHistoryEntry = {
+  comic_source_path: string;
+  comic_title: string;
+  chapter_title: string;
+  chapter_source_path: string;
+  chapter_id: number;
+  last_page: number;
+  total_pages: number;
+  is_read: boolean;
+  updated_at: number;
+};
+
 export type ReadingProgress = {
   chapter_id: number;
   last_page: number;
