@@ -1,6 +1,6 @@
 {
   "name": "comicrd",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,10 @@
     "tauri:build:linux:appimage": "tauri build --target x86_64-unknown-linux-gnu --bundles appimage",
     "tauri:build:windows": "tauri build --target x86_64-pc-windows-msvc",
     "tauri:build:macos": "tauri build --target universal-apple-darwin",
+    "build:linux": "scripts/build-linux.sh deb-rpm",
+    "build:linux:appimage": "scripts/build-linux.sh appimage",
+    "build:linux:arch": "scripts/build-linux.sh arch",
+    "build:linux:all": "scripts/build-linux.sh all",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -162,10 +162,9 @@ jobs:
         run: |
           su builder -c "cd '$GITHUB_WORKSPACE' && pnpm install --frozen-lockfile"
 
-      - name: Build frontend and Rust binary
+      - name: Build Tauri binary without bundling
         run: |
-          su builder -c "cd '$GITHUB_WORKSPACE' && pnpm build"
-          su builder -c "cd '$GITHUB_WORKSPACE/src-tauri' && cargo build --release --target x86_64-unknown-linux-gnu"
+          su builder -c "cd '$GITHUB_WORKSPACE' && pnpm tauri build --target x86_64-unknown-linux-gnu --no-bundle"
 
       - name: Create Arch source tarball and PKGBUILD
         run: |

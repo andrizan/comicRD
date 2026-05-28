@@ -8,7 +8,7 @@
 - Frontend Role: React + TanStack Router/Query untuk Library, Comic, Reader, Settings.
 - Backend Role: Tauri 2 + Rust command layer untuk scan source, rendering page, progress, bookmark, settings.
 - Data Role: SQLite (`rusqlite`) untuk metadata komik, chapter, progress, bookmark, dan `app_settings`.
-- Performance Role: scan library bertahap, lazy list, lazy image, virtualized reader, dan custom protocol untuk melayani byte gambar tanpa base64 IPC.
+- Performance Role: scan library bertahap, lazy list, lazy image, stable webtoon rendering, dan custom protocol untuk melayani byte gambar tanpa base64 IPC.
 
 ## Tech Stack
 
@@ -22,6 +22,14 @@
 - Archive Support: `zip`, `cbz`, folder images
 - Formatting/Linting: `oxfmt`, `oxlint`
 - Test: Vitest (frontend), Rust tests (`cargo test`)
+
+## Build Scripts
+
+- `scripts/build-linux.sh` mirrors `.github/workflows/desktop-build.yml` for local Linux builds.
+- `pnpm build:linux` builds `.deb` and `.rpm`.
+- `pnpm build:linux:appimage` builds AppImage separately.
+- `pnpm build:linux:arch` follows the Arch/CachyOS CI path: `pnpm tauri build --target x86_64-unknown-linux-gnu --no-bundle`, then generate tarball, `PKGBUILD`, `.SRCINFO`, and local pacman package when `makepkg` exists.
+- Linux outputs are copied to `release/linux`.
 
 ## Current Global Reader Settings
 
@@ -40,6 +48,7 @@
 - Toolbar atas ala OpenComic/HakuNeko: close, judul komik/chapter, navigasi, zoom, gap, fullscreen, bookmark.
 - Progress indicator segmented fixed di bagian bawah; segment bisa diklik untuk lompat page.
 - `Esc` dan tombol close kembali ke chapter page berdasarkan `comic_source_path`, bukan id database.
+- `ArrowUp`/`ArrowDown` dan `PageUp`/`PageDown` dipakai sebagai alternatif scroll saat mouse wheel bermasalah.
 
 ## Current Render Pipeline
 
@@ -47,8 +56,11 @@
 - Comic/chapter page baru scan chapter saat title diklik.
 - Database write untuk comic/chapter/progress baru dilakukan saat chapter dibuka/dibaca.
 - Chapter status boleh melakukan lookup read-only ke database berdasarkan relative `history_key`.
-- Gambar dilayani langsung ke `<img>` lewat `comicPageSrc`; platform yang mendukung memakai `comicrd://localhost/page/{chapterId}/{pageIndex}`, sedangkan Windows/Android memakai fallback `http://comicrd.localhost/page/{chapterId}/{pageIndex}`.
-- React menampilkan `<img>` langsung dari protocol URL dengan lazy loading dan prefetch beberapa halaman ke depan.
+- Gambar dilayani langsung ke `<img>` lewat `comicPageSrc`.
+- Linux/macOS harus memakai `comicrd://localhost/page/{chapterId}/{pageIndex}`.
+- Windows/Android harus memakai Wry/Tauri custom-protocol workaround `http://comicrd.localhost/page/{chapterId}/{pageIndex}`.
+- `http://comicrd.localhost/...` bukan HTTP server biasa; hanya valid sebagai custom protocol workaround pada platform yang didukung. Jika Linux menerima URL ini, release build bisa menampilkan `Connection refused`.
+- React menampilkan halaman sebagai dokumen webtoon normal dengan lazy loading dan prefetch beberapa halaman ke depan; jangan memakai dynamic-height virtualizer untuk reader karena pernah menyebabkan overlap dan scroll jump.
 
 ## Current i18n UX
 

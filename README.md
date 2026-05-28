@@ -8,7 +8,7 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 
 - **Library Management** — Set a library folder with automatic comic detection (similar to HakuNeko)
 - **Reading Progress** — Continue reading, bookmarks, and read/unread status tracking
-- **Navigation** — Previous/next page and chapter navigation with keyboard arrow support (toggleable)
+- **Navigation** — Previous/next page and chapter navigation, plus vertical keyboard scrolling with Arrow Up/Down and Page Up/Down
 - **Reader Controls** — Zoom, page gap/margin, and fullscreen with globally persisted settings
 - **Sorting** — Comics sortable by `name` or `folder_date` (ascending/descending); chapters sortable by name
 - **Chapter Status** — Unread, reading, and read indicators per chapter
@@ -22,8 +22,8 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 - **Incremental Library Scan** — Titles scanned first; chapters scanned only when a title is opened
 - **Lazy Database Writes** — Comic, chapter, and progress records created only when a chapter is read
 - **Relative History Paths** — Progress keys are relative to the library source, so history survives folder moves
-- **Virtualized Reader** — Lazy image loading with virtualized rendering and prefetching of upcoming pages
-- **Custom Protocol** — Page bytes are served directly to `<img>` tags, using `comicrd://` where supported and an HTTP protocol fallback on Windows/Android
+- **Stable Webtoon Rendering** — Pages are rendered as a normal vertical document with lazy `<img>` loading to avoid dynamic-height virtualization overlap
+- **Custom Page Protocol** — Comic page bytes are served directly to `<img>` tags through Tauri's registered `comicrd` protocol. Linux/macOS use `comicrd://localhost/...`; Windows/Android use Wry's `http://comicrd.localhost/...` custom-protocol workaround.
 - **Persistent Settings** — Reader, library, theme, and locale preferences are stored in SQLite `app_settings`
 
 ## Tech Stack
@@ -37,7 +37,6 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 | Routing         | [TanStack Router](https://tanstack.com/router)                          |
 | Data Fetching   | [TanStack Query](https://tanstack.com/query)                            |
 | i18n            | [Lingui](https://lingui.dev/)                                           |
-| Virtualization  | [TanStack Virtual](https://tanstack.com/virtual)                        |
 | Icons           | [Lucide React](https://lucide.dev/)                                     |
 | Linting         | [oxlint](https://oxc-project.github.io/)                                |
 | Formatting      | [oxfmt](https://oxc-project.github.io/)                                 |
@@ -81,11 +80,24 @@ pnpm tauri:build:windows     # Windows
 pnpm tauri:build:macos       # macOS (universal)
 ```
 
+Linux builds can also be run through the local CI-mirror script:
+
+```bash
+pnpm build:linux             # .deb + .rpm, copied to release/linux
+pnpm build:linux:appimage    # AppImage, copied to release/linux
+pnpm build:linux:arch        # Arch/CachyOS tarball + PKGBUILD + pacman package
+pnpm build:linux:all
+```
+
 Linux AppImage requires `linuxdeploy` and is built separately:
 
 ```bash
 pnpm tauri:build:linux:appimage
 ```
+
+If Linux shows `Could not connect to localhost: Connection refused` on the app front page, do not assume it is a frontend bug. First verify the Tauri/WebKitGTK production asset protocol path and confirm which URL the webview is loading.
+
+For reader image URLs, Linux/macOS must use `comicrd://localhost/...`. Windows/Android use Wry's `http://comicrd.localhost/...` custom-protocol workaround.
 
 Build for the current machine's default target:
 
