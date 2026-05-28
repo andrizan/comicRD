@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Copy, FolderOpen, Heart, RefreshCw, Search, Type } from "lucide-react";
+import {
+  ArrowLeft,
+  Copy,
+  FolderOpen,
+  Heart,
+  LayoutGrid,
+  List,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import {
   addChapterFavorite,
   listChapterFavorites,
@@ -11,13 +20,11 @@ import {
   removeChapterFavorite,
 } from "../api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
-import { Button } from "../components/ui/button";
-import { Card } from "../components/ui/card";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "../components/ui/context-menu";
 import { ScrollToTop } from "../components/ui/scroll-to-top";
 import { VirtualList, type VirtualListHandle } from "../components/ui/virtual-list";
 import { t as translate, useAppI18n } from "../i18n";
-import { useChapterSort } from "../stores/libraryStore";
+import { useChapterSort, useLibraryPreferences } from "../stores/libraryStore";
 import { setScrollKey, restoreScroll, scrollPositions } from "./Layout";
 import type { RawChapter, SortDir } from "../types";
 
@@ -47,19 +54,19 @@ function chapterStatusLabel(chapter: RawChapter): string {
   return translate("comic.status.unread");
 }
 
-function chapterStatusClass(chapter: RawChapter): string {
-  if (chapter.is_read) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+function chapterStatusColor(chapter: RawChapter): string {
+  if (chapter.is_read) return "bg-emerald-500/15 text-emerald-500";
   if (chapter.total_pages > 0 || chapter.page_count > 0) {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "bg-amber-500/15 text-amber-500";
   }
-  return "border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)]";
+  return "bg-app-border/40 text-app-text";
 }
 
 function lastChapterStorageKey(comicSourcePath: string): string {
   return `comicrd:last-chapter:${comicSourcePath}`;
 }
 
-const CHAPTER_ROW_HEIGHT = 72;
+const CHAPTER_ROW_HEIGHT = 60;
 
 export function ComicPage() {
   const { t } = useAppI18n();
@@ -69,6 +76,7 @@ export function ComicPage() {
   const comicTitle = titleFromPath(comicSourcePath);
   const [searchText, setSearchText] = useState("");
   const { chapterSortDir, setChapterSortDir } = useChapterSort();
+  const { displayMode, setDisplayMode } = useLibraryPreferences();
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const virtualListRef = useRef<VirtualListHandle>(null);
   const hasScrolledRef = useRef(false);
@@ -187,7 +195,7 @@ export function ComicPage() {
       },
       {
         label: t("library.copyTitle"),
-        icon: <Type size={14} />,
+        icon: <Copy size={14} />,
         onClick: () => void navigator.clipboard.writeText(chapter.title),
       },
       {
@@ -222,111 +230,164 @@ export function ComicPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [navigate]);
 
-  const renderChapterItem = (_index: number, chapter: RawChapter) => (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => void onOpenChapter(chapter.source_path)}
-      onContextMenu={(e) => ctxMenu.show(e, chapterContextItems(chapter))}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          void onOpenChapter(chapter.source_path);
-        }
-      }}
-      className={`mb-2 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--card)] p-3 ${
-        openChapterMutation.isPending
-          ? "pointer-events-none opacity-60"
-          : "cursor-pointer hover:bg-[var(--accent)]/5"
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-[var(--accent)] hover:underline">{chapter.title}</p>
-        <p className="text-xs text-[var(--muted-foreground)]">
-          {chapter.page_count
-            ? t("comic.pages", { count: chapter.page_count })
-            : t("comic.pagesEmpty")}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleFavorite(chapter.source_path);
-        }}
-        className={`shrink-0 transition ${
-          favoriteSet.has(chapter.source_path)
-            ? "text-red-500 hover:text-red-400"
-            : "text-[var(--muted-foreground)] hover:text-red-400"
-        }`}
-        title={
-          favoriteSet.has(chapter.source_path) ? t("comic.removeFavorite") : t("comic.addFavorite")
-        }
-      >
-        <Heart size={16} fill={favoriteSet.has(chapter.source_path) ? "currentColor" : "none"} />
-      </button>
-      <span
-        className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${chapterStatusClass(chapter)}`}
-      >
-        {chapterStatusLabel(chapter)}
-      </span>
-    </div>
-  );
+  function renderChapterRow(index: number, chapter: RawChapter) {
+    const isFav = favoriteSet.has(chapter.source_path);
 
-  return (
-    <section className="space-y-4">
-      <Card>
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3 overflow-hidden">
-            <Button variant="ghost" onClick={() => navigate({ to: "/" })} className="shrink-0 gap-1.5 px-2">
-              <ArrowLeft size={16} />
-            </Button>
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <h2 className="truncate text-xl font-bold">{comicTitle}</h2>
-              <p className="truncate text-xs text-[var(--muted-foreground)]">{comicSourcePath}</p>
+    if (displayMode === "grid") {
+      return (
+        <div
+          role="button"
+          tabIndex={0}
+          title={chapter.title}
+          onClick={() => void onOpenChapter(chapter.source_path)}
+          onContextMenu={(e) => ctxMenu.show(e, chapterContextItems(chapter))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              void onOpenChapter(chapter.source_path);
+            }
+          }}
+          className={`flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg ${
+            openChapterMutation.isPending ? "pointer-events-none opacity-60" : ""
+          }`}
+        >
+          <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
+            <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium hover:underline">{chapter.title}</p>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-[10px] text-app-muted">
+                {chapter.page_count
+                  ? t("comic.pages", { count: chapter.page_count })
+                  : t("comic.pagesEmpty")}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${chapterStatusColor(chapter)}`}>
+                  {chapterStatusLabel(chapter)}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFavorite(chapter.source_path);
+                  }}
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
+                    isFav ? "text-red-400" : "text-app-muted hover:text-red-400"
+                  }`}
+                >
+                  <Heart size={18} fill={isFav ? "currentColor" : "none"} />
+                </button>
+              </div>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-semibold">
-              {t("comic.chapters", { count: totalChapters })}
-            </span>
-            {searchText.trim() ? (
-              <span className="rounded-full border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-semibold text-[var(--muted-foreground)]">
-                {t("comic.shown", { count: filteredChapters.length })}
-              </span>
-            ) : null}
-            <Button
-              variant="ghost"
-              onClick={() => void chaptersQuery.refetch()}
-              disabled={chaptersQuery.isFetching}
-              title={t("comic.refreshChapters")}
-              aria-label={t("comic.refreshChapters")}
-              className="gap-1.5 px-2.5"
-            >
-              <RefreshCw
-                size={14}
-                className={chaptersQuery.isFetching ? "animate-spin" : undefined}
-              />
-            </Button>
-          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search
-              size={14}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]"
-            />
+      );
+    }
+
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => void onOpenChapter(chapter.source_path)}
+        onContextMenu={(e) => ctxMenu.show(e, chapterContextItems(chapter))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            void onOpenChapter(chapter.source_path);
+          }
+        }}
+        className={`flex cursor-pointer gap-3 border-b border-app-border bg-app-surface px-4 py-3 transition-colors hover:bg-app-bg ${
+          openChapterMutation.isPending ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
+        <span className="w-6 flex-shrink-0 pt-0.5 text-right font-display text-xs font-bold text-app-muted">
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">{chapter.title}</p>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${chapterStatusColor(chapter)}`}>
+              {chapterStatusLabel(chapter)}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFavorite(chapter.source_path);
+              }}
+              className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
+                isFav
+                  ? "text-red-400"
+                  : "text-app-muted hover:bg-app-bg hover:text-red-400"
+              }`}
+              title={isFav ? t("comic.removeFavorite") : t("comic.addFavorite")}
+            >
+              <Heart size={18} fill={isFav ? "currentColor" : "none"} />
+            </button>
+          </div>
+          <p className="mt-0.5 text-xs text-app-muted">
+            {chapter.page_count
+              ? t("comic.pages", { count: chapter.page_count })
+              : t("comic.pagesEmpty")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <section className="flex flex-col">
+      {/* Header */}
+      <div className="border-b border-app-border bg-app-surface">
+        <div className="flex items-center gap-3 px-5 py-3">
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/" })}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-bold">{comicTitle}</h2>
+            <p className="truncate text-[10px] text-app-muted">{comicSourcePath}</p>
+          </div>
+          <span className="shrink-0 rounded-full border border-app-border bg-app-bg px-2.5 py-1 text-[11px] font-semibold text-app-muted">
+            {totalChapters} Chapters
+          </span>
+          <button
+            type="button"
+            onClick={() => void chaptersQuery.refetch()}
+            disabled={chaptersQuery.isFetching}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+            title={t("comic.refreshChapters")}
+          >
+            <RefreshCw size={14} className={chaptersQuery.isFetching ? "animate-spin" : undefined} />
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="space-y-3 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-app-border bg-app-surface px-3.5 h-10 transition-all focus-within:border-app-accent">
+            <Search size={16} className="flex-shrink-0 text-app-muted" />
             <input
+              type="text"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-8 pr-3 text-sm placeholder:text-[var(--muted-foreground)]"
               placeholder={t("comic.searchPlaceholder")}
+              className="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-app-muted"
             />
           </div>
           <select
             value={chapterSortDir}
             onChange={(e) => setChapterSortDir(e.target.value as SortDir)}
-            className="h-9 shrink-0 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
+            className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
           >
             <option value="asc">{t("comic.nameAsc")}</option>
             <option value="desc">{t("comic.nameDesc")}</option>
@@ -334,19 +395,44 @@ export function ComicPage() {
           <button
             type="button"
             onClick={() => setShowFavoritesOnly((v) => !v)}
-            className={`flex items-center gap-1 rounded-md border px-2.5 py-2 text-sm transition ${
+            className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-all ${
               showFavoritesOnly
-                ? "border-red-400 bg-red-500/10 text-red-500"
-                : "border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-red-400"
+                ? "border-red-400/30 bg-red-500/10 text-red-400"
+                : "border-app-border bg-app-surface text-app-muted hover:text-red-400"
             }`}
             title={t("comic.showFavorites")}
           >
-            <Heart size={14} fill={showFavoritesOnly ? "currentColor" : "none"} />
-            {showFavoritesOnly ? String(favoriteSet.size) : ""}
+            <Heart size={16} fill={showFavoritesOnly ? "currentColor" : "none"} />
           </button>
+          <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-app-border bg-app-surface">
+            <button
+              type="button"
+              onClick={() => setDisplayMode("grid")}
+              aria-label="Grid"
+              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
+                displayMode === "grid"
+                  ? "bg-app-accent/10 text-app-accent"
+                  : "text-app-muted hover:text-app-text"
+              }`}
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisplayMode("list")}
+              aria-label="List"
+              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
+                displayMode === "list"
+                  ? "bg-app-accent/10 text-app-accent"
+                  : "text-app-muted hover:text-app-text"
+              }`}
+            >
+              <List size={16} />
+            </button>
+          </div>
         </div>
-      </Card>
-      <Card className="space-y-2">
+
+        {/* Chapter list */}
         {chaptersQuery.isPending ? (
           <SkeletonList rows={5} />
         ) : chaptersQuery.isError ? (
@@ -363,18 +449,23 @@ export function ComicPage() {
             description={t("comic.emptyFilter.description")}
           />
         ) : (
-          <VirtualList
-            ref={virtualListRef}
-            count={filteredChapters.length}
-            estimateSize={CHAPTER_ROW_HEIGHT}
-            scrollElement={scrollEl}
-            items={filteredChapters}
-            getItemKey={(i) => filteredChapters[i].key}
-            renderItem={renderChapterItem}
-            measureElement
-          />
+          <div className="overflow-hidden rounded-xl border border-app-border">
+            <VirtualList
+              ref={virtualListRef}
+              count={filteredChapters.length}
+              estimateSize={displayMode === "grid" ? 140 : CHAPTER_ROW_HEIGHT}
+              scrollElement={scrollEl}
+              columns={displayMode === "grid" ? 2 : 1}
+              gap={1}
+              items={filteredChapters}
+              getItemKey={(i) => filteredChapters[i].key}
+              renderItem={renderChapterRow}
+              measureElement
+            />
+          </div>
         )}
-      </Card>
+      </div>
+
       <ScrollToTop />
       <ContextMenu state={ctxMenu.state} onClose={ctxMenu.close} />
     </section>

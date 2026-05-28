@@ -23,7 +23,7 @@ export function ComicItem({ comic, variant, index, isBookmarked, onBookmark }: C
       >
         <SpineThumb title={comic.title} index={index} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{comic.title}</p>
+          <p className="truncate text-sm font-medium hover:underline">{comic.title}</p>
           <div className="mt-1 flex items-center justify-between">
             <span className="text-[10px] text-app-muted">
               {unixToLocale(comic.date_modified)}
@@ -45,7 +45,7 @@ export function ComicItem({ comic, variant, index, isBookmarked, onBookmark }: C
         {String(index + 1).padStart(2, "0")}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{comic.title}</p>
+        <p className="truncate text-sm font-medium hover:underline">{comic.title}</p>
         <p className="mt-0.5 truncate text-xs text-app-muted">{comic.source_path}</p>
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">

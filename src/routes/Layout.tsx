@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Home, Moon, Settings, Sun } from "lucide-react";
 import { listSettings, setSetting } from "../api/tauri";
+import { SettingsPanel } from "../components/SettingsPanel";
 import { activateLocale, resolveLocalePreference, useAppI18n } from "../i18n";
 import { cn } from "../lib/utils";
 
@@ -63,6 +64,7 @@ export function restoreScroll(key: string): void {
 export function Layout() {
   const { t } = useAppI18n();
   const queryClient = useQueryClient();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsQuery = useQuery({
     queryKey: ["settings"],
     queryFn: listSettings,
@@ -125,47 +127,45 @@ export function Layout() {
   return (
     <div className={cn("app-shell", isReaderRoute && "grid-rows-[1fr]")}>
       {!isReaderRoute ? (
-        <>
-          {/* TitleBar */}
-          <div className="flex h-10 items-center justify-between border-b border-app-border bg-app-surface px-4">
-            <div className="flex items-center gap-2">
-              <Link
-                to="/"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 transition-all hover:bg-white/5 hover:text-neutral-300"
-                title="Home"
-              >
-                <Home size={14} />
-              </Link>
-              <span className="font-display text-xs font-bold tracking-widest text-neutral-500">
-                ComicRD
-              </span>
-            </div>
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => void toggleTheme()}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 transition-all hover:bg-white/5 hover:text-neutral-300"
-                title={t("app.toggleTheme")}
-              >
-                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-              </button>
-              <Link
-                to="/settings"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 transition-all hover:bg-white/5 hover:text-neutral-300"
-              >
-                <Settings size={14} />
-              </Link>
-            </div>
+        <div className="flex h-10 items-center justify-between border-b border-app-border bg-app-surface px-4">
+          <div className="flex items-center gap-2">
+            <Link
+              to="/"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+              title="Home"
+            >
+              <Home size={14} />
+            </Link>
+            <span className="font-display text-xs font-bold tracking-widest text-app-muted">
+              ComicRD
+            </span>
           </div>
-        </>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => void toggleTheme()}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+              title={t("app.toggleTheme")}
+            >
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((v) => !v)}
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all hover:bg-app-bg ${
+                settingsOpen ? "bg-app-accent/10 text-app-accent" : "text-app-muted hover:text-app-text"
+              }`}
+              title={t("nav.settings")}
+            >
+              <Settings size={14} />
+            </button>
+          </div>
+        </div>
       ) : null}
       <main className={cn("content-scroll", isReaderRoute && "reader-shell")}>
-        {isReaderRoute ? (
-          <Outlet />
-        ) : (
-          <Outlet />
-        )}
+        <Outlet />
       </main>
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

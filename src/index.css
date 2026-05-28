@@ -61,9 +61,20 @@ textarea {
   border-color: var(--theme-border);
 }
 
+.dark select,
+.dark select option {
+  background-color: #292524 !important;
+  color: #d6d3d1 !important;
+}
+
 option {
-  background-color: var(--theme-surface);
-  color: var(--theme-text);
+  background-color: #fafaf9;
+  color: #44403c;
+}
+
+.dark option {
+  background-color: #292524;
+  color: #d6d3d1;
 }
 
 input::placeholder,

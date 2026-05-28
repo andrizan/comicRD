@@ -34,7 +34,7 @@ export function VirtualList<T>({
   measureElement = false,
   ref,
 }: VirtualListProps<T>) {
-  const measureElementRef = useRef<((node: HTMLElement | null) => void) | null>(null);
+  const itemMeasureRef = useRef<((node: HTMLElement | null) => void) | null>(null);
   const rowCount = Math.ceil(count / columns);
 
   const virtualizer = useVirtualizer({
@@ -43,10 +43,20 @@ export function VirtualList<T>({
     getScrollElement: () => scrollElement,
     overscan,
     getItemKey: (rowIndex) => getItemKey(rowIndex * columns),
-    ...(measureElement ? { measureElement: (node) => node.getBoundingClientRect().height } : {}),
+    ...(measureElement
+      ? {
+          measureElement: (node) => {
+            if (columns > 1) {
+              const firstItem = node.querySelector<HTMLElement>("[data-virtual-item]");
+              if (firstItem) return firstItem.getBoundingClientRect().height;
+            }
+            return node.getBoundingClientRect().height;
+          },
+        }
+      : {}),
   });
 
-  measureElementRef.current = (node: HTMLElement | null) => {
+  itemMeasureRef.current = (node: HTMLElement | null) => {
     if (node) virtualizer.measureElement(node);
   };
 
@@ -80,7 +90,11 @@ export function VirtualList<T>({
           const item = items[itemIndex];
           if (!item) continue;
           rowItems.push(
-            <div key={getItemKey(itemIndex)} style={{ flex: 1, minWidth: 0 }}>
+            <div
+              key={getItemKey(itemIndex)}
+              data-virtual-item=""
+              style={{ flex: 1, minWidth: 0 }}
+            >
               {renderItem(itemIndex, item, virtualRow)}
             </div>,
           );
@@ -90,7 +104,7 @@ export function VirtualList<T>({
           <div
             key={virtualRow.key}
             data-index={virtualRow.index}
-            ref={measureElement ? measureElementRef.current : undefined}
+            ref={measureElement ? itemMeasureRef.current : undefined}
             style={{
               position: "absolute",
               top: 0,

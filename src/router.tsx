@@ -3,7 +3,6 @@ import { ComicPage } from "./routes/ComicPage";
 import { Layout } from "./routes/Layout";
 import { LibraryPage } from "./routes/LibraryPage";
 import { ReaderPage } from "./routes/ReaderPage";
-import { SettingsPage } from "./routes/SettingsPage";
 
 const rootRoute = createRootRoute({
   component: Layout,
@@ -27,13 +26,7 @@ const readerRoute = createRoute({
   component: ReaderPage,
 });
 
-const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/settings",
-  component: SettingsPage,
-});
-
-const routeTree = rootRoute.addChildren([libraryRoute, comicRoute, readerRoute, settingsRoute]);
+const routeTree = rootRoute.addChildren([libraryRoute, comicRoute, readerRoute]);
 
 export const router = createRouter({ routeTree });
 

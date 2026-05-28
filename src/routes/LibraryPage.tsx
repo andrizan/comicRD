@@ -276,7 +276,7 @@ export function LibraryPage() {
             </span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{entry.comic_title}</p>
+            <p className="truncate text-sm font-medium hover:underline">{entry.comic_title}</p>
             <p className="mt-1 truncate text-xs text-app-muted">{entry.chapter_title}</p>
             <div className="mt-1 flex items-center justify-between">
               <span className="text-[10px] text-app-muted">{unixToLocale(entry.updated_at)}</span>
@@ -308,7 +308,7 @@ export function LibraryPage() {
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{entry.comic_title}</p>
+          <p className="truncate text-sm font-medium hover:underline">{entry.comic_title}</p>
           <p className="mt-0.5 truncate text-xs text-app-muted">
             {entry.chapter_title}
             {!entry.is_read && entry.total_pages > 0
@@ -362,7 +362,7 @@ export function LibraryPage() {
             <Link
               to="/comic/$comicId"
               params={{ comicId: encodeURIComponent(bm.comic_source_path) }}
-              className="truncate text-sm font-medium"
+              className="truncate text-sm font-medium hover:underline"
             >
               {bm.comic_title || bm.comic_source_path}
             </Link>
@@ -395,7 +395,7 @@ export function LibraryPage() {
           <Link
             to="/comic/$comicId"
             params={{ comicId: encodeURIComponent(bm.comic_source_path) }}
-            className="truncate text-sm font-medium"
+            className="truncate text-sm font-medium hover:underline"
           >
             {bm.comic_title || bm.comic_source_path}
           </Link>
@@ -629,7 +629,7 @@ export function LibraryPage() {
           <div className="overflow-hidden rounded-xl border border-app-border">
             <VirtualList
               count={currentItems.length}
-              estimateSize={ROW_HEIGHT}
+              estimateSize={displayMode === "grid" ? 120 : ROW_HEIGHT}
               scrollElement={scrollEl}
               columns={displayMode === "grid" ? 2 : 1}
               gap={1}
