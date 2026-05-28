@@ -1,18 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { FolderOpen, Moon, Settings, Sun } from "lucide-react";
+import { Moon, Settings, Sun } from "lucide-react";
 import { listSettings, setSetting } from "../api/tauri";
 import { activateLocale, resolveLocalePreference, useAppI18n } from "../i18n";
 import { cn } from "../lib/utils";
 
 function parseTheme(value: string | undefined): "light" | "dark" {
-  if (!value) return "light";
+  if (!value) return "dark";
   try {
     const parsed = JSON.parse(value);
-    return parsed === "dark" ? "dark" : "light";
+    return parsed === "light" ? "light" : "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 
@@ -121,47 +121,38 @@ export function Layout() {
   return (
     <div className={cn("app-shell", isReaderRoute && "grid-rows-[1fr]")}>
       {!isReaderRoute ? (
-        <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--header)] backdrop-blur">
-          <div className="mx-auto flex max-w-[1680px] items-center justify-between px-4 py-3">
-            <h1 className="text-lg font-black tracking-wide">ComicRD</h1>
-            <nav className="flex items-center gap-1.5">
+        <>
+          {/* TitleBar */}
+          <div className="flex h-10 items-center justify-between border-b border-[var(--border)] bg-black/60 px-4">
+            <div className="flex items-center gap-1.5">
+              <span className="font-display text-xs font-bold tracking-widest text-neutral-500">
+                ComicRD
+              </span>
+            </div>
+            <div className="flex gap-1">
               <button
                 type="button"
                 onClick={() => void toggleTheme()}
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition hover:bg-[var(--muted)]"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 transition-all hover:bg-white/5 hover:text-neutral-300"
                 title={t("app.toggleTheme")}
               >
-                {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
               </button>
               <Link
-                to="/"
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition hover:bg-[var(--muted)]"
-                activeProps={{
-                  className:
-                    "inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-2.5 py-1.5 text-sm font-medium text-[var(--accent-foreground)]",
-                }}
-              >
-                <FolderOpen size={15} /> {t("nav.library")}
-              </Link>
-              <Link
                 to="/settings"
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition hover:bg-[var(--muted)]"
-                activeProps={{
-                  className:
-                    "inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-2.5 py-1.5 text-sm font-medium text-[var(--accent-foreground)]",
-                }}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-600 transition-all hover:bg-white/5 hover:text-neutral-300"
               >
-                <Settings size={15} /> {t("nav.settings")}
+                <Settings size={14} />
               </Link>
-            </nav>
+            </div>
           </div>
-        </header>
+        </>
       ) : null}
       <main className={cn("content-scroll", isReaderRoute && "reader-shell")}>
         {isReaderRoute ? (
           <Outlet />
         ) : (
-          <div className="mx-auto max-w-[1680px] px-4 py-4">
+          <div className="mx-auto max-w-[1680px]">
             <Outlet />
           </div>
         )}

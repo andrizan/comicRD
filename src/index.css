@@ -1,35 +1,23 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap');
 
 :root {
-  color-scheme: light;
-  --background: #f8f5ee;
-  --foreground: #181511;
-  --muted: #e5ddcf;
-  --muted-foreground: #514a40;
-  --card: #fffcf5;
-  --border: #a99b86;
-  --accent: #075e6f;
-  --accent-foreground: #ffffff;
-  --header: #fffcf5f0;
-  --page-glow: #fff3cf;
-  --page-start: #ede3d2;
-  --page-end: #fbf7ef;
-}
-
-:root[data-theme="dark"] {
   color-scheme: dark;
-  --background: #101416;
+  --background: #0a0a0c;
   --foreground: #f4f6f6;
-  --muted: #263236;
-  --muted-foreground: #c6cecf;
-  --card: #182123;
-  --border: #4b5a5e;
-  --accent: #85d7e6;
+  --muted: #131317;
+  --muted-foreground: #4b5563;
+  --card: #0e0e11;
+  --border: rgba(255,255,255,0.06);
+  --accent: #5ee7bf;
   --accent-foreground: #051114;
-  --header: #11181bed;
-  --page-glow: #1e3136;
-  --page-start: #0d1113;
-  --page-end: #151d20;
+  --header: #0d0d10;
+  --input: #111114;
+  --border-hover: rgba(255,255,255,0.12);
+  --border-accent: rgba(94,231,191,0.28);
+  --page-glow: transparent;
+  --page-start: #0a0a0c;
+  --page-end: #0a0a0c;
 }
 
 * {
@@ -44,52 +32,39 @@ body,
 }
 
 body {
-  background:
-    radial-gradient(circle at 20% 20%, var(--page-glow) 0%, transparent 45%),
-    linear-gradient(160deg, var(--page-start) 0%, var(--page-end) 100%);
+  background: var(--background);
   color: var(--foreground);
-  font-family:
-    "Atkinson Hyperlegible", "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  font-family: 'DM Sans', sans-serif;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 input,
 select,
 textarea {
-  background-color: var(--card);
+  background-color: var(--input);
   color: var(--foreground);
 }
 
 option {
-  background-color: var(--card);
+  background-color: #0d0d10;
   color: var(--foreground);
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--muted-foreground);
+  color: #3a3a42;
   opacity: 1;
 }
 
-:root[data-theme="dark"] .bg-white {
-  background-color: #1c2522 !important;
-}
-
-:root[data-theme="dark"] .bg-\[\#fffdf6\] {
-  background-color: #121917 !important;
-}
-
-:root[data-theme="dark"] .shadow-sm {
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
-}
-
 :focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.library-row {
-}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1e1e24; border-radius: 2px; }
 
 .app-shell {
   display: grid;
@@ -99,7 +74,6 @@ textarea::placeholder {
 
 .content-scroll {
   overflow: auto;
-  scroll-behavior: smooth;
   scrollbar-gutter: stable;
 }
 
@@ -140,3 +114,17 @@ textarea::placeholder {
 .reader-scrollbar::-webkit-scrollbar-corner {
   background: #050505;
 }
+
+/* Spine colors */
+.spine-0  { background: #1a2d3a; } .spine-1  { background: #2a1a1a; }
+.spine-2  { background: #1a1a2e; } .spine-3  { background: #0f2a1a; }
+.spine-4  { background: #2a1a2a; } .spine-5  { background: #1a2a1a; }
+.spine-6  { background: #2a2a0f; } .spine-7  { background: #0a1a2a; }
+.spine-8  { background: #1f0f2a; } .spine-9  { background: #0d1a0d; }
+.spine-10 { background: #2a1a0a; } .spine-11 { background: #2a0a0a; }
+.spine-12 { background: #1a0a0a; } .spine-13 { background: #0a1a2a; }
+
+/* Type badge colors */
+.badge-manga  { background: rgba(255,110,110,0.12); color: #ff8888; }
+.badge-manhwa { background: rgba(100,180,255,0.12); color: #72b9ff; }
+.badge-manhua { background: rgba(255,200,80,0.12);  color: #ffc84a; }

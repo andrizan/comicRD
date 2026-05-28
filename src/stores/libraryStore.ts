@@ -4,6 +4,7 @@ import { getSetting, setSetting } from "../api/tauri";
 import type { SortBy, SortDir } from "../types";
 
 export type ViewMode = "history" | "library" | "bookmarks";
+export type DisplayMode = "grid" | "list";
 
 function parseStoredString(value: string | null): string {
   if (!value) return "";
@@ -23,12 +24,14 @@ interface PreferencesState {
   sortBy: SortBy;
   sortDir: SortDir;
   viewMode: ViewMode;
+  displayMode: DisplayMode;
   inputPath: string;
   chapterSortDir: SortDir;
   preferencesReady: boolean;
   setSortBy: (sortBy: SortBy) => void;
   setSortDir: (sortDir: SortDir) => void;
   setViewMode: (viewMode: ViewMode) => void;
+  setDisplayMode: (mode: DisplayMode) => void;
   setInputPath: (inputPath: string) => void;
   setChapterSortDir: (dir: SortDir) => void;
   loadPreferences: () => Promise<void>;
@@ -38,6 +41,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   sortBy: "name",
   sortDir: "asc",
   viewMode: "library",
+  displayMode: "grid",
   inputPath: "",
   chapterSortDir: "asc",
   preferencesReady: false,
@@ -57,6 +61,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (get().preferencesReady) void setSetting("library_view_mode", viewMode);
   },
 
+  setDisplayMode: (displayMode) => {
+    set({ displayMode });
+    if (get().preferencesReady) void setSetting("library_display_mode", displayMode);
+  },
+
   setInputPath: (inputPath) => {
     set({ inputPath });
     if (get().preferencesReady) void setSetting("library_source_input", inputPath);
@@ -72,6 +81,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const savedSortBy = parseStoredString(await getSetting("library_sort_by"));
     const savedSortDir = parseStoredString(await getSetting("library_sort_dir"));
     const savedViewMode = parseStoredString(await getSetting("library_view_mode"));
+    const savedDisplayMode = parseStoredString(await getSetting("library_display_mode"));
     const savedChapterSortDir = parseStoredString(await getSetting("chapter_sort_dir"));
 
     const patch: Partial<PreferencesState> = { preferencesReady: true };
@@ -79,29 +89,23 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (savedSortBy === "name" || savedSortBy === "folder_date") patch.sortBy = savedSortBy;
     if (savedSortDir === "asc" || savedSortDir === "desc") patch.sortDir = savedSortDir;
     if (isViewMode(savedViewMode)) patch.viewMode = savedViewMode;
+    if (savedDisplayMode === "grid" || savedDisplayMode === "list") patch.displayMode = savedDisplayMode;
     if (savedChapterSortDir === "asc" || savedChapterSortDir === "desc")
       patch.chapterSortDir = savedChapterSortDir;
     set(patch);
   },
 }));
 
-const selectorActions = (s: PreferencesState) => ({
-  setSortBy: s.setSortBy,
-  setSortDir: s.setSortDir,
-  setViewMode: s.setViewMode,
-  setInputPath: s.setInputPath,
-  setChapterSortDir: s.setChapterSortDir,
-  loadPreferences: s.loadPreferences,
-});
-
 const selectorLibraryView = (s: PreferencesState) => ({
   sortBy: s.sortBy,
   sortDir: s.sortDir,
   viewMode: s.viewMode,
+  displayMode: s.displayMode,
   inputPath: s.inputPath,
   setSortBy: s.setSortBy,
   setSortDir: s.setSortDir,
   setViewMode: s.setViewMode,
+  setDisplayMode: s.setDisplayMode,
   loadPreferences: s.loadPreferences,
 });
 
@@ -113,5 +117,3 @@ const selectorChapterSort = (s: PreferencesState) => ({
 export const useLibraryPreferences = () => usePreferencesStore(useShallow(selectorLibraryView));
 
 export const useChapterSort = () => usePreferencesStore(useShallow(selectorChapterSort));
-
-export const usePreferencesActions = () => usePreferencesStore(useShallow(selectorActions));
