@@ -19,6 +19,11 @@ describe("reader scrollbar styling", () => {
     expect(readerPage).not.toContain("h-[220px] rounded-md");
   });
 
+  it("keeps page refs available for footer segment navigation", () => {
+    expect(readerPage).toContain("pageRefs.current.get(nextPage)?.scrollIntoView");
+    expect(readerPage).not.toContain("pageRefs.current.clear()");
+  });
+
   it("defines dark native scrollbar styling for WebView2", () => {
     const css = readFileSync("src/index.css", "utf8");
     expect(css).toContain(".reader-scrollbar");

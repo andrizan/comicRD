@@ -222,15 +222,36 @@ export function activateLocale(locale: AppLocale): void {
   }
 }
 
+export function interpolateI18nPlaceholders(
+  message: string,
+  values?: Record<string, unknown>,
+): string {
+  if (!values) return message;
+  return message.replace(/\{([A-Za-z0-9_]+)\}/g, (match, key: string) => {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) return match;
+    const value = values[key];
+    return value == null ? "" : String(value);
+  });
+}
+
+function translateWithValues(
+  translator: typeof i18n,
+  id: MessageKey,
+  values?: Record<string, unknown>,
+): string {
+  return interpolateI18nPlaceholders(translator._(id, values), values);
+}
+
 export function t(id: MessageKey, values?: Record<string, unknown>): string {
-  return i18n._(id, values);
+  return translateWithValues(i18n, id, values);
 }
 
 export function useAppI18n() {
   const { i18n: activeI18n } = useLingui();
   return {
     locale: activeI18n.locale as AppLocale,
-    t: (id: MessageKey, values?: Record<string, unknown>) => activeI18n._(id, values),
+    t: (id: MessageKey, values?: Record<string, unknown>) =>
+      translateWithValues(activeI18n, id, values),
   };
 }
 

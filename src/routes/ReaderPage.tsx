@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   BookmarkPlus,
@@ -26,6 +26,7 @@ import { ErrorState, SkeletonList } from "../components/feedback/states";
 import { Button } from "../components/ui/button";
 import { useAppI18n } from "../i18n";
 import { comicPageSrc } from "../lib/comic-protocol";
+import { buildProgressPayload } from "../lib/reader-progress";
 
 function parseSettingMap(entries: { key: string; value_json: string }[]) {
   return new Map(entries.map((item) => [item.key, item.value_json]));
@@ -88,6 +89,7 @@ export function ReaderPage() {
   const { chapterId } = useParams({ from: "/reader/$chapterId" });
   const navigate = useNavigate({ from: "/reader/$chapterId" });
   const chapterIdNum = Number(chapterId);
+  const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -104,6 +106,7 @@ export function ReaderPage() {
   const progressQuery = useQuery({
     queryKey: ["progress", chapterIdNum],
     queryFn: () => getProgress(chapterIdNum),
+    staleTime: 0,
   });
 
   const settingMap = useMemo(() => parseSettingMap(settingsQuery.data ?? []), [settingsQuery.data]);
@@ -112,6 +115,7 @@ export function ReaderPage() {
 
   const totalPages = pagesQuery.data?.length ?? 0;
   const [currentPage, setCurrentPage] = useState(0);
+  const currentPageRef = useRef(0);
   const [zoom, setZoom] = useState(defaultZoom);
   const [pageGap, setPageGap] = useState(defaultPageGap);
 
@@ -125,6 +129,16 @@ export function ReaderPage() {
 
   const progressMutation = useMutation({
     mutationFn: saveProgress,
+    onSuccess: (_data, variables) => {
+      queryClient.setQueryData(["progress", variables.chapter_id], {
+        chapter_id: variables.chapter_id,
+        last_page: variables.last_page,
+        total_pages: variables.total_pages,
+        mode: variables.mode,
+        is_read: variables.is_read,
+        updated_at: Math.floor(Date.now() / 1000),
+      });
+    },
   });
 
   const bookmarkMutation = useMutation({
@@ -136,20 +150,42 @@ export function ReaderPage() {
     return Math.max(0, Math.min(totalPages - 1, value));
   };
 
-  const goToChapter = (nextChapterId: number) => {
+  const persistProgressNow = async (page: number) => {
+    const payload = buildProgressPayload(chapterIdNum, page, totalPages);
+    await saveProgress(payload);
+    queryClient.setQueryData(["progress", chapterIdNum], {
+      chapter_id: payload.chapter_id,
+      last_page: payload.last_page,
+      total_pages: payload.total_pages,
+      mode: payload.mode,
+      is_read: payload.is_read,
+      updated_at: Math.floor(Date.now() / 1000),
+    });
+  };
+
+  const goToChapter = async (nextChapterId: number) => {
+    if (totalPages > 0) {
+      await persistProgressNow(currentPageRef.current);
+    }
     navigate({
       to: "/reader/$chapterId",
       params: { chapterId: String(nextChapterId) },
     });
   };
 
-  const closeReader = () => {
+  const closeReader = async () => {
+    if (totalPages > 0) {
+      await persistProgressNow(currentPageRef.current);
+    }
     const chapterContext = chapterContextQuery.data;
     if (chapterContext?.comic_source_path) {
       window.sessionStorage.setItem(
         `comicrd:last-chapter:${chapterContext.comic_source_path}`,
         chapterContext.chapter_source_path,
       );
+      await queryClient.invalidateQueries({
+        queryKey: ["raw-chapters", chapterContext.comic_source_path],
+      });
       navigate({
         to: "/comic/$comicId",
         params: { comicId: encodeURIComponent(chapterContext.comic_source_path) },
@@ -160,15 +196,15 @@ export function ReaderPage() {
   };
 
   const persistProgressDebounced = useEffectEvent((nextPage: number) => {
-    const isRead = totalPages > 0 && nextPage >= totalPages - 1;
-    progressMutation.mutate({
-      chapter_id: chapterIdNum,
-      last_page: nextPage,
-      total_pages: totalPages,
-      mode: "webtoon",
-      is_read: isRead,
-    });
+    progressMutation.mutate(buildProgressPayload(chapterIdNum, nextPage, totalPages));
   });
+
+  const syncCurrentPage = (nextPage: number) => {
+    const clampedPage = clampPage(nextPage);
+    currentPageRef.current = clampedPage;
+    setCurrentPage((prev) => (prev === clampedPage ? prev : clampedPage));
+    return clampedPage;
+  };
 
   useEffect(() => {
     if (totalPages <= 0) return;
@@ -192,46 +228,45 @@ export function ReaderPage() {
   const lastWebtoonPageSyncTsRef = useRef(0);
   const restoredChapterRef = useRef<number | null>(null);
   const goToPage = (targetPage: number) => {
-    const nextPage = clampPage(targetPage);
-    setCurrentPage(nextPage);
+    const nextPage = syncCurrentPage(targetPage);
     pageRefs.current.get(nextPage)?.scrollIntoView({ block: "start" });
   };
 
   useEffect(() => {
     restoredChapterRef.current = null;
     lastWebtoonPageSyncTsRef.current = 0;
+    currentPageRef.current = 0;
     setCurrentPage(0);
-    pageRefs.current.clear();
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
   }, [chapterIdNum]);
 
   useEffect(() => {
-    if (totalPages <= 0 || !progressQuery.isFetched) return;
-    if (restoredChapterRef.current === chapterIdNum) return;
-    const target = clampPage(progressQuery.data?.last_page ?? 0);
-    restoredChapterRef.current = chapterIdNum;
-    setCurrentPage(target);
-    window.requestAnimationFrame(() => {
-      if (target === 0) {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = 0;
-        }
-        return;
-      }
-      pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
-    });
-  }, [chapterIdNum, progressQuery.data, progressQuery.isFetched, totalPages]);
+    if (totalPages <= 0 || !progressQuery.isFetched || progressQuery.isFetching) return;
 
-  useEffect(() => {
-    if (restoredChapterRef.current !== chapterIdNum) return;
+    if (restoredChapterRef.current !== chapterIdNum) {
+      const target = clampPage(progressQuery.data?.last_page ?? 0);
+      restoredChapterRef.current = chapterIdNum;
+      syncCurrentPage(target);
+      lastWebtoonPageSyncTsRef.current = performance.now();
+      window.requestAnimationFrame(() => {
+        if (target === 0) {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = 0;
+          }
+          return;
+        }
+        pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
+      });
+    }
+
     const root = scrollRef.current;
     if (!root) return;
     const observer = new IntersectionObserver(
       (entries) => {
         const now = performance.now();
-        if (now - lastWebtoonPageSyncTsRef.current < 120) return;
+        if (now - lastWebtoonPageSyncTsRef.current < 300) return;
         const visible = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
@@ -239,7 +274,7 @@ export function ReaderPage() {
         if (!Number.isFinite(pageIndex)) return;
         lastWebtoonPageSyncTsRef.current = now;
         startTransition(() => {
-          setCurrentPage((prev) => (prev === pageIndex ? prev : clampPage(pageIndex)));
+          syncCurrentPage(pageIndex);
         });
       },
       {
@@ -252,7 +287,16 @@ export function ReaderPage() {
       observer.observe(node);
     }
     return () => observer.disconnect();
-  }, [chapterIdNum, pagesQuery.data, totalPages]);
+  }, [chapterIdNum, progressQuery.data, progressQuery.isFetched, progressQuery.isFetching, totalPages, pagesQuery.data]);
+
+  const handleReaderScroll = () => {
+    const root = scrollRef.current;
+    if (!root || totalPages <= 0) return;
+    const bottomDistance = root.scrollHeight - root.scrollTop - root.clientHeight;
+    if (bottomDistance <= 24) {
+      syncCurrentPage(totalPages - 1);
+    }
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -291,7 +335,7 @@ export function ReaderPage() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        closeReader();
+        void closeReader();
         return;
       }
       if (event.key === "ArrowUp") {
@@ -317,7 +361,7 @@ export function ReaderPage() {
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
-          goToChapter(chapterContextQuery.data.prev_chapter_id);
+          void goToChapter(chapterContextQuery.data.prev_chapter_id);
           return;
         }
         goToPage(currentPage - 1);
@@ -325,7 +369,7 @@ export function ReaderPage() {
       if (event.key === "ArrowRight") {
         event.preventDefault();
         if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
-          goToChapter(chapterContextQuery.data.next_chapter_id);
+          void goToChapter(chapterContextQuery.data.next_chapter_id);
           return;
         }
         goToPage(currentPage + 1);
@@ -379,7 +423,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className="border-white/20 bg-transparent text-white hover:bg-white/10"
-              onClick={closeReader}
+          onClick={() => void closeReader()}
             >
               <X size={14} />
             </Button>
@@ -410,7 +454,7 @@ export function ReaderPage() {
           <Button
             variant="outline"
             className="border-white/20 bg-transparent text-white hover:bg-white/10"
-            onClick={closeReader}
+          onClick={() => void closeReader()}
           >
             <X size={14} />
           </Button>
@@ -448,7 +492,7 @@ export function ReaderPage() {
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
               onClick={() => {
                 if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
-                  goToChapter(chapterContextQuery.data.prev_chapter_id);
+                  void goToChapter(chapterContextQuery.data.prev_chapter_id);
                   return;
                 }
                 goToPage(currentPage - 1);
@@ -461,7 +505,7 @@ export function ReaderPage() {
               className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
               onClick={() => {
                 if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
-                  goToChapter(chapterContextQuery.data.next_chapter_id);
+                  void goToChapter(chapterContextQuery.data.next_chapter_id);
                   return;
                 }
                 goToPage(currentPage + 1);
@@ -530,6 +574,7 @@ export function ReaderPage() {
           ref={scrollRef}
           className="reader-scrollbar h-[calc(100dvh-120px)] overflow-x-hidden overflow-y-auto bg-black pr-1"
           style={{ scrollBehavior: "smooth" }}
+          onScroll={handleReaderScroll}
         >
           <div className="mx-auto w-full">
             {Array.from({ length: totalPages }).map((_, index) => (
