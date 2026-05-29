@@ -323,7 +323,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-app-border px-5 py-3">
+        <div className="border-t border-app-border px-5 py-3 space-y-2">
           <button
             type="button"
             onClick={() => void saveAll()}
@@ -332,6 +332,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           >
             {isSaving ? "..." : t("settings.saveSettings")}
           </button>
+          <p className="text-center text-[10px] text-app-muted">v{__APP_VERSION__}</p>
         </div>
       </div>
     </>
