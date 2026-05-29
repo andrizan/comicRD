@@ -52,9 +52,7 @@ export function ContextMenu({ state, onClose }: ContextMenuProps) {
           key={i}
           type="button"
           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-app-bg ${
-            item.danger
-              ? "text-red-500 hover:text-red-600"
-              : "text-app-text"
+            item.danger ? "text-red-500 hover:text-red-600" : "text-app-text"
           }`}
           onClick={() => {
             item.onClick();

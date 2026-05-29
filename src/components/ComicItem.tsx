@@ -25,9 +25,7 @@ export function ComicItem({ comic, variant, index, isBookmarked, onBookmark }: C
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium hover:underline">{comic.title}</p>
           <div className="mt-1 flex items-center justify-between">
-            <span className="text-[10px] text-app-muted">
-              {unixToLocale(comic.date_modified)}
-            </span>
+            <span className="text-[10px] text-app-muted">{unixToLocale(comic.date_modified)}</span>
             <BookmarkBtn isBookmarked={isBookmarked} onToggle={onBookmark} />
           </div>
         </div>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  ArrowRight,
   Copy,
   FolderOpen,
   Heart,
@@ -10,6 +11,7 @@ import {
   List,
   RefreshCw,
   Search,
+  Type,
 } from "lucide-react";
 import {
   addChapterFavorite,
@@ -142,7 +144,11 @@ export function ComicPage() {
   const filteredChapters = useMemo(() => {
     const filtered = (chaptersQuery.data ?? []).filter((chapter) => {
       const q = searchText.trim().toLowerCase();
-      if (q && !chapter.title.toLowerCase().includes(q) && !chapter.source_path.toLowerCase().includes(q)) {
+      if (
+        q &&
+        !chapter.title.toLowerCase().includes(q) &&
+        !chapter.source_path.toLowerCase().includes(q)
+      ) {
         return false;
       }
       if (showFavoritesOnly && !favoriteSet.has(chapter.source_path)) {
@@ -180,7 +186,7 @@ export function ComicPage() {
     return [
       {
         label: t("comic.openChapter"),
-        icon: <FolderOpen size={14} />,
+        icon: <ArrowRight size={14} />,
         onClick: () => void onOpenChapter(chapter.source_path),
       },
       {
@@ -195,7 +201,7 @@ export function ComicPage() {
       },
       {
         label: t("library.copyTitle"),
-        icon: <Copy size={14} />,
+        icon: <Type size={14} />,
         onClick: () => void navigator.clipboard.writeText(chapter.title),
       },
       {
@@ -265,7 +271,9 @@ export function ComicPage() {
                   : t("comic.pagesEmpty")}
               </span>
               <div className="flex items-center gap-1.5">
-                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${chapterStatusColor(chapter)}`}>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${chapterStatusColor(chapter)}`}
+                >
                   {chapterStatusLabel(chapter)}
                 </span>
                 <button
@@ -309,8 +317,12 @@ export function ComicPage() {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">{chapter.title}</p>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${chapterStatusColor(chapter)}`}>
+            <p className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">
+              {chapter.title}
+            </p>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${chapterStatusColor(chapter)}`}
+            >
               {chapterStatusLabel(chapter)}
             </span>
             <button
@@ -321,9 +333,7 @@ export function ComicPage() {
                 toggleFavorite(chapter.source_path);
               }}
               className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
-                isFav
-                  ? "text-red-400"
-                  : "text-app-muted hover:bg-app-bg hover:text-red-400"
+                isFav ? "text-red-400" : "text-app-muted hover:bg-app-bg hover:text-red-400"
               }`}
               title={isFav ? t("comic.removeFavorite") : t("comic.addFavorite")}
             >
@@ -366,7 +376,10 @@ export function ComicPage() {
             className="flex h-8 w-8 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
             title={t("comic.refreshChapters")}
           >
-            <RefreshCw size={14} className={chaptersQuery.isFetching ? "animate-spin" : undefined} />
+            <RefreshCw
+              size={14}
+              className={chaptersQuery.isFetching ? "animate-spin" : undefined}
+            />
           </button>
         </div>
       </div>

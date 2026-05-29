@@ -89,7 +89,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (savedSortBy === "name" || savedSortBy === "folder_date") patch.sortBy = savedSortBy;
     if (savedSortDir === "asc" || savedSortDir === "desc") patch.sortDir = savedSortDir;
     if (isViewMode(savedViewMode)) patch.viewMode = savedViewMode;
-    if (savedDisplayMode === "grid" || savedDisplayMode === "list") patch.displayMode = savedDisplayMode;
+    if (savedDisplayMode === "grid" || savedDisplayMode === "list")
+      patch.displayMode = savedDisplayMode;
     if (savedChapterSortDir === "asc" || savedChapterSortDir === "desc")
       patch.chapterSortDir = savedChapterSortDir;
     set(patch);

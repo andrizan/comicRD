@@ -90,11 +90,7 @@ export function VirtualList<T>({
           const item = items[itemIndex];
           if (!item) continue;
           rowItems.push(
-            <div
-              key={getItemKey(itemIndex)}
-              data-virtual-item=""
-              style={{ flex: 1, minWidth: 0 }}
-            >
+            <div key={getItemKey(itemIndex)} data-virtual-item="" style={{ flex: 1, minWidth: 0 }}>
               {renderItem(itemIndex, item, virtualRow)}
             </div>,
           );

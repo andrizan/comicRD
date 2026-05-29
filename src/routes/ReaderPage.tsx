@@ -458,10 +458,7 @@ export function ReaderPage() {
 
   return (
     <section className="fixed inset-0 overflow-hidden bg-black text-[#f4f4f5]">
-      <div
-        className="group/tb fixed inset-x-0 top-0 z-50"
-        onMouseEnter={showToolbar}
-      >
+      <div className="group/tb fixed inset-x-0 top-0 z-50" onMouseEnter={showToolbar}>
         <div
           className={`border-b border-white/5 bg-[#151922]/60 px-3 py-2 backdrop-blur-md transition-all duration-300 ${
             toolbarVisible
@@ -477,105 +474,105 @@ export function ReaderPage() {
             >
               <X size={14} />
             </Button>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">
-              {chapterContextQuery.data?.comic_title ?? t("reader.comicFallback")}
-            </p>
-            <p className="truncate text-xs text-white/70">
-              {chapterContextQuery.data?.title ?? t("reader.chapterFallback")} ·{" "}
-              {t("reader.chapterPosition", {
-                position: chapterContextQuery.data?.chapter_position ?? "-",
-                total: chapterContextQuery.data?.chapter_total ?? "-",
-              })}
-            </p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">
+                {chapterContextQuery.data?.comic_title ?? t("reader.comicFallback")}
+              </p>
+              <p className="truncate text-xs text-white/70">
+                {chapterContextQuery.data?.title ?? t("reader.chapterFallback")} ·{" "}
+                {t("reader.chapterPosition", {
+                  position: chapterContextQuery.data?.chapter_position ?? "-",
+                  total: chapterContextQuery.data?.chapter_total ?? "-",
+                })}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                title={t("reader.decreaseGap")}
+                onClick={() => setPageGap((value) => Math.max(0, value - 10))}
+              >
+                <Minimize2 size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                title={t("reader.increaseGap")}
+                onClick={() => setPageGap((value) => Math.min(100, value + 10))}
+              >
+                <Maximize2 size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                onClick={() => {
+                  if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
+                    void goToChapter(chapterContextQuery.data.prev_chapter_id);
+                    return;
+                  }
+                  goToPage(currentPage - 1);
+                }}
+              >
+                <ChevronLeft size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                onClick={() => {
+                  if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
+                    void goToChapter(chapterContextQuery.data.next_chapter_id);
+                    return;
+                  }
+                  goToPage(currentPage + 1);
+                }}
+              >
+                <ChevronRight size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
+              >
+                <ZoomOut size={14} />
+              </Button>
+              <span className="w-12 text-center text-xs font-semibold">
+                {Math.round(zoom * 100)}%
+              </span>
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
+              >
+                <ZoomIn size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                title={t("reader.resetZoom")}
+                onClick={() => setZoom(1)}
+              >
+                <Shrink size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                title={t("reader.fullscreen")}
+                onClick={() => {
+                  if (document.fullscreenElement) {
+                    void document.exitFullscreen();
+                    return;
+                  }
+                  void document.documentElement.requestFullscreen();
+                }}
+              >
+                <Fullscreen size={14} className={isFullscreen ? "text-app-accent" : ""} />
+              </Button>
+              <span className="w-10 text-center text-xs font-semibold text-white/80">
+                {pageGap}px
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title={t("reader.decreaseGap")}
-              onClick={() => setPageGap((value) => Math.max(0, value - 10))}
-            >
-              <Minimize2 size={14} />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title={t("reader.increaseGap")}
-              onClick={() => setPageGap((value) => Math.min(100, value + 10))}
-            >
-              <Maximize2 size={14} />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              onClick={() => {
-                if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
-                  void goToChapter(chapterContextQuery.data.prev_chapter_id);
-                  return;
-                }
-                goToPage(currentPage - 1);
-              }}
-            >
-              <ChevronLeft size={14} />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              onClick={() => {
-                if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
-                  void goToChapter(chapterContextQuery.data.next_chapter_id);
-                  return;
-                }
-                goToPage(currentPage + 1);
-              }}
-            >
-              <ChevronRight size={14} />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
-            >
-              <ZoomOut size={14} />
-            </Button>
-            <span className="w-12 text-center text-xs font-semibold">
-              {Math.round(zoom * 100)}%
-            </span>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
-            >
-              <ZoomIn size={14} />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title={t("reader.resetZoom")}
-              onClick={() => setZoom(1)}
-            >
-              <Shrink size={14} />
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
-              title={t("reader.fullscreen")}
-              onClick={() => {
-                if (document.fullscreenElement) {
-                  void document.exitFullscreen();
-                  return;
-                }
-                void document.documentElement.requestFullscreen();
-              }}
-            >
-              <Fullscreen size={14} className={isFullscreen ? "text-app-accent" : ""} />
-            </Button>
-            <span className="w-10 text-center text-xs font-semibold text-white/80">
-              {pageGap}px
-            </span>
-          </div>
-        </div>
         </div>
       </div>
 
@@ -622,10 +619,7 @@ export function ReaderPage() {
         </div>
       </div>
 
-      <div
-        className="group fixed inset-x-0 bottom-0 z-40"
-        onMouseMove={showToolbar}
-      >
+      <div className="group fixed inset-x-0 bottom-0 z-40" onMouseMove={showToolbar}>
         <div
           className={`border-t border-white/5 bg-[#151922]/50 px-6 py-1 backdrop-blur-md transition-all duration-300 hover:bg-[#151922]/70 hover:py-3 ${
             toolbarVisible
@@ -633,29 +627,29 @@ export function ReaderPage() {
               : "translate-y-full opacity-0 pointer-events-none"
           }`}
         >
-        <div className="mx-auto flex w-full max-w-[1400px] items-center gap-3">
-          <span className="w-0 overflow-hidden text-left text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
-            {pageIndicator}
-          </span>
-          <div className="flex flex-1 items-center gap-0.5 group-hover:gap-1">
-            {Array.from({ length: segmentCount }).map((_, idx) => (
-              <button
-                key={idx}
-                type="button"
-                title={t("reader.pageTitle", { page: idx + 1 })}
-                className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
-                  idx <= activeSegment ? "bg-app-accent" : "bg-white/20"
-                }`}
-                onClick={() => {
-                  goToPage(idx);
-                }}
-              />
-            ))}
+          <div className="mx-auto flex w-full max-w-[1400px] items-center gap-3">
+            <span className="w-0 overflow-hidden text-left text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
+              {pageIndicator}
+            </span>
+            <div className="flex flex-1 items-center gap-0.5 group-hover:gap-1">
+              {Array.from({ length: segmentCount }).map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  title={t("reader.pageTitle", { page: idx + 1 })}
+                  className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
+                    idx <= activeSegment ? "bg-app-accent" : "bg-white/20"
+                  }`}
+                  onClick={() => {
+                    goToPage(idx);
+                  }}
+                />
+              ))}
+            </div>
+            <span className="w-0 overflow-hidden text-right text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
+              {Math.max(totalPages, 1)}
+            </span>
           </div>
-          <span className="w-0 overflow-hidden text-right text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">
-            {Math.max(totalPages, 1)}
-          </span>
-        </div>
         </div>
       </div>
     </section>

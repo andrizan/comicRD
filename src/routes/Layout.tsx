@@ -81,7 +81,10 @@ export function Layout() {
   const theme = parseTheme(settingMap.get("app_theme"));
   const localePreference = parseSettingString(settingMap.get("app_locale"), "en");
   const activeLocale = resolveLocalePreference(localePreference);
-  const isLibrarySourceEmpty = !parseSettingString(settingMap.get("library_source_input"), "").trim();
+  const isLibrarySourceEmpty = !parseSettingString(
+    settingMap.get("library_source_input"),
+    "",
+  ).trim();
 
   useEffect(() => {
     if (theme === "dark") {

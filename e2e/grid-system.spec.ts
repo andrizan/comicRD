@@ -94,7 +94,11 @@ function getItemRects(page: import("@playwright/test").Page) {
     const items = document.querySelectorAll("[data-virtual-item]");
     return Array.from(items).map((el) => {
       const rect = el.getBoundingClientRect();
-      return { top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width) };
+      return {
+        top: Math.round(rect.top),
+        left: Math.round(rect.left),
+        width: Math.round(rect.width),
+      };
     });
   });
 }

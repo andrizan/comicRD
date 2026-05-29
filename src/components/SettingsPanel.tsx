@@ -215,9 +215,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   <span className="font-semibold text-app-text">{t("settings.webtoon")}</span>.
                 </div>
                 <label className="mb-3 block">
-                  <span className="mb-1.5 block text-xs font-medium">{t("settings.defaultZoom")}</span>
+                  <span className="mb-1.5 block text-xs font-medium">
+                    {t("settings.defaultZoom")}
+                  </span>
                   <input
-                    min={0.4} max={3} step={0.1} type="range"
+                    min={0.4}
+                    max={3}
+                    step={0.1}
+                    type="range"
                     value={defaultZoom}
                     onChange={(e) => setDefaultZoom(Number(e.target.value))}
                     className="w-full accent-app-accent"
@@ -229,7 +234,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-medium">{t("settings.pageGap")}</span>
                   <input
-                    min={0} max={100} step={10} type="range"
+                    min={0}
+                    max={100}
+                    step={10}
+                    type="range"
                     value={pageGap}
                     onChange={(e) => setPageGap(Number(e.target.value))}
                     className="w-full accent-app-accent"
@@ -250,7 +258,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     <span className="mb-1.5 block text-xs font-medium">{t("settings.theme")}</span>
                     <select
                       value={appTheme}
-                      onChange={(event) => setAppTheme(event.target.value === "dark" ? "dark" : "light")}
+                      onChange={(event) =>
+                        setAppTheme(event.target.value === "dark" ? "dark" : "light")
+                      }
                       className="h-9 w-full cursor-pointer rounded-lg border border-app-border bg-app-surface px-2 text-xs text-app-text focus:border-app-accent focus:outline-none"
                     >
                       <option value="light">{t("common.light")}</option>
@@ -258,10 +268,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium">{t("settings.language")}</span>
+                    <span className="mb-1.5 block text-xs font-medium">
+                      {t("settings.language")}
+                    </span>
                     <select
                       value={localePreference}
-                      onChange={(event) => setLocalePreference(event.target.value as LocalePreference)}
+                      onChange={(event) =>
+                        setLocalePreference(event.target.value as LocalePreference)
+                      }
                       className="h-9 w-full cursor-pointer rounded-lg border border-app-border bg-app-surface px-2 text-xs text-app-text focus:border-app-accent focus:outline-none"
                     >
                       {localeOptions.map((option) => (

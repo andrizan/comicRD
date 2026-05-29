@@ -274,7 +274,12 @@ export function LibraryPage() {
         >
           <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
             <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
-              {entry.comic_title.split(" ").slice(0, 2).map((w) => w[0] || "").join("").toUpperCase()}
+              {entry.comic_title
+                .split(" ")
+                .slice(0, 2)
+                .map((w) => w[0] || "")
+                .join("")
+                .toUpperCase()}
             </span>
           </div>
           <div className="min-w-0 flex-1">
@@ -295,7 +300,11 @@ export function LibraryPage() {
                     : "text-app-muted hover:text-app-text"
                 }`}
               >
-                {bookmarkSet.has(entry.comic_source_path) ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+                {bookmarkSet.has(entry.comic_source_path) ? (
+                  <BookmarkCheck size={16} />
+                ) : (
+                  <Bookmark size={16} />
+                )}
               </button>
             </div>
           </div>
@@ -357,11 +366,24 @@ export function LibraryPage() {
         <div
           title={bm.comic_title || bm.comic_source_path}
           className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
-          onContextMenu={(e) => ctxMenu.show(e, comicContextItems({ source_path: bm.comic_source_path, title: bm.comic_title } as RawComic))}
+          onContextMenu={(e) =>
+            ctxMenu.show(
+              e,
+              comicContextItems({
+                source_path: bm.comic_source_path,
+                title: bm.comic_title,
+              } as RawComic),
+            )
+          }
         >
           <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
             <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
-              {(bm.comic_title || bm.comic_source_path).split(" ").slice(0, 2).map((w) => w[0] || "").join("").toUpperCase()}
+              {(bm.comic_title || bm.comic_source_path)
+                .split(" ")
+                .slice(0, 2)
+                .map((w) => w[0] || "")
+                .join("")
+                .toUpperCase()}
             </span>
           </div>
           <div className="min-w-0 flex-1">
@@ -392,7 +414,15 @@ export function LibraryPage() {
     return (
       <div
         className="flex cursor-pointer items-center gap-2.5 border-b border-app-border bg-app-surface px-4 py-3 transition-colors hover:bg-app-bg"
-        onContextMenu={(e) => ctxMenu.show(e, comicContextItems({ source_path: bm.comic_source_path, title: bm.comic_title } as RawComic))}
+        onContextMenu={(e) =>
+          ctxMenu.show(
+            e,
+            comicContextItems({
+              source_path: bm.comic_source_path,
+              title: bm.comic_title,
+            } as RawComic),
+          )
+        }
       >
         <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold text-app-muted">
           {String(index + 1).padStart(2, "0")}
@@ -505,9 +535,7 @@ export function LibraryPage() {
           <div className="rounded-lg border border-app-border bg-app-surface px-4 py-3">
             <div className="font-display text-2xl font-extrabold leading-none">
               {libraryStats.totalComics}
-              <sup className="ml-0.5 text-[11px] font-medium not-italic text-app-accent">
-                komik
-              </sup>
+              <sup className="ml-0.5 text-[11px] font-medium not-italic text-app-accent">komik</sup>
             </div>
             <div className="mt-1.5 text-[10px] uppercase tracking-widest text-app-muted">
               Total Library
@@ -643,7 +671,8 @@ export function LibraryPage() {
               gap={1}
               items={currentItems as unknown[]}
               getItemKey={(i) => {
-                if (viewMode === "history") return `${(currentItems[i] as ReadingHistoryEntry).comic_source_path}-${(currentItems[i] as ReadingHistoryEntry).chapter_id}`;
+                if (viewMode === "history")
+                  return `${(currentItems[i] as ReadingHistoryEntry).comic_source_path}-${(currentItems[i] as ReadingHistoryEntry).chapter_id}`;
                 if (viewMode === "bookmarks") return (currentItems[i] as ComicBookmark).id;
                 return (currentItems[i] as RawComic).key;
               }}

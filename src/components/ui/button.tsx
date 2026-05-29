@@ -10,8 +10,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 const buttonStyles: Record<ButtonVariant, string> = {
   default: "bg-app-accent text-white hover:brightness-110",
   ghost: "bg-transparent text-app-text hover:bg-app-surface",
-  outline:
-    "border border-app-border bg-app-surface text-app-text hover:bg-app-surface",
+  outline: "border border-app-border bg-app-surface text-app-text hover:bg-app-surface",
   danger: "bg-[#a73131] text-white hover:brightness-110",
 };
 
