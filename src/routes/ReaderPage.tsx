@@ -569,7 +569,7 @@ export function ReaderPage() {
                 void document.documentElement.requestFullscreen();
               }}
             >
-              <Fullscreen size={14} className={isFullscreen ? "text-[var(--accent)]" : ""} />
+              <Fullscreen size={14} className={isFullscreen ? "text-app-accent" : ""} />
             </Button>
             <span className="w-10 text-center text-xs font-semibold text-white/80">
               {pageGap}px
@@ -644,7 +644,7 @@ export function ReaderPage() {
                 type="button"
                 title={t("reader.pageTitle", { page: idx + 1 })}
                 className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
-                  idx <= activeSegment ? "bg-[var(--accent)]" : "bg-white/20"
+                  idx <= activeSegment ? "bg-app-accent" : "bg-white/20"
                 }`}
                 onClick={() => {
                   goToPage(idx);

@@ -357,7 +357,7 @@ export function ComicPage() {
             <p className="truncate text-[10px] text-app-muted">{comicSourcePath}</p>
           </div>
           <span className="shrink-0 rounded-full border border-app-border bg-app-bg px-2.5 py-1 text-[11px] font-semibold text-app-muted">
-            {totalChapters} Chapters
+            {t("comic.chapters", { count: totalChapters })}
           </span>
           <button
             type="button"
@@ -409,6 +409,7 @@ export function ComicPage() {
               type="button"
               onClick={() => setDisplayMode("grid")}
               aria-label="Grid"
+              title="Grid"
               className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
                 displayMode === "grid"
                   ? "bg-app-accent/10 text-app-accent"
@@ -421,6 +422,7 @@ export function ComicPage() {
               type="button"
               onClick={() => setDisplayMode("list")}
               aria-label="List"
+              title="List"
               className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
                 displayMode === "list"
                   ? "bg-app-accent/10 text-app-accent"

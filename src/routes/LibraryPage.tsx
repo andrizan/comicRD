@@ -265,7 +265,9 @@ export function LibraryPage() {
   function renderHistoryRow(index: number, entry: ReadingHistoryEntry) {
     if (displayMode === "grid") {
       return (
-        <div
+        <Link
+          to="/comic/$comicId"
+          params={{ comicId: encodeURIComponent(entry.comic_source_path) }}
           title={entry.comic_title}
           className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
           onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
@@ -283,6 +285,7 @@ export function LibraryPage() {
               <button
                 type="button"
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   toggleBookmark(entry.comic_source_path);
                 }}
@@ -296,11 +299,13 @@ export function LibraryPage() {
               </button>
             </div>
           </div>
-        </div>
+        </Link>
       );
     }
     return (
-      <div
+      <Link
+        to="/comic/$comicId"
+        params={{ comicId: encodeURIComponent(entry.comic_source_path) }}
         className="flex cursor-pointer items-center gap-2.5 border-b border-app-border bg-app-surface px-4 py-3 transition-colors hover:bg-app-bg"
         onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
       >
@@ -325,6 +330,7 @@ export function LibraryPage() {
           <button
             type="button"
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               toggleBookmark(entry.comic_source_path);
             }}
@@ -341,7 +347,7 @@ export function LibraryPage() {
             )}
           </button>
         </div>
-      </div>
+      </Link>
     );
   }
 
@@ -562,6 +568,7 @@ export function LibraryPage() {
               type="button"
               onClick={() => setDisplayMode("grid")}
               aria-label="Grid"
+              title="Grid"
               className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
                 displayMode === "grid"
                   ? "bg-app-accent/10 text-app-accent"
@@ -574,6 +581,7 @@ export function LibraryPage() {
               type="button"
               onClick={() => setDisplayMode("list")}
               aria-label="List"
+              title="List"
               className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
                 displayMode === "list"
                   ? "bg-app-accent/10 text-app-accent"
