@@ -630,25 +630,27 @@ export function LibraryPage() {
                   <SelectItem value="desc">{t("common.desc")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Select
-                items={[
-                  { label: t("library.filterAll"), value: "all" },
-                  { label: t("library.filterRead"), value: "read" },
-                  { label: t("library.filterUnread"), value: "unread" },
-                ]}
-                value={readFilter}
-                onValueChange={(v) => setReadFilter(v as "all" | "read" | "unread")}
-              >
-                <SelectTrigger className="h-10 w-[100px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t("library.filterAll")}</SelectItem>
-                  <SelectItem value="read">{t("library.filterRead")}</SelectItem>
-                  <SelectItem value="unread">{t("library.filterUnread")}</SelectItem>
-                </SelectContent>
-              </Select>
             </>
+          ) : null}
+          {viewMode === "library" ? (
+            <Select
+              items={[
+                { label: t("library.filterAll"), value: "all" },
+                { label: t("library.filterRead"), value: "read" },
+                { label: t("library.filterUnread"), value: "unread" },
+              ]}
+              value={readFilter}
+              onValueChange={(v) => setReadFilter(v as "all" | "read" | "unread")}
+            >
+              <SelectTrigger className="h-10 w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("library.filterAll")}</SelectItem>
+                <SelectItem value="read">{t("library.filterRead")}</SelectItem>
+                <SelectItem value="unread">{t("library.filterUnread")}</SelectItem>
+              </SelectContent>
+            </Select>
           ) : null}
           <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-app-border bg-app-surface">
             <button
