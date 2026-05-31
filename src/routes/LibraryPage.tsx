@@ -41,6 +41,7 @@ export function LibraryPage() {
   const { t } = useAppI18n();
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState("");
+  const [readFilter, setReadFilter] = useState<"all" | "read" | "unread">("all");
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
 
   const {
@@ -184,10 +185,14 @@ export function LibraryPage() {
     () =>
       (comicsQuery.data ?? []).filter((comic) => {
         const q = searchText.trim().toLowerCase();
-        if (!q) return true;
-        return comic.title.toLowerCase().includes(q) || comic.source_path.toLowerCase().includes(q);
+        if (q && !comic.title.toLowerCase().includes(q) && !comic.source_path.toLowerCase().includes(q)) {
+          return false;
+        }
+        if (readFilter === "read" && !readingSet.has(comic.source_path)) return false;
+        if (readFilter === "unread" && readingSet.has(comic.source_path)) return false;
+        return true;
       }),
-    [comicsQuery.data, searchText],
+    [comicsQuery.data, searchText, readFilter, readingSet],
   );
 
   const bookmarkedComics = useMemo(() => {
@@ -244,8 +249,8 @@ export function LibraryPage() {
   const libraryStats = useMemo(() => {
     const allComics = comicsQuery.data ?? [];
     let visible: number;
-    if (viewMode === "bookmarks") visible = bookmarkedComics.length;
-    else if (viewMode === "history") visible = historyEntries.length;
+    if (viewMode === "history") visible = historyEntries.length;
+    else if (viewMode === "bookmarks") visible = bookmarkedComics.length;
     else visible = filteredComics.length;
     return { totalComics: allComics.length, visibleComics: visible };
   }, [comicsQuery.data, filteredComics, bookmarkedComics, historyEntries, viewMode]);
@@ -530,6 +535,7 @@ export function LibraryPage() {
               void comicsQuery.refetch();
               void historyQuery.refetch();
               void bookmarksQuery.refetch();
+              void comicsWithProgressQuery.refetch();
             }}
             className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
             title={t("library.refresh")}
@@ -599,6 +605,15 @@ export function LibraryPage() {
               >
                 <option value="asc">{t("common.asc")}</option>
                 <option value="desc">{t("common.desc")}</option>
+              </select>
+              <select
+                value={readFilter}
+                onChange={(e) => setReadFilter(e.target.value as "all" | "read" | "unread")}
+                className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
+              >
+                <option value="all">{t("library.filterAll")}</option>
+                <option value="read">{t("library.filterRead")}</option>
+                <option value="unread">{t("library.filterUnread")}</option>
               </select>
             </>
           ) : null}

@@ -62,6 +62,9 @@ const enMessages = {
   "library.readAt": "Read: {value}",
   "library.historyEmpty.title": "No reading history",
   "library.historyEmpty.description": "Start reading comics to see your history here.",
+  "library.filterAll": "All",
+  "library.filterRead": "Read",
+  "library.filterUnread": "Unread",
 
   "comic.refreshChapters": "Refresh chapters",
   "comic.chapters": "{count} chapters",
@@ -179,6 +182,9 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "library.readAt": "Dibaca: {value}",
   "library.historyEmpty.title": "Belum ada riwayat baca",
   "library.historyEmpty.description": "Mulai baca komik untuk melihat riwayat di sini.",
+  "library.filterAll": "Semua",
+  "library.filterRead": "Sudah Dibaca",
+  "library.filterUnread": "Belum Dibaca",
 
   "comic.refreshChapters": "Muat ulang chapter",
   "comic.chapters": "{count} chapter",
