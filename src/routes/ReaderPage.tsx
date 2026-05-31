@@ -233,6 +233,7 @@ export function ReaderPage() {
   const restoredChapterRef = useRef<number | null>(null);
   const goToPage = (targetPage: number) => {
     const nextPage = syncCurrentPage(targetPage);
+    lastWebtoonPageSyncTsRef.current = performance.now();
     pageRefs.current.get(nextPage)?.scrollIntoView({ block: "start" });
   };
 
@@ -249,21 +250,21 @@ export function ReaderPage() {
   useEffect(() => {
     if (totalPages <= 0 || !progressQuery.isFetched || progressQuery.isFetching) return;
 
-    const target = clampPage(progressQuery.data?.last_page ?? 0);
-    if (restoredChapterRef.current === chapterIdNum && target === currentPageRef.current) return;
-
-    restoredChapterRef.current = chapterIdNum;
-    syncCurrentPage(target);
-    lastWebtoonPageSyncTsRef.current = performance.now();
-    window.requestAnimationFrame(() => {
-      if (target === 0) {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = 0;
+    if (restoredChapterRef.current !== chapterIdNum) {
+      const target = clampPage(progressQuery.data?.last_page ?? 0);
+      restoredChapterRef.current = chapterIdNum;
+      syncCurrentPage(target);
+      lastWebtoonPageSyncTsRef.current = performance.now();
+      window.requestAnimationFrame(() => {
+        if (target === 0) {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = 0;
+          }
+          return;
         }
-        return;
-      }
-      pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
-    });
+        pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
+      });
+    }
 
     const root = scrollRef.current;
     if (!root) return;
@@ -283,7 +284,7 @@ export function ReaderPage() {
       },
       {
         root,
-        rootMargin: "0px 0px -50% 0px",
+        rootMargin: "-10% 0px -70% 0px",
         threshold: 0.01,
       },
     );
@@ -378,24 +379,24 @@ export function ReaderPage() {
       }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
+        if (currentPageRef.current <= 0 && chapterContextQuery.data?.prev_chapter_id) {
           void goToChapter(chapterContextQuery.data.prev_chapter_id);
           return;
         }
-        goToPage(currentPage - 1);
+        goToPage(currentPageRef.current - 1);
       }
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
+        if (currentPageRef.current >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
           void goToChapter(chapterContextQuery.data.next_chapter_id);
           return;
         }
-        goToPage(currentPage + 1);
+        goToPage(currentPageRef.current + 1);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [chapterContextQuery.data, currentPage, totalPages]);
+  }, [chapterContextQuery.data, totalPages]);
 
   const pageIndicator = `${Math.min(currentPage + 1, Math.max(totalPages, 1))}`;
   const segmentCount = Math.max(1, totalPages);
@@ -513,11 +514,11 @@ export function ReaderPage() {
                 variant="outline"
                 className={READER_TOOLBAR_BUTTON_CLASS}
                 onClick={() => {
-                  if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
+                  if (currentPageRef.current <= 0 && chapterContextQuery.data?.prev_chapter_id) {
                     void goToChapter(chapterContextQuery.data.prev_chapter_id);
                     return;
                   }
-                  goToPage(currentPage - 1);
+                  goToPage(currentPageRef.current - 1);
                 }}
               >
                 <ChevronLeft size={14} />
@@ -526,11 +527,11 @@ export function ReaderPage() {
                 variant="outline"
                 className={READER_TOOLBAR_BUTTON_CLASS}
                 onClick={() => {
-                  if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
+                  if (currentPageRef.current >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
                     void goToChapter(chapterContextQuery.data.next_chapter_id);
                     return;
                   }
-                  goToPage(currentPage + 1);
+                  goToPage(currentPageRef.current + 1);
                 }}
               >
                 <ChevronRight size={14} />
