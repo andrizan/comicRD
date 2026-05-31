@@ -56,7 +56,7 @@ jobs:
             script: tauri:build:macos
             artifact_name: comicrd-macos
             artifact_paths: |
-              src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
 
     runs-on: ${{ matrix.os }}
 

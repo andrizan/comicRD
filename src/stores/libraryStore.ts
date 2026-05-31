@@ -26,6 +26,7 @@ interface PreferencesState {
   viewMode: ViewMode;
   displayMode: DisplayMode;
   inputPath: string;
+  chapterSortBy: SortBy;
   chapterSortDir: SortDir;
   preferencesReady: boolean;
   setSortBy: (sortBy: SortBy) => void;
@@ -33,6 +34,7 @@ interface PreferencesState {
   setViewMode: (viewMode: ViewMode) => void;
   setDisplayMode: (mode: DisplayMode) => void;
   setInputPath: (inputPath: string) => void;
+  setChapterSortBy: (sortBy: SortBy) => void;
   setChapterSortDir: (dir: SortDir) => void;
   loadPreferences: () => Promise<void>;
 }
@@ -43,6 +45,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   viewMode: "library",
   displayMode: "grid",
   inputPath: "",
+  chapterSortBy: "name",
   chapterSortDir: "asc",
   preferencesReady: false,
 
@@ -71,6 +74,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (get().preferencesReady) void setSetting("library_source_input", inputPath);
   },
 
+  setChapterSortBy: (chapterSortBy) => {
+    set({ chapterSortBy });
+    if (get().preferencesReady) void setSetting("chapter_sort_by", chapterSortBy);
+  },
+
   setChapterSortDir: (chapterSortDir) => {
     set({ chapterSortDir });
     if (get().preferencesReady) void setSetting("chapter_sort_dir", chapterSortDir);
@@ -83,6 +91,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const savedViewMode = parseStoredString(await getSetting("library_view_mode"));
     const savedDisplayMode = parseStoredString(await getSetting("library_display_mode"));
     const savedChapterSortDir = parseStoredString(await getSetting("chapter_sort_dir"));
+    const savedChapterSortBy = parseStoredString(await getSetting("chapter_sort_by"));
 
     const patch: Partial<PreferencesState> = { preferencesReady: true };
     if (savedPath.trim()) patch.inputPath = savedPath.trim();
@@ -93,6 +102,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       patch.displayMode = savedDisplayMode;
     if (savedChapterSortDir === "asc" || savedChapterSortDir === "desc")
       patch.chapterSortDir = savedChapterSortDir;
+    if (savedChapterSortBy === "name" || savedChapterSortBy === "folder_date")
+      patch.chapterSortBy = savedChapterSortBy;
     set(patch);
   },
 }));
@@ -111,7 +122,9 @@ const selectorLibraryView = (s: PreferencesState) => ({
 });
 
 const selectorChapterSort = (s: PreferencesState) => ({
+  chapterSortBy: s.chapterSortBy,
   chapterSortDir: s.chapterSortDir,
+  setChapterSortBy: s.setChapterSortBy,
   setChapterSortDir: s.setChapterSortDir,
 });
 

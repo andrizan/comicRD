@@ -490,6 +490,15 @@ fn upsert_chapter(
       r#"
       INSERT INTO chapters (comic_id, title, chapter_index, history_key, source_path, source_type, page_count, created_at, updated_at, date_modified)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+      ON CONFLICT(source_path) DO UPDATE SET
+        comic_id = excluded.comic_id,
+        title = excluded.title,
+        chapter_index = excluded.chapter_index,
+        history_key = excluded.history_key,
+        source_type = excluded.source_type,
+        page_count = excluded.page_count,
+        updated_at = excluded.updated_at,
+        date_modified = excluded.date_modified
       "#,
       params![
         comic_id,
@@ -631,7 +640,9 @@ fn natural_compare(a: &str, b: &str) -> std::cmp::Ordering {
                         other => return other,
                     }
                 } else {
-                    match ac.to_lowercase().cmp(&bc.to_lowercase()) {
+                    let ac_lower: String = ac.to_lowercase().collect();
+                    let bc_lower: String = bc.to_lowercase().collect();
+                    match ac_lower.cmp(&bc_lower) {
                         std::cmp::Ordering::Equal => {
                             a_chars.next();
                             b_chars.next();

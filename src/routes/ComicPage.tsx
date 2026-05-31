@@ -36,7 +36,7 @@ import {
 import { t as translate, useAppI18n } from "@/i18n";
 import { useChapterSort, useLibraryPreferences } from "@/stores/libraryStore";
 import { setScrollKey, restoreScroll, scrollPositions } from "@/routes/Layout";
-import type { RawChapter, SortDir } from "@/types";
+import type { RawChapter, SortBy, SortDir } from "@/types";
 
 function decodeComicPath(value: string): string {
   try {
@@ -85,7 +85,7 @@ export function ComicPage() {
   const comicSourcePath = decodeComicPath(comicId);
   const comicTitle = titleFromPath(comicSourcePath);
   const [searchText, setSearchText] = useState("");
-  const { chapterSortDir, setChapterSortDir } = useChapterSort();
+  const { chapterSortBy, chapterSortDir, setChapterSortBy, setChapterSortDir } = useChapterSort();
   const { displayMode, setDisplayMode } = useLibraryPreferences();
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const virtualListRef = useRef<VirtualListHandle>(null);
@@ -165,14 +165,19 @@ export function ComicPage() {
       return true;
     });
     filtered.sort((a, b) => {
-      const order = a.title.localeCompare(b.title, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
+      let order: number;
+      if (chapterSortBy === "folder_date") {
+        order = a.chapter_index - b.chapter_index;
+      } else {
+        order = a.title.localeCompare(b.title, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      }
       return chapterSortDir === "desc" ? -order : order;
     });
     return filtered;
-  }, [chapterSortDir, chaptersQuery.data, searchText, showFavoritesOnly, favoriteSet]);
+  }, [chapterSortBy, chapterSortDir, chaptersQuery.data, searchText, showFavoritesOnly, favoriteSet]);
   const totalChapters = chaptersQuery.data?.length ?? 0;
 
   async function onOpenChapter(chapterSourcePath: string) {
@@ -407,18 +412,34 @@ export function ComicPage() {
           </InputGroup>
           <Select
             items={[
-              { label: t("comic.nameAsc"), value: "asc" },
-              { label: t("comic.nameDesc"), value: "desc" },
+              { label: t("common.name"), value: "name" },
+              { label: t("library.folderDate"), value: "folder_date" },
+            ]}
+            value={chapterSortBy}
+            onValueChange={(v) => setChapterSortBy(v as SortBy)}
+          >
+            <SelectTrigger className="h-10 w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">{t("common.name")}</SelectItem>
+              <SelectItem value="folder_date">{t("library.folderDate")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            items={[
+              { label: t("common.asc"), value: "asc" },
+              { label: t("common.desc"), value: "desc" },
             ]}
             value={chapterSortDir}
             onValueChange={(v) => setChapterSortDir(v as SortDir)}
           >
-            <SelectTrigger className="h-10 w-[100px]">
+            <SelectTrigger className="h-10 w-[80px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="asc">{t("comic.nameAsc")}</SelectItem>
-              <SelectItem value="desc">{t("comic.nameDesc")}</SelectItem>
+              <SelectItem value="asc">{t("common.asc")}</SelectItem>
+              <SelectItem value="desc">{t("common.desc")}</SelectItem>
             </SelectContent>
           </Select>
           <button
