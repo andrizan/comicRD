@@ -158,6 +158,10 @@ export async function listReadingHistory() {
   return invoke<ReadingHistoryEntry[]>("list_reading_history");
 }
 
+export async function listComicsWithProgress() {
+  return invoke<string[]>("list_comics_with_progress");
+}
+
 export async function openContainingFolder(path: string) {
   return invoke("open_containing_folder", { path });
 }

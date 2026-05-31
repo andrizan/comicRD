@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useAppI18n } from "../i18n";
 import { unixToLocale } from "../lib/utils";
 import { BookmarkBtn } from "./BookmarkBtn";
 import { SpineThumb } from "./SpineThumb";
@@ -9,10 +10,20 @@ interface ComicItemProps {
   variant: "grid" | "list";
   index: number;
   isBookmarked: boolean;
+  isReading: boolean;
   onBookmark: () => void;
 }
 
-export function ComicItem({ comic, variant, index, isBookmarked, onBookmark }: ComicItemProps) {
+function ReadingBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-app-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-app-accent">
+      {label}
+    </span>
+  );
+}
+
+export function ComicItem({ comic, variant, index, isBookmarked, isReading, onBookmark }: ComicItemProps) {
+  const { t } = useAppI18n();
   if (variant === "grid") {
     return (
       <Link
@@ -26,7 +37,10 @@ export function ComicItem({ comic, variant, index, isBookmarked, onBookmark }: C
           <p className="truncate text-sm font-medium hover:underline">{comic.title}</p>
           <div className="mt-1 flex items-center justify-between">
             <span className="text-[10px] text-app-muted">{unixToLocale(comic.date_modified)}</span>
-            <BookmarkBtn isBookmarked={isBookmarked} onToggle={onBookmark} />
+            <div className="flex items-center gap-1">
+              {isReading && <ReadingBadge label={t("comic.badge.reading")} />}
+              <BookmarkBtn isBookmarked={isBookmarked} onToggle={onBookmark} />
+            </div>
           </div>
         </div>
       </Link>
@@ -50,6 +64,7 @@ export function ComicItem({ comic, variant, index, isBookmarked, onBookmark }: C
         <span className="hidden text-xs text-app-muted sm:block">
           {unixToLocale(comic.date_modified)}
         </span>
+        {isReading && <ReadingBadge label={t("comic.badge.reading")} />}
         <BookmarkBtn isBookmarked={isBookmarked} onToggle={onBookmark} />
       </div>
     </Link>

@@ -18,6 +18,7 @@ import {
   addComicBookmark,
   initDb,
   listAllBookmarks,
+  listComicsWithProgress,
   listLibraryComicsRaw,
   listReadingHistory,
   openContainingFolder,
@@ -89,6 +90,15 @@ export function LibraryPage() {
     queryFn: listReadingHistory,
     staleTime: 0,
   });
+
+  const comicsWithProgressQuery = useQuery({
+    queryKey: ["comics-with-progress"],
+    queryFn: listComicsWithProgress,
+  });
+
+  const readingSet = useMemo(() => {
+    return new Set(comicsWithProgressQuery.data ?? []);
+  }, [comicsWithProgressQuery.data]);
 
   const bookmarkSet = useMemo(() => {
     const set = new Set<string>();
@@ -256,6 +266,7 @@ export function LibraryPage() {
           variant={displayMode}
           index={index}
           isBookmarked={bookmarkSet.has(item.source_path)}
+          isReading={readingSet.has(item.source_path)}
           onBookmark={() => toggleBookmark(item.source_path)}
         />
       </div>

@@ -1833,6 +1833,26 @@ fn list_reading_history(app: AppHandle) -> Result<Vec<ReadingHistoryEntry>, Stri
 }
 
 #[tauri::command]
+fn list_comics_with_progress(app: AppHandle) -> Result<Vec<String>, String> {
+    let conn = open_conn(&app)?;
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT DISTINCT c.source_path
+            FROM reading_progress r
+            INNER JOIN chapters ch ON ch.id = r.chapter_id
+            INNER JOIN comics c ON c.id = ch.comic_id
+            "#,
+        )
+        .map_err(|e| format!("failed preparing comics-with-progress query: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("failed querying comics with progress: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting comics with progress: {e}"))
+}
+
+#[tauri::command]
 fn set_setting(app: AppHandle, key: String, value_json: String) -> Result<(), String> {
     let conn = open_conn(&app)?;
     conn.execute(
@@ -2030,6 +2050,7 @@ pub fn run() {
             remove_chapter_favorite,
             list_chapter_favorites,
             list_reading_history,
+            list_comics_with_progress,
             set_setting,
             get_setting,
             list_settings,
