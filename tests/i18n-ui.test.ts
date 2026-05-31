@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import i18nSource from "../i18n.ts?raw";
-import settingsPanel from "../components/SettingsPanel.tsx?raw";
+import i18nSource from "@/i18n.ts?raw";
+import settingsPanel from "@/components/SettingsPanel.tsx?raw";
 
 describe("i18n UI wiring", () => {
   it("defaults to English and only exposes English and Indonesian language choices", () => {

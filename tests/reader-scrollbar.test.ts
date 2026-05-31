@@ -1,8 +1,8 @@
 // @ts-expect-error Node types are intentionally not exposed to the browser app tsconfig.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import layout from "../routes/Layout.tsx?raw";
-import readerPage from "../routes/ReaderPage.tsx?raw";
+import layout from "@/routes/Layout.tsx?raw";
+import readerPage from "@/routes/ReaderPage.tsx?raw";
 
 describe("reader scrollbar styling", () => {
   it("uses a dark scrollbar class on the reader scroll container", () => {

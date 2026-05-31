@@ -20,15 +20,23 @@ import {
   openChapterForReading,
   openContainingFolder,
   removeChapterFavorite,
-} from "../api/tauri";
-import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
-import { ContextMenu, useContextMenu, type ContextMenuItem } from "../components/ui/context-menu";
-import { ScrollToTop } from "../components/ui/scroll-to-top";
-import { VirtualList, type VirtualListHandle } from "../components/ui/virtual-list";
-import { t as translate, useAppI18n } from "../i18n";
-import { useChapterSort, useLibraryPreferences } from "../stores/libraryStore";
-import { setScrollKey, restoreScroll, scrollPositions } from "./Layout";
-import type { RawChapter, SortDir } from "../types";
+} from "@/api/tauri";
+import { EmptyState, ErrorState, SkeletonList } from "@/components/feedback/states";
+import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { ScrollToTop } from "@/components/ui/scroll-to-top";
+import { VirtualList, type VirtualListHandle } from "@/components/ui/virtual-list";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { t as translate, useAppI18n } from "@/i18n";
+import { useChapterSort, useLibraryPreferences } from "@/stores/libraryStore";
+import { setScrollKey, restoreScroll, scrollPositions } from "@/routes/Layout";
+import type { RawChapter, SortDir } from "@/types";
 
 function decodeComicPath(value: string): string {
   try {
@@ -258,7 +266,7 @@ export function ComicPage() {
           }`}
         >
           <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
-            <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
+            <span className="font-display text-sm font-bold leading-tight text-app-accent opacity-80">
               {String(index + 1).padStart(2, "0")}
             </span>
           </div>
@@ -312,7 +320,7 @@ export function ComicPage() {
           openChapterMutation.isPending ? "pointer-events-none opacity-60" : ""
         }`}
       >
-        <span className="w-6 flex-shrink-0 pt-0.5 text-right font-display text-xs font-bold text-app-muted">
+        <span className="w-6 flex-shrink-0 pt-0.5 text-right font-display text-xs font-bold leading-tight text-app-muted">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="min-w-0 flex-1">
@@ -387,24 +395,32 @@ export function ComicPage() {
       {/* Toolbar */}
       <div className="space-y-3 px-5 py-4">
         <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-app-border bg-app-surface px-3.5 h-10 transition-all focus-within:border-app-accent">
-            <Search size={16} className="flex-shrink-0 text-app-muted" />
-            <input
-              type="text"
+          <InputGroup className="w-[200px] flex-1">
+            <InputGroupInput
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder={t("comic.searchPlaceholder")}
-              className="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-app-muted"
             />
-          </div>
-          <select
+            <InputGroupAddon>
+              <Search size={16} />
+            </InputGroupAddon>
+          </InputGroup>
+          <Select
+            items={[
+              { label: t("comic.nameAsc"), value: "asc" },
+              { label: t("comic.nameDesc"), value: "desc" },
+            ]}
             value={chapterSortDir}
-            onChange={(e) => setChapterSortDir(e.target.value as SortDir)}
-            className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
+            onValueChange={(v) => setChapterSortDir(v as SortDir)}
           >
-            <option value="asc">{t("comic.nameAsc")}</option>
-            <option value="desc">{t("comic.nameDesc")}</option>
-          </select>
+            <SelectTrigger className="h-10 w-[100px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="asc">{t("comic.nameAsc")}</SelectItem>
+              <SelectItem value="desc">{t("comic.nameDesc")}</SelectItem>
+            </SelectContent>
+          </Select>
           <button
             type="button"
             onClick={() => setShowFavoritesOnly((v) => !v)}

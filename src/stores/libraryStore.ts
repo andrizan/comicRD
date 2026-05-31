@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import { getSetting, setSetting } from "../api/tauri";
-import type { SortBy, SortDir } from "../types";
+import { getSetting, setSetting } from "@/api/tauri";
+import type { SortBy, SortDir } from "@/types";
 
 export type ViewMode = "history" | "library" | "bookmarks";
 export type DisplayMode = "grid" | "list";

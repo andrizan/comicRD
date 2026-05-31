@@ -1,7 +1,7 @@
 import { AlertTriangle, Inbox } from "lucide-react";
-import { Button } from "../ui/button";
-import { Card } from "../ui/card";
-import { useAppI18n } from "../../i18n";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { useAppI18n } from "@/i18n";
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
   return (
@@ -32,7 +32,7 @@ export function ErrorState({
         <p className="max-w-xl text-sm text-[#7c3a3a]">{description}</p>
       </div>
       {onRetry ? (
-        <Button variant="danger" onClick={onRetry}>
+        <Button variant="destructive" onClick={onRetry}>
           {t("common.retry")}
         </Button>
       ) : null}

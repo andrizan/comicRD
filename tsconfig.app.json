@@ -15,11 +15,16 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* Path aliases */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "tests/reader-scrollbar.test.ts", "tests/settings-state.test.ts", "tests/i18n.test.ts", "tests/i18n-ui.test.ts", "tests/reader-progress.test.ts"]
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLibrarySourceSaveDisabled } from "./settings-state";
+import { isLibrarySourceSaveDisabled } from "../src/lib/settings-state";
 
 describe("isLibrarySourceSaveDisabled", () => {
   it("disables saving when the input matches the saved library source", () => {

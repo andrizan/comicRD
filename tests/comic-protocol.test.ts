@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comicPageSrc } from "./comic-protocol";
+import { comicPageSrc } from "@/lib/comic-protocol";
 
 describe("comicPageSrc", () => {
   it("uses the Wry HTTP custom-protocol workaround on Windows", () => {

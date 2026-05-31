@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProgressPayload } from "./reader-progress";
+import { buildProgressPayload } from "../src/lib/reader-progress";
 
 describe("reader progress payload", () => {
   it("marks a chapter read when the last page is persisted", () => {

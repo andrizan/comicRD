@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { interpolateI18nPlaceholders, resolveLocalePreference, t } from "../i18n";
+import { interpolateI18nPlaceholders, resolveLocalePreference, t } from "@/i18n";
 
 describe("i18n locale resolution", () => {
   it("allows explicit English and Indonesian preferences", () => {

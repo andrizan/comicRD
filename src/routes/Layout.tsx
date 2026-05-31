@@ -2,10 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Home, Moon, Settings, Sun } from "lucide-react";
-import { listSettings, setSetting } from "../api/tauri";
-import { SettingsPanel } from "../components/SettingsPanel";
-import { activateLocale, resolveLocalePreference, useAppI18n } from "../i18n";
-import { cn } from "../lib/utils";
+import { listSettings, setSetting } from "@/api/tauri";
+import { SettingsPanel } from "@/components/SettingsPanel";
+import { activateLocale, resolveLocalePreference, useAppI18n } from "@/i18n";
+import { cn } from "@/lib/utils";
 
 function parseTheme(value: string | undefined): "light" | "dark" {
   if (!value) return "dark";
@@ -140,7 +140,7 @@ export function Layout() {
             >
               <Home size={14} />
             </Link>
-            <span className="font-display text-xs font-bold tracking-widest text-app-muted">
+            <span className="font-display text-xs font-bold leading-tight tracking-widest text-app-muted">
               ComicRD
             </span>
           </div>

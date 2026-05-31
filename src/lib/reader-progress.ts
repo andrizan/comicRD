@@ -1,4 +1,4 @@
-import type { ReaderMode } from "../types";
+import type { ReaderMode } from "@/types";
 
 export type SaveProgressPayload = {
   chapter_id: number;

@@ -20,12 +20,12 @@ import {
   listSettings,
   saveProgress,
   setSetting,
-} from "../api/tauri";
-import { ErrorState, SkeletonList } from "../components/feedback/states";
-import { Button } from "../components/ui/button";
-import { useAppI18n } from "../i18n";
-import { comicPageSrc } from "../lib/comic-protocol";
-import { buildProgressPayload } from "../lib/reader-progress";
+} from "@/api/tauri";
+import { ErrorState, SkeletonList } from "@/components/feedback/states";
+import { Button } from "@/components/ui/button";
+import { useAppI18n } from "@/i18n";
+import { comicPageSrc } from "@/lib/comic-protocol";
+import { buildProgressPayload } from "@/lib/reader-progress";
 
 function parseSettingMap(entries: { key: string; value_json: string }[]) {
   return new Map(entries.map((item) => [item.key, item.value_json]));
@@ -43,6 +43,12 @@ function parseJsonOr<T>(value: string | undefined, fallback: T): T {
 function normalizePageGap(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value / 10) * 10));
 }
+
+const READER_OUTLINE_BUTTON_CLASS =
+  "dark:border-white/20 bg-transparent text-white/70 hover:bg-transparent hover:text-white/70 dark:bg-transparent dark:hover:bg-transparent cursor-pointer";
+const READER_TOOLBAR_BUTTON_CLASS = `${READER_OUTLINE_BUTTON_CLASS} px-2 py-1 text-xs`;
+const READER_REVEAL_BUTTON_CLASS =
+  "fixed right-3 top-3 z-50 rounded-full border dark:border-white/20 bg-transparent p-2 text-white/70 backdrop-blur transition-all duration-300 hover:bg-transparent hover:text-white/70 dark:bg-transparent dark:hover:bg-transparent";
 
 function PageImage({
   chapterId,
@@ -434,7 +440,7 @@ export function ReaderPage() {
           <div className="mx-auto flex max-w-[1400px] items-center gap-3">
             <Button
               variant="outline"
-              className="border-white/20 bg-transparent text-white hover:bg-white/10"
+              className={READER_OUTLINE_BUTTON_CLASS}
               onClick={() => void closeReader()}
             >
               <X size={14} />
@@ -469,7 +475,7 @@ export function ReaderPage() {
           <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              className="border-white/20 bg-transparent text-white hover:bg-white/10"
+              className={READER_OUTLINE_BUTTON_CLASS}
               onClick={() => void closeReader()}
             >
               <X size={14} />
@@ -489,7 +495,7 @@ export function ReaderPage() {
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 title={t("reader.decreaseGap")}
                 onClick={() => setPageGap((value) => Math.max(0, value - 10))}
               >
@@ -497,7 +503,7 @@ export function ReaderPage() {
               </Button>
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 title={t("reader.increaseGap")}
                 onClick={() => setPageGap((value) => Math.min(100, value + 10))}
               >
@@ -505,7 +511,7 @@ export function ReaderPage() {
               </Button>
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 onClick={() => {
                   if (currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id) {
                     void goToChapter(chapterContextQuery.data.prev_chapter_id);
@@ -518,7 +524,7 @@ export function ReaderPage() {
               </Button>
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 onClick={() => {
                   if (currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
                     void goToChapter(chapterContextQuery.data.next_chapter_id);
@@ -531,7 +537,7 @@ export function ReaderPage() {
               </Button>
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
               >
                 <ZoomOut size={14} />
@@ -541,14 +547,14 @@ export function ReaderPage() {
               </span>
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
               >
                 <ZoomIn size={14} />
               </Button>
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 title={t("reader.resetZoom")}
                 onClick={() => setZoom(1)}
               >
@@ -556,7 +562,7 @@ export function ReaderPage() {
               </Button>
               <Button
                 variant="outline"
-                className="border-white/20 bg-transparent px-2 py-1 text-xs text-white hover:bg-white/10"
+                className={READER_TOOLBAR_BUTTON_CLASS}
                 title={t("reader.fullscreen")}
                 onClick={() => {
                   if (document.fullscreenElement) {
@@ -578,7 +584,7 @@ export function ReaderPage() {
 
       <button
         type="button"
-        className={`fixed right-3 top-3 z-50 rounded-full bg-[#151922]/60 p-2 text-white/50 backdrop-blur transition-all duration-300 hover:bg-[#151922]/90 hover:text-white ${
+        className={`${READER_REVEAL_BUTTON_CLASS} ${
           toolbarVisible ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
         onMouseEnter={showToolbar}

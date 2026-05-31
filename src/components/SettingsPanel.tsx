@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, FolderOpen, X } from "lucide-react";
-import { exportDatabaseBackup, importDatabaseBackup, listSettings, setSetting } from "../api/tauri";
-import { SkeletonList } from "../components/feedback/states";
-import { localeOptions, type LocalePreference, useAppI18n } from "../i18n";
-import { usePreferencesStore } from "../stores/libraryStore";
+import { exportDatabaseBackup, importDatabaseBackup, listSettings, setSetting } from "@/api/tauri";
+import { SkeletonList } from "@/components/feedback/states";
+import { localeOptions, type LocalePreference, useAppI18n } from "@/i18n";
+import { usePreferencesStore } from "@/stores/libraryStore";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 
 function parse<T>(value: string | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -182,19 +185,21 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
               {/* Library Source */}
               <div className="border-b border-app-border px-5 py-4">
-                <h3 className="mb-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em] text-app-muted">
+                <h3 className="mb-3 font-display text-[11px] font-bold leading-tight uppercase tracking-[0.1em] text-app-muted">
                   {t("settings.librarySource.title")}
                 </h3>
                 <div className="flex items-center gap-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-app-border bg-app-surface px-3 h-9">
-                    <FolderOpen size={14} className="flex-shrink-0 text-app-muted" />
-                    <input
+                  <InputGroup className="flex-1">
+                    <InputGroupInput
                       value={librarySource}
                       onChange={(event) => setLibrarySource(event.target.value)}
-                      className="min-w-0 flex-1 border-none bg-transparent text-xs outline-none placeholder:text-app-muted"
                       placeholder={t("settings.librarySource.placeholder")}
+                      className="text-xs"
                     />
-                  </div>
+                    <InputGroupAddon>
+                      <FolderOpen size={14} />
+                    </InputGroupAddon>
+                  </InputGroup>
                   <button
                     type="button"
                     onClick={() => void onPickLibrarySource()}
@@ -207,7 +212,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
               {/* Reader */}
               <div className="border-b border-app-border px-5 py-4">
-                <h3 className="mb-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em] text-app-muted">
+                <h3 className="mb-3 font-display text-[11px] font-bold leading-tight uppercase tracking-[0.1em] text-app-muted">
                   {t("settings.reader.title")}
                 </h3>
                 <div className="mb-3 rounded-lg border border-app-border bg-app-surface px-3 py-2 text-xs text-app-muted">
@@ -218,14 +223,12 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   <span className="mb-1.5 block text-xs font-medium">
                     {t("settings.defaultZoom")}
                   </span>
-                  <input
+                  <Slider
+                    value={[defaultZoom]}
                     min={0.4}
                     max={3}
                     step={0.1}
-                    type="range"
-                    value={defaultZoom}
-                    onChange={(e) => setDefaultZoom(Number(e.target.value))}
-                    className="w-full accent-app-accent"
+                    onValueChange={(v) => setDefaultZoom(Array.isArray(v) ? v[0] : v)}
                   />
                   <p className="mt-1 text-[10px] text-app-muted">
                     {t("common.value", { value: `${Math.round(defaultZoom * 100)}%` })}
@@ -233,14 +236,12 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-medium">{t("settings.pageGap")}</span>
-                  <input
+                  <Slider
+                    value={[pageGap]}
                     min={0}
                     max={100}
                     step={10}
-                    type="range"
-                    value={pageGap}
-                    onChange={(e) => setPageGap(Number(e.target.value))}
-                    className="w-full accent-app-accent"
+                    onValueChange={(v) => setPageGap(Array.isArray(v) ? v[0] : v)}
                   />
                   <p className="mt-1 text-[10px] text-app-muted">
                     {t("common.value", { value: `${pageGap}px` })}
@@ -250,49 +251,61 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
               {/* Appearance */}
               <div className="border-b border-app-border px-5 py-4">
-                <h3 className="mb-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em] text-app-muted">
+                <h3 className="mb-3 font-display text-[11px] font-bold leading-tight uppercase tracking-[0.1em] text-app-muted">
                   {t("settings.appearance.title")}
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium">{t("settings.theme")}</span>
-                    <select
+                    <Select
+                      items={[
+                        { label: t("common.light"), value: "light" },
+                        { label: t("common.dark"), value: "dark" },
+                      ]}
                       value={appTheme}
-                      onChange={(event) =>
-                        setAppTheme(event.target.value === "dark" ? "dark" : "light")
-                      }
-                      className="h-9 w-full cursor-pointer rounded-lg border border-app-border bg-app-surface px-2 text-xs text-app-text focus:border-app-accent focus:outline-none"
+                      onValueChange={(v) => setAppTheme(v as "light" | "dark")}
                     >
-                      <option value="light">{t("common.light")}</option>
-                      <option value="dark">{t("common.dark")}</option>
-                    </select>
+                      <SelectTrigger className="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">{t("common.light")}</SelectItem>
+                        <SelectItem value="dark">{t("common.dark")}</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium">
                       {t("settings.language")}
                     </span>
-                    <select
+                    <Select
+                      items={localeOptions.map((option) => ({
+                        label: option.value === "id" ? t("settings.language.indonesian") : t("settings.language.english"),
+                        value: option.value,
+                      }))}
                       value={localePreference}
-                      onChange={(event) =>
-                        setLocalePreference(event.target.value as LocalePreference)
-                      }
-                      className="h-9 w-full cursor-pointer rounded-lg border border-app-border bg-app-surface px-2 text-xs text-app-text focus:border-app-accent focus:outline-none"
+                      onValueChange={(v) => setLocalePreference(v as LocalePreference)}
                     >
-                      {localeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.value === "id"
-                            ? t("settings.language.indonesian")
-                            : t("settings.language.english")}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {localeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.value === "id"
+                              ? t("settings.language.indonesian")
+                              : t("settings.language.english")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                 </div>
               </div>
 
               {/* Backup */}
               <div className="px-5 py-4">
-                <h3 className="mb-3 font-display text-[11px] font-extrabold uppercase tracking-[0.1em] text-app-muted">
+                <h3 className="mb-3 font-display text-[11px] font-bold leading-tight uppercase tracking-[0.1em] text-app-muted">
                   {t("settings.backup.title")}
                 </h3>
                 <p className="mb-3 text-xs text-app-muted">{t("settings.backup.description")}</p>

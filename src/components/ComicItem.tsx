@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { useAppI18n } from "../i18n";
-import { unixToLocale } from "../lib/utils";
+import { useAppI18n } from "@/i18n";
+import { unixToLocale } from "@/lib/utils";
 import { BookmarkBtn } from "./BookmarkBtn";
 import { SpineThumb } from "./SpineThumb";
-import type { RawComic } from "../types";
+import type { RawComic } from "@/types";
 
 interface ComicItemProps {
   comic: RawComic;
@@ -53,7 +53,7 @@ export function ComicItem({ comic, variant, index, isBookmarked, isReading, onBo
       params={{ comicId: encodeURIComponent(comic.source_path) }}
       className="flex cursor-pointer items-center gap-3 border-b border-app-border bg-app-surface px-4 py-3 transition-colors hover:bg-app-bg"
     >
-      <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold text-app-muted">
+      <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold leading-tight text-app-muted">
         {String(index + 1).padStart(2, "0")}
       </span>
       <div className="min-w-0 flex-1">

@@ -23,17 +23,25 @@ import {
   listReadingHistory,
   openContainingFolder,
   removeComicBookmark,
-} from "../api/tauri";
-import { ComicItem } from "../components/ComicItem";
-import { EmptyState, ErrorState, SkeletonList } from "../components/feedback/states";
-import { ContextMenu, useContextMenu, type ContextMenuItem } from "../components/ui/context-menu";
-import { ScrollToTop } from "../components/ui/scroll-to-top";
-import { VirtualList } from "../components/ui/virtual-list";
-import { useAppI18n } from "../i18n";
-import { unixToLocale } from "../lib/utils";
-import { useLibraryPreferences } from "../stores/libraryStore";
-import { saveScroll, restoreScroll, setScrollKey } from "./Layout";
-import type { ComicBookmark, RawComic, ReadingHistoryEntry, SortBy, SortDir } from "../types";
+} from "@/api/tauri";
+import { ComicItem } from "@/components/ComicItem";
+import { EmptyState, ErrorState, SkeletonList } from "@/components/feedback/states";
+import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
+import { ScrollToTop } from "@/components/ui/scroll-to-top";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { VirtualList } from "@/components/ui/virtual-list";
+import { useAppI18n } from "@/i18n";
+import { unixToLocale } from "@/lib/utils";
+import { useLibraryPreferences } from "@/stores/libraryStore";
+import { saveScroll, restoreScroll, setScrollKey } from "@/routes/Layout";
+import type { ComicBookmark, RawComic, ReadingHistoryEntry, SortBy, SortDir } from "@/types";
 
 const ROW_HEIGHT = 56;
 
@@ -289,7 +297,7 @@ export function LibraryPage() {
           onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
         >
           <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
-            <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
+            <span className="font-display text-sm font-bold leading-tight text-app-accent opacity-80">
               {entry.comic_title
                 .split(" ")
                 .slice(0, 2)
@@ -334,7 +342,7 @@ export function LibraryPage() {
         className="flex cursor-pointer items-center gap-2.5 border-b border-app-border bg-app-surface px-4 py-3 transition-colors hover:bg-app-bg"
         onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
       >
-        <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold text-app-muted">
+        <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold leading-tight text-app-muted">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="min-w-0 flex-1">
@@ -393,7 +401,7 @@ export function LibraryPage() {
           }
         >
           <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
-            <span className="font-display text-sm font-extrabold text-app-accent opacity-80">
+            <span className="font-display text-sm font-bold leading-tight text-app-accent opacity-80">
               {(bm.comic_title || bm.comic_source_path)
                 .split(" ")
                 .slice(0, 2)
@@ -440,7 +448,7 @@ export function LibraryPage() {
           )
         }
       >
-        <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold text-app-muted">
+        <span className="w-6 flex-shrink-0 text-right font-display text-xs font-bold leading-tight text-app-muted">
           {String(index + 1).padStart(2, "0")}
         </span>
         <div className="min-w-0 flex-1">
@@ -550,7 +558,7 @@ export function LibraryPage() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-lg border border-app-border bg-app-surface px-4 py-3">
-            <div className="font-display text-2xl font-extrabold leading-none">
+            <div className="font-display text-2xl font-bold leading-tight">
               {libraryStats.totalComics}
               <sup className="ml-0.5 text-[11px] font-medium not-italic text-app-accent">komik</sup>
             </div>
@@ -559,7 +567,7 @@ export function LibraryPage() {
             </div>
           </div>
           <div className="rounded-lg border border-app-border bg-app-surface px-4 py-3">
-            <div className="font-display text-2xl font-extrabold leading-none">
+            <div className="font-display text-2xl font-bold leading-tight">
               {historyEntries.length}
             </div>
             <div className="mt-1.5 text-[10px] uppercase tracking-widest text-app-muted">
@@ -567,7 +575,7 @@ export function LibraryPage() {
             </div>
           </div>
           <div className="rounded-lg border border-app-border bg-app-surface px-4 py-3">
-            <div className="font-display text-2xl font-extrabold leading-none">
+            <div className="font-display text-2xl font-bold leading-tight">
               {bookmarkedComics.length}
             </div>
             <div className="mt-1.5 text-[10px] uppercase tracking-widest text-app-muted">
@@ -578,43 +586,68 @@ export function LibraryPage() {
 
         {/* Toolbar */}
         <div className="flex items-center gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-app-border bg-app-surface px-3.5 h-10 transition-all focus-within:border-app-accent">
-            <Search size={16} className="flex-shrink-0 text-app-muted" />
-            <input
-              type="text"
+          <InputGroup className="w-[200px] flex-1">
+            <InputGroupInput
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder={t("library.searchPlaceholder")}
-              className="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-app-muted"
             />
-          </div>
+            <InputGroupAddon>
+              <Search size={16} />
+            </InputGroupAddon>
+          </InputGroup>
           {viewMode !== "history" ? (
             <>
-              <select
+              <Select
+                items={[
+                  { label: t("common.name"), value: "name" },
+                  { label: sortLabel, value: "folder_date" },
+                ]}
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortBy)}
-                className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
+                onValueChange={(v) => setSortBy(v as SortBy)}
               >
-                <option value="name">{t("common.name")}</option>
-                <option value="folder_date">{sortLabel}</option>
-              </select>
-              <select
+                <SelectTrigger className="h-10 w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">{t("common.name")}</SelectItem>
+                  <SelectItem value="folder_date">{sortLabel}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                items={[
+                  { label: t("common.asc"), value: "asc" },
+                  { label: t("common.desc"), value: "desc" },
+                ]}
                 value={sortDir}
-                onChange={(e) => setSortDir(e.target.value as SortDir)}
-                className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
+                onValueChange={(v) => setSortDir(v as SortDir)}
               >
-                <option value="asc">{t("common.asc")}</option>
-                <option value="desc">{t("common.desc")}</option>
-              </select>
-              <select
+                <SelectTrigger className="h-10 w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asc">{t("common.asc")}</SelectItem>
+                  <SelectItem value="desc">{t("common.desc")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                items={[
+                  { label: t("library.filterAll"), value: "all" },
+                  { label: t("library.filterRead"), value: "read" },
+                  { label: t("library.filterUnread"), value: "unread" },
+                ]}
                 value={readFilter}
-                onChange={(e) => setReadFilter(e.target.value as "all" | "read" | "unread")}
-                className="h-10 flex-shrink-0 cursor-pointer rounded-lg border border-app-border bg-app-surface px-3 text-sm text-app-muted transition-all focus:border-app-accent focus:outline-none"
+                onValueChange={(v) => setReadFilter(v as "all" | "read" | "unread")}
               >
-                <option value="all">{t("library.filterAll")}</option>
-                <option value="read">{t("library.filterRead")}</option>
-                <option value="unread">{t("library.filterUnread")}</option>
-              </select>
+                <SelectTrigger className="h-10 w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("library.filterAll")}</SelectItem>
+                  <SelectItem value="read">{t("library.filterRead")}</SelectItem>
+                  <SelectItem value="unread">{t("library.filterUnread")}</SelectItem>
+                </SelectContent>
+              </Select>
             </>
           ) : null}
           <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-app-border bg-app-surface">
@@ -649,7 +682,7 @@ export function LibraryPage() {
 
         {/* Section label */}
         <div className="flex items-center justify-between">
-          <span className="font-display text-[11px] font-extrabold uppercase tracking-[0.1em] text-app-muted">
+          <span className="font-display text-[11px] font-bold leading-tight uppercase tracking-[0.1em] text-app-muted">
             {viewMode === "history"
               ? t("library.history")
               : viewMode === "bookmarks"

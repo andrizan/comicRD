@@ -27,7 +27,7 @@ export function SpineThumb({ title, index }: SpineThumbProps) {
     <div
       className={`flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border ${cls}`}
     >
-      <span className="font-display text-sm font-extrabold opacity-80">{initials(title)}</span>
+      <span className="font-display text-sm font-bold leading-tight opacity-80">{initials(title)}</span>
     </div>
   );
 }

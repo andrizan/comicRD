@@ -17,7 +17,7 @@ import type {
   SettingEntry,
   SortBy,
   SortDir,
-} from "../types";
+} from "@/types";
 
 export async function initDb() {
   await invoke("init_db");

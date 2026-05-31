@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import comicPage from "../routes/ComicPage.tsx?raw";
+import comicPage from "@/routes/ComicPage.tsx?raw";
 
 describe("ComicPage", () => {
   it("has an icon-only refresh button for the chapter list", () => {
