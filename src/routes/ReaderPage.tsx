@@ -249,28 +249,28 @@ export function ReaderPage() {
   useEffect(() => {
     if (totalPages <= 0 || !progressQuery.isFetched || progressQuery.isFetching) return;
 
-    if (restoredChapterRef.current !== chapterIdNum) {
-      const target = clampPage(progressQuery.data?.last_page ?? 0);
-      restoredChapterRef.current = chapterIdNum;
-      syncCurrentPage(target);
-      lastWebtoonPageSyncTsRef.current = performance.now();
-      window.requestAnimationFrame(() => {
-        if (target === 0) {
-          if (scrollRef.current) {
-            scrollRef.current.scrollTop = 0;
-          }
-          return;
+    const target = clampPage(progressQuery.data?.last_page ?? 0);
+    if (restoredChapterRef.current === chapterIdNum && target === currentPageRef.current) return;
+
+    restoredChapterRef.current = chapterIdNum;
+    syncCurrentPage(target);
+    lastWebtoonPageSyncTsRef.current = performance.now();
+    window.requestAnimationFrame(() => {
+      if (target === 0) {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = 0;
         }
-        pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
-      });
-    }
+        return;
+      }
+      pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
+    });
 
     const root = scrollRef.current;
     if (!root) return;
     const observer = new IntersectionObserver(
       (entries) => {
         const now = performance.now();
-        if (now - lastWebtoonPageSyncTsRef.current < 300) return;
+        if (now - lastWebtoonPageSyncTsRef.current < 200) return;
         const visible = entries
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
@@ -283,7 +283,7 @@ export function ReaderPage() {
       },
       {
         root,
-        rootMargin: "-20% 0px -65% 0px",
+        rootMargin: "0px 0px -50% 0px",
         threshold: 0.01,
       },
     );
