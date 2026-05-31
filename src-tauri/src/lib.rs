@@ -606,6 +606,45 @@ fn comic_title_for_path(path: &Path) -> String {
         .to_string()
 }
 
+fn natural_compare(a: &str, b: &str) -> std::cmp::Ordering {
+    let mut a_chars = a.chars().peekable();
+    let mut b_chars = b.chars().peekable();
+    loop {
+        match (a_chars.peek(), b_chars.peek()) {
+            (None, None) => return std::cmp::Ordering::Equal,
+            (None, Some(_)) => return std::cmp::Ordering::Less,
+            (Some(_), None) => return std::cmp::Ordering::Greater,
+            (Some(&ac), Some(&bc)) => {
+                if ac.is_ascii_digit() && bc.is_ascii_digit() {
+                    let mut a_num = String::new();
+                    let mut b_num = String::new();
+                    while a_chars.peek().map_or(false, |c| c.is_ascii_digit()) {
+                        a_num.push(a_chars.next().unwrap());
+                    }
+                    while b_chars.peek().map_or(false, |c| c.is_ascii_digit()) {
+                        b_num.push(b_chars.next().unwrap());
+                    }
+                    let a_val: u64 = a_num.parse().unwrap_or(0);
+                    let b_val: u64 = b_num.parse().unwrap_or(0);
+                    match a_val.cmp(&b_val) {
+                        std::cmp::Ordering::Equal => continue,
+                        other => return other,
+                    }
+                } else {
+                    match ac.to_lowercase().cmp(&bc.to_lowercase()) {
+                        std::cmp::Ordering::Equal => {
+                            a_chars.next();
+                            b_chars.next();
+                            continue;
+                        }
+                        other => return other,
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn discover_chapter_entries_from_comic_dir(comic_dir: &Path) -> Vec<(String, String, String, i64)> {
     let source_path = comic_dir.to_string_lossy().to_string();
     let mut chapter_entries: Vec<(String, String, String, i64)> = Vec::new();
@@ -629,7 +668,11 @@ fn discover_chapter_entries_from_comic_dir(comic_dir: &Path) -> Vec<(String, Str
         .filter_map(|e| e.ok())
         .map(|e| e.into_path())
         .collect::<Vec<_>>();
-    dirs.sort();
+    dirs.sort_by(|a, b| {
+        let a_name = a.file_name().and_then(|v| v.to_str()).unwrap_or("");
+        let b_name = b.file_name().and_then(|v| v.to_str()).unwrap_or("");
+        natural_compare(a_name, b_name)
+    });
 
     for child in dirs {
         if child.is_dir() {
