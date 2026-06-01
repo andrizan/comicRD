@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   Bookmark,
   BookmarkCheck,
   BookOpen,
   Clock,
   Copy,
   FolderOpen,
+  HardDrive,
   LayoutGrid,
   List,
   RefreshCw,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 import {
   addComicBookmark,
+  checkLibrarySource,
   initDb,
   listAllBookmarks,
   listComicsWithProgress,
@@ -88,6 +91,35 @@ export function LibraryPage() {
     enabled: activeLibraryPath.length > 0,
     queryFn: () => listLibraryComicsRaw(sortBy, sortDir),
   });
+
+  const sourceStatusQuery = useQuery({
+    queryKey: ["library-source-status"],
+    queryFn: checkLibrarySource,
+    refetchOnWindowFocus: true,
+  });
+
+  const sourceWarning = useMemo(() => {
+    const status = sourceStatusQuery.data;
+    if (!status) return null;
+    if (status.configured && status.readable) return null;
+    if (!status.configured) {
+      return {
+        key: "unconfigured",
+        title: t("settings.librarySource.statusUnconfigured"),
+        detail: t("settings.librarySource.statusHint"),
+      } as const;
+    }
+    const titleKey = !status.exists
+      ? "settings.librarySource.statusNotFound"
+      : !status.is_dir
+        ? "settings.librarySource.statusNotDirectory"
+        : "settings.librarySource.statusNotReadable";
+    return {
+      key: "inaccessible",
+      title: t(titleKey),
+      detail: status.path,
+    } as const;
+  }, [sourceStatusQuery.data, t]);
 
   const bookmarksQuery = useQuery({
     queryKey: ["comic-bookmarks"],
@@ -695,6 +727,39 @@ export function LibraryPage() {
             {libraryStats.visibleComics} item
           </span>
         </div>
+
+        {/* Source Warning */}
+        {viewMode === "library" && sourceWarning ? (
+          <div
+            role="status"
+            className="mx-5 mt-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+          >
+            {sourceWarning.key === "unconfigured" ? (
+              <HardDrive size={18} className="mt-0.5 flex-shrink-0 text-amber-500" />
+            ) : (
+              <AlertTriangle size={18} className="mt-0.5 flex-shrink-0 text-amber-500" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-amber-500">{sourceWarning.title}</p>
+              {sourceWarning.detail ? (
+                <p className="mt-0.5 break-all text-[11px] text-amber-500/80">
+                  {sourceWarning.detail}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void sourceStatusQuery.refetch();
+                void comicsQuery.refetch();
+              }}
+              className="shrink-0 rounded-md border border-amber-500/30 px-2 py-1 text-[11px] font-medium text-amber-500 transition-colors hover:bg-amber-500/20"
+            >
+              <RefreshCw size={11} className="mr-1 inline" />
+              {t("common.refresh")}
+            </button>
+          </div>
+        ) : null}
 
         {/* List/Grid */}
         {comicsQuery.isPending ? (

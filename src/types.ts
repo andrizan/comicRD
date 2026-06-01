@@ -119,6 +119,15 @@ export type LibraryScanStatus = {
   error: string | null;
 };
 
+export type LibrarySourceStatus = {
+  configured: boolean;
+  path: string;
+  exists: boolean;
+  is_dir: boolean;
+  readable: boolean;
+  error: string | null;
+};
+
 export type ChapterContext = {
   chapter_id: number;
   comic_id: number;

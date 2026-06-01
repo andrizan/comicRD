@@ -1,7 +1,8 @@
+use ahash::AHashMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -151,6 +152,16 @@ struct ScanSummary {
 }
 
 #[derive(Debug, Serialize, Clone)]
+struct LibrarySourceStatus {
+    configured: bool,
+    path: String,
+    exists: bool,
+    is_dir: bool,
+    readable: bool,
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
 struct LibraryScanStatus {
     running: bool,
     started_at: Option<i64>,
@@ -167,6 +178,42 @@ struct LibraryScanState {
     last_summary: Option<ScanSummary>,
     error: Option<String>,
 }
+
+#[derive(Clone)]
+enum ChapterSource {
+    Folder(Arc<Vec<PathBuf>>),
+    Archive(Arc<ChapterArchive>),
+}
+
+struct ChapterArchive {
+    #[allow(dead_code)]
+    source_path: PathBuf,
+    pages: Arc<Vec<String>>,
+    archive: Mutex<ZipArchive<std::fs::File>>,
+}
+
+const PAGE_BYTES_CACHE_CAP: usize = 512;
+
+type CachedPageBytes = (Arc<Vec<u8>>, &'static str);
+
+struct PageCache {
+    by_chapter: AHashMap<i64, ChapterSource>,
+    bytes: Mutex<lru::LruCache<(i64, usize), CachedPageBytes>>,
+}
+
+impl Default for PageCache {
+    fn default() -> Self {
+        Self {
+            by_chapter: AHashMap::new(),
+            bytes: Mutex::new(lru::LruCache::new(
+                std::num::NonZeroUsize::new(PAGE_BYTES_CACHE_CAP).expect("cap > 0"),
+            )),
+        }
+    }
+}
+
+static DB_CONN: OnceLock<Mutex<Connection>> = OnceLock::new();
+static PAGE_CACHE: OnceLock<RwLock<PageCache>> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
 struct SaveProgressPayload {
@@ -237,12 +284,50 @@ fn db_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir.join("comicrd.db"))
 }
 
-fn open_conn(app: &AppHandle) -> Result<Connection, String> {
+fn initialize_db(app: &AppHandle) -> Result<(), String> {
     let conn = Connection::open(db_path(app)?).map_err(|e| format!("failed opening db: {e}"))?;
-    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")
-        .map_err(|e| format!("failed enabling pragmas: {e}"))?;
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;",
+    )
+    .map_err(|e| format!("failed enabling pragmas: {e}"))?;
     run_migrations(&conn)?;
-    Ok(conn)
+    DB_CONN
+        .set(Mutex::new(conn))
+        .map_err(|_| "db already initialized".to_string())?;
+    PAGE_CACHE
+        .set(RwLock::new(PageCache::default()))
+        .map_err(|_| "page cache already initialized".to_string())?;
+    Ok(())
+}
+
+fn get_conn<'a>(
+    _app: &'a AppHandle,
+) -> Result<std::sync::MutexGuard<'a, Connection>, String> {
+    DB_CONN
+        .get()
+        .ok_or_else(|| "db not initialized".to_string())?
+        .lock()
+        .map_err(|_| "db lock poisoned".to_string())
+}
+
+fn page_cache_read<'a>(
+    _app: &'a AppHandle,
+) -> Result<std::sync::RwLockReadGuard<'a, PageCache>, String> {
+    PAGE_CACHE
+        .get()
+        .ok_or_else(|| "page cache not initialized".to_string())?
+        .read()
+        .map_err(|_| "page cache lock poisoned".to_string())
+}
+
+fn page_cache_write<'a>(
+    _app: &'a AppHandle,
+) -> Result<std::sync::RwLockWriteGuard<'a, PageCache>, String> {
+    PAGE_CACHE
+        .get()
+        .ok_or_else(|| "page cache not initialized".to_string())?
+        .write()
+        .map_err(|_| "page cache write lock poisoned".to_string())
 }
 
 fn run_migrations(conn: &Connection) -> Result<(), String> {
@@ -326,6 +411,19 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| format!("failed running migrations: {e}"))?;
 
+    conn.execute_batch(
+        r#"
+      CREATE INDEX IF NOT EXISTS idx_chapters_comic_id ON chapters(comic_id);
+      CREATE INDEX IF NOT EXISTS idx_chapters_chapter_index ON chapters(chapter_index);
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_chapter_id ON bookmarks(chapter_id);
+      CREATE INDEX IF NOT EXISTS idx_chapter_favorites_comic ON chapter_favorites(comic_source_path);
+      CREATE INDEX IF NOT EXISTS idx_reading_progress_updated_at ON reading_progress(updated_at);
+      CREATE INDEX IF NOT EXISTS idx_comics_date_modified ON comics(date_modified);
+      CREATE INDEX IF NOT EXISTS idx_libraries_updated_at ON libraries(updated_at);
+      "#,
+    )
+    .map_err(|e| format!("failed creating indexes: {e}"))?;
+
     let ts = now_ts();
     let defaults = [
         ("default_mode", "\"webtoon\""),
@@ -348,23 +446,25 @@ fn run_migrations(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-fn is_archive(path: &Path) -> bool {
+fn ext_eq(path: &Path, target: &str) -> bool {
     path.extension()
         .and_then(|v| v.to_str())
-        .map(|e| matches!(e.to_ascii_lowercase().as_str(), "zip" | "cbz"))
+        .map(|e| e.eq_ignore_ascii_case(target))
         .unwrap_or(false)
 }
 
+fn is_archive(path: &Path) -> bool {
+    ext_eq(path, "zip") || ext_eq(path, "cbz")
+}
+
 fn is_image(path: &Path) -> bool {
-    path.extension()
-        .and_then(|v| v.to_str())
-        .map(|e| {
-            matches!(
-                e.to_ascii_lowercase().as_str(),
-                "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp" | "avif"
-            )
-        })
-        .unwrap_or(false)
+    ext_eq(path, "jpg")
+        || ext_eq(path, "jpeg")
+        || ext_eq(path, "png")
+        || ext_eq(path, "webp")
+        || ext_eq(path, "gif")
+        || ext_eq(path, "bmp")
+        || ext_eq(path, "avif")
 }
 
 fn image_entries_in_dir(path: &Path) -> Vec<PathBuf> {
@@ -380,7 +480,7 @@ fn image_entries_in_dir(path: &Path) -> Vec<PathBuf> {
     entries
 }
 
-fn image_names_in_archive(path: &Path) -> Result<Vec<String>, String> {
+fn open_chapter_archive(path: &Path) -> Result<ChapterArchive, String> {
     let file = fs::File::open(path).map_err(|e| format!("failed opening archive: {e}"))?;
     let mut archive = ZipArchive::new(file).map_err(|e| format!("invalid zip/cbz: {e}"))?;
     let mut names = Vec::new();
@@ -396,7 +496,11 @@ fn image_names_in_archive(path: &Path) -> Result<Vec<String>, String> {
         }
     }
     names.sort();
-    Ok(names)
+    Ok(ChapterArchive {
+        source_path: path.to_path_buf(),
+        pages: Arc::new(names),
+        archive: Mutex::new(archive),
+    })
 }
 
 fn upsert_comic(
@@ -409,13 +513,12 @@ fn upsert_comic(
     date_modified: i64,
 ) -> Result<i64, String> {
     let ts = now_ts();
-    if let Some(id) = conn
+    if let Ok(id) = conn
         .query_row(
             "SELECT id FROM comics WHERE history_key = ?1 LIMIT 1",
             params![history_key],
             |row| row.get::<_, i64>(0),
         )
-        .ok()
     {
         conn
       .execute(
@@ -442,25 +545,25 @@ fn upsert_comic(
     Ok(conn.last_insert_rowid())
 }
 
-fn upsert_chapter(
-    conn: &Connection,
+struct ChapterUpsert<'a> {
     comic_id: i64,
-    title: &str,
+    title: &'a str,
     chapter_index: i64,
-    history_key: &str,
-    source_path: &str,
-    source_type: &str,
+    history_key: &'a str,
+    source_path: &'a str,
+    source_type: &'a str,
     page_count: usize,
     date_modified: i64,
-) -> Result<i64, String> {
+}
+
+fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Result<i64, String> {
     let ts = now_ts();
-    if let Some(id) = conn
+    if let Ok(id) = conn
         .query_row(
             "SELECT id FROM chapters WHERE history_key = ?1 LIMIT 1",
-            params![history_key],
+            params![params.history_key],
             |row| row.get::<_, i64>(0),
         )
-        .ok()
     {
         conn
       .execute(
@@ -470,14 +573,14 @@ fn upsert_chapter(
         WHERE id = ?9
         "#,
         params![
-          comic_id,
-          title,
-          chapter_index,
-          source_path,
-          source_type,
-          page_count as i64,
+          params.comic_id,
+          params.title,
+          params.chapter_index,
+          params.source_path,
+          params.source_type,
+          params.page_count as i64,
           ts,
-          date_modified,
+          params.date_modified,
           id
         ],
       )
@@ -501,16 +604,16 @@ fn upsert_chapter(
         date_modified = excluded.date_modified
       "#,
       params![
-        comic_id,
-        title,
-        chapter_index,
-        history_key,
-        source_path,
-        source_type,
-        page_count as i64,
+        params.comic_id,
+        params.title,
+        params.chapter_index,
+        params.history_key,
+        params.source_path,
+        params.source_type,
+        params.page_count as i64,
         ts,
         ts,
-        date_modified
+        params.date_modified
       ],
     )
     .map_err(|e| format!("failed inserting chapter: {e}"))?;
@@ -601,6 +704,49 @@ fn get_library_source_setting(conn: &Connection) -> Result<String, String> {
         })
 }
 
+fn library_source_status_for(path: &str) -> LibrarySourceStatus {
+    if path.is_empty() {
+        return LibrarySourceStatus {
+            configured: false,
+            path: String::new(),
+            exists: false,
+            is_dir: false,
+            readable: false,
+            error: None,
+        };
+    }
+    let p = Path::new(path);
+    let exists = p.exists();
+    let is_dir = exists && p.is_dir();
+    let readable = is_dir && p.read_dir().is_ok();
+    let error = if !exists {
+        Some(format!(
+            "path '{path}' not found. On Linux, you may need to mount the partition first."
+        ))
+    } else if !is_dir {
+        Some(format!("path '{path}' exists but is not a directory."))
+    } else if !readable {
+        Some(format!("path '{path}' is not readable (permission denied)."))
+    } else {
+        None
+    };
+    LibrarySourceStatus {
+        configured: true,
+        path: path.to_string(),
+        exists,
+        is_dir,
+        readable,
+        error,
+    }
+}
+
+#[tauri::command]
+fn check_library_source(app: AppHandle) -> Result<LibrarySourceStatus, String> {
+    let conn = get_conn(&app)?;
+    let path = get_library_source_setting(&conn).unwrap_or_default();
+    Ok(library_source_status_for(&path))
+}
+
 fn comic_title_for_path(path: &Path) -> String {
     if path.is_dir() {
         return path
@@ -627,10 +773,10 @@ fn natural_compare(a: &str, b: &str) -> std::cmp::Ordering {
                 if ac.is_ascii_digit() && bc.is_ascii_digit() {
                     let mut a_num = String::new();
                     let mut b_num = String::new();
-                    while a_chars.peek().map_or(false, |c| c.is_ascii_digit()) {
+                    while a_chars.peek().is_some_and(|c| c.is_ascii_digit()) {
                         a_num.push(a_chars.next().unwrap());
                     }
-                    while b_chars.peek().map_or(false, |c| c.is_ascii_digit()) {
+                    while b_chars.peek().is_some_and(|c| c.is_ascii_digit()) {
                         b_num.push(b_chars.next().unwrap());
                     }
                     let a_val: u64 = a_num.parse().unwrap_or(0);
@@ -827,14 +973,16 @@ fn scan_comic_dir(
 
         upsert_chapter(
             conn,
-            comic_id,
-            &chapter_title,
-            idx,
-            &chapter_key,
-            &chapter_path,
-            &chapter_type,
-            cached_page_count.max(0) as usize,
-            modified_at,
+            ChapterUpsert {
+                comic_id,
+                title: &chapter_title,
+                chapter_index: idx,
+                history_key: &chapter_key,
+                source_path: &chapter_path,
+                source_type: &chapter_type,
+                page_count: cached_page_count.max(0) as usize,
+                date_modified: modified_at,
+            },
         )?;
         chapter_count += 1;
     }
@@ -844,13 +992,13 @@ fn scan_comic_dir(
 
 #[tauri::command]
 fn init_db(app: AppHandle) -> Result<(), String> {
-    let _ = open_conn(&app)?;
+    let _conn = get_conn(&app)?;
     Ok(())
 }
 
 #[tauri::command]
 fn add_library(app: AppHandle, path: String) -> Result<i64, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let ts = now_ts();
     conn.execute(
         r#"
@@ -871,7 +1019,7 @@ fn add_library(app: AppHandle, path: String) -> Result<i64, String> {
 
 #[tauri::command]
 fn list_libraries(app: AppHandle) -> Result<Vec<Library>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare("SELECT id, path, created_at, updated_at FROM libraries ORDER BY updated_at DESC")
         .map_err(|e| format!("failed preparing query: {e}"))?;
@@ -891,29 +1039,36 @@ fn list_libraries(app: AppHandle) -> Result<Vec<Library>, String> {
 
 #[tauri::command]
 fn scan_libraries(app: AppHandle) -> Result<ScanSummary, String> {
-    let conn = open_conn(&app)?;
-    scan_libraries_conn(&conn)
+    let mut conn = get_conn(&app)?;
+    scan_libraries_conn(&mut conn)
 }
 
-fn scan_libraries_conn(conn: &Connection) -> Result<ScanSummary, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, path FROM libraries ORDER BY id")
-        .map_err(|e| format!("failed preparing libraries query: {e}"))?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(|e| format!("failed querying libraries: {e}"))?;
+fn scan_libraries_conn(conn: &mut Connection) -> Result<ScanSummary, String> {
+    let libraries: Vec<(i64, String)> = {
+        let mut stmt = conn
+            .prepare("SELECT id, path FROM libraries ORDER BY id")
+            .map_err(|e| format!("failed preparing libraries query: {e}"))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| format!("failed querying libraries: {e}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("invalid library row: {e}"))?
+    };
 
     let mut comic_count = 0usize;
     let mut chapter_count = 0usize;
 
-    for row in rows {
-        let (library_id, library_path) = row.map_err(|e| format!("invalid library row: {e}"))?;
+    for (library_id, library_path) in libraries {
         let base = Path::new(&library_path);
         if !base.exists() || !base.is_dir() {
             continue;
         }
+
+        let tx = conn
+            .transaction()
+            .map_err(|e| format!("failed opening scan transaction: {e}"))?;
         let mut entries = WalkDir::new(base)
             .min_depth(1)
             .max_depth(1)
@@ -925,7 +1080,7 @@ fn scan_libraries_conn(conn: &Connection) -> Result<ScanSummary, String> {
 
         for entry in entries {
             if entry.is_dir() {
-                let (c, ch) = scan_comic_dir(&conn, library_id, &library_path, &entry)?;
+                let (c, ch) = scan_comic_dir(&tx, library_id, &library_path, &entry)?;
                 comic_count += c;
                 chapter_count += ch;
             } else if entry.is_file() && is_archive(&entry) {
@@ -943,7 +1098,7 @@ fn scan_libraries_conn(conn: &Connection) -> Result<ScanSummary, String> {
                 let comic_key = comic_history_key(&library_path, &source_path);
                 let modified_at = file_modified_ts(&entry);
                 let comic_id = upsert_comic(
-                    &conn,
+                    &tx,
                     library_id,
                     &title,
                     &comic_key,
@@ -954,7 +1109,7 @@ fn scan_libraries_conn(conn: &Connection) -> Result<ScanSummary, String> {
                 let chapter_key = chapter_history_key(&library_path, &source_path, 1);
                 let mut should_upsert_chapter = true;
                 let page_count = if let Some((cached_page_count, cached_modified_at)) =
-                    chapter_snapshot_by_history_key(&conn, &chapter_key)?
+                    chapter_snapshot_by_history_key(&tx, &chapter_key)?
                 {
                     if cached_modified_at == modified_at {
                         should_upsert_chapter = false;
@@ -967,21 +1122,25 @@ fn scan_libraries_conn(conn: &Connection) -> Result<ScanSummary, String> {
                 };
                 if should_upsert_chapter {
                     upsert_chapter(
-                        &conn,
-                        comic_id,
-                        "Chapter 1",
-                        1,
-                        &chapter_key,
-                        &source_path,
-                        &source_type,
-                        page_count,
-                        modified_at,
+                        &tx,
+                        ChapterUpsert {
+                            comic_id,
+                            title: "Chapter 1",
+                            chapter_index: 1,
+                            history_key: &chapter_key,
+                            source_path: &source_path,
+                            source_type: &source_type,
+                            page_count,
+                            date_modified: modified_at,
+                        },
                     )?;
                 }
                 comic_count += 1;
                 chapter_count += 1;
             }
         }
+        tx.commit()
+            .map_err(|e| format!("failed committing scan transaction: {e}"))?;
     }
 
     Ok(ScanSummary {
@@ -1007,7 +1166,7 @@ fn start_scan_libraries(app: AppHandle) -> Result<bool, String> {
 
     let app_handle = app.clone();
     thread::spawn(move || {
-        let result = open_conn(&app_handle).and_then(|conn| scan_libraries_conn(&conn));
+        let result = get_conn(&app_handle).and_then(|mut conn| scan_libraries_conn(&mut conn));
         if let Ok(mut state) = LIBRARY_SCAN_STATE.lock() {
             state.running = false;
             state.finished_at = Some(now_ts());
@@ -1037,7 +1196,7 @@ fn list_comics(
     sort_by: Option<String>,
     sort_dir: Option<String>,
 ) -> Result<Vec<Comic>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let order_field = match sort_by.unwrap_or_else(|| "name".to_string()).as_str() {
         "folder_date" => "c.date_modified",
         _ => "c.title COLLATE NOCASE",
@@ -1101,7 +1260,7 @@ fn list_library_comics_raw_sync(
     sort_by: Option<String>,
     sort_dir: Option<String>,
 ) -> Result<Vec<RawComic>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let library_path = get_library_source_setting(&conn)?;
     let base = Path::new(&library_path);
     if !base.exists() || !base.is_dir() {
@@ -1184,7 +1343,7 @@ fn list_comic_chapters_raw_sync(
     app: AppHandle,
     comic_source_path: String,
 ) -> Result<Vec<RawChapter>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let library_path = get_library_source_setting(&conn)?;
     let discovered = discover_chapter_entries_for_comic(&comic_source_path)?;
     let mut out = Vec::with_capacity(discovered.len());
@@ -1246,14 +1405,17 @@ fn open_chapter_for_reading_sync(
     app: AppHandle,
     payload: OpenChapterPayload,
 ) -> Result<i64, String> {
-    let conn = open_conn(&app)?;
-    let (library_id, library_path) = find_library_for_comic(&conn, &payload.comic_source_path)?;
+    let mut conn = get_conn(&app)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("failed opening chapter transaction: {e}"))?;
+    let (library_id, library_path) = find_library_for_comic(&tx, &payload.comic_source_path)?;
     let comic_source = Path::new(&payload.comic_source_path);
     let comic_source_type = source_type_for_path(comic_source);
     let comic_title = comic_title_for_path(comic_source);
     let comic_key = comic_history_key(&library_path, &payload.comic_source_path);
     let comic_id = upsert_comic(
-        &conn,
+        &tx,
         library_id,
         &comic_title,
         &comic_key,
@@ -1267,24 +1429,28 @@ fn open_chapter_for_reading_sync(
     for (chapter_title, chapter_path, chapter_type, chapter_index) in chapter_entries {
         let chapter_key = chapter_history_key(&library_path, &chapter_path, chapter_index);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
-        let cached_page_count = chapter_snapshot_by_history_key(&conn, &chapter_key)?
+        let cached_page_count = chapter_snapshot_by_history_key(&tx, &chapter_key)?
             .map(|(pc, _)| pc.max(0) as usize)
             .unwrap_or(0);
         let chapter_id = upsert_chapter(
-            &conn,
-            comic_id,
-            &chapter_title,
-            chapter_index,
-            &chapter_key,
-            &chapter_path,
-            &chapter_type,
-            cached_page_count,
-            modified_at,
+            &tx,
+            ChapterUpsert {
+                comic_id,
+                title: &chapter_title,
+                chapter_index,
+                history_key: &chapter_key,
+                source_path: &chapter_path,
+                source_type: &chapter_type,
+                page_count: cached_page_count,
+                date_modified: modified_at,
+            },
         )?;
         if chapter_path == payload.chapter_source_path {
             selected_chapter_id = Some(chapter_id);
         }
     }
+    tx.commit()
+        .map_err(|e| format!("failed committing chapter transaction: {e}"))?;
     selected_chapter_id.ok_or_else(|| "chapter tidak ditemukan".to_string())
 }
 
@@ -1300,7 +1466,7 @@ async fn open_chapter_for_reading(
 
 #[tauri::command]
 fn list_chapters(app: AppHandle, comic_id: i64) -> Result<Vec<Chapter>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare(
             r#"
@@ -1335,11 +1501,19 @@ fn list_chapters(app: AppHandle, comic_id: i64) -> Result<Vec<Chapter>, String> 
 
 #[tauri::command]
 fn get_chapter_context(app: AppHandle, chapter_id: i64) -> Result<Option<ChapterContext>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
+    get_chapter_context_conn(&conn, chapter_id)
+}
+
+fn get_chapter_context_conn(
+    conn: &Connection,
+    chapter_id: i64,
+) -> Result<Option<ChapterContext>, String> {
     let mut stmt = conn
         .prepare(
             r#"
-      SELECT ch.id, ch.comic_id, ch.title, ch.chapter_index, c.title, c.source_path, ch.source_path
+      SELECT ch.id, ch.comic_id, ch.title, ch.chapter_index, ch.source_path,
+             c.title, c.source_path
       FROM chapters ch
       INNER JOIN comics c ON c.id = ch.comic_id
       WHERE ch.id = ?1
@@ -1368,63 +1542,52 @@ fn get_chapter_context(app: AppHandle, chapter_id: i64) -> Result<Option<Chapter
     let chapter_index = row
         .get::<_, i64>(3)
         .map_err(|e| format!("invalid chapter row: {e}"))?;
-    let comic_title = row
+    let chapter_source_path = row
         .get::<_, String>(4)
         .map_err(|e| format!("invalid chapter row: {e}"))?;
-    let comic_source_path = row
+    let comic_title = row
         .get::<_, String>(5)
         .map_err(|e| format!("invalid chapter row: {e}"))?;
-    let chapter_source_path = row
+    let comic_source_path = row
         .get::<_, String>(6)
         .map_err(|e| format!("invalid chapter row: {e}"))?;
+    drop(rows);
+    drop(stmt);
 
-    let chapter_total = conn
-        .query_row(
-            "SELECT COUNT(*) FROM chapters WHERE comic_id = ?1",
-            params![comic_id],
-            |r| r.get::<_, i64>(0),
-        )
-        .map_err(|e| format!("failed counting chapters: {e}"))?;
-
-    let chapter_position = conn
-        .query_row(
+    let mut stmt = conn
+        .prepare(
             r#"
-      SELECT COUNT(*) + 1
-      FROM chapters
-      WHERE comic_id = ?1 AND (chapter_index < ?2 OR (chapter_index = ?2 AND id < ?3))
+      WITH ranked AS (
+        SELECT id, title, chapter_index,
+               COUNT(*) OVER () AS total,
+               ROW_NUMBER() OVER (ORDER BY chapter_index ASC, id ASC) AS pos,
+               LAG(id) OVER (ORDER BY chapter_index ASC, id ASC) AS prev_id,
+               LAG(title) OVER (ORDER BY chapter_index ASC, id ASC) AS prev_title,
+               LEAD(id) OVER (ORDER BY chapter_index ASC, id ASC) AS next_id,
+               LEAD(title) OVER (ORDER BY chapter_index ASC, id ASC) AS next_title
+        FROM chapters
+        WHERE comic_id = ?1
+      )
+      SELECT pos, total, prev_id, prev_title, next_id, next_title
+      FROM ranked
+      WHERE id = ?2
       "#,
-            params![comic_id, chapter_index, chapter_id],
-            |r| r.get::<_, i64>(0),
         )
-        .map_err(|e| format!("failed computing chapter position: {e}"))?;
-
-    let prev = conn
-        .query_row(
-            r#"
-      SELECT id, title
-      FROM chapters
-      WHERE comic_id = ?1 AND (chapter_index < ?2 OR (chapter_index = ?2 AND id < ?3))
-      ORDER BY chapter_index DESC, id DESC
-      LIMIT 1
-      "#,
-            params![comic_id, chapter_index, chapter_id],
-            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-        )
-        .ok();
-
-    let next = conn
-        .query_row(
-            r#"
-      SELECT id, title
-      FROM chapters
-      WHERE comic_id = ?1 AND (chapter_index > ?2 OR (chapter_index = ?2 AND id > ?3))
-      ORDER BY chapter_index ASC, id ASC
-      LIMIT 1
-      "#,
-            params![comic_id, chapter_index, chapter_id],
-            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-        )
-        .ok();
+        .map_err(|e| format!("failed preparing chapter neighbors query: {e}"))?;
+    let row = stmt
+        .query_row(params![comic_id, chapter_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        })
+        .map_err(|e| format!("failed loading chapter neighbors: {e}"))?;
+    let (chapter_position, chapter_total, prev_chapter_id, prev_chapter_title, next_chapter_id, next_chapter_title) =
+        row;
 
     Ok(Some(ChapterContext {
         chapter_id,
@@ -1436,10 +1599,10 @@ fn get_chapter_context(app: AppHandle, chapter_id: i64) -> Result<Option<Chapter
         chapter_index,
         chapter_position,
         chapter_total,
-        prev_chapter_id: prev.as_ref().map(|v| v.0),
-        prev_chapter_title: prev.as_ref().map(|v| v.1.clone()),
-        next_chapter_id: next.as_ref().map(|v| v.0),
-        next_chapter_title: next.as_ref().map(|v| v.1.clone()),
+        prev_chapter_id,
+        prev_chapter_title,
+        next_chapter_id,
+        next_chapter_title,
     }))
 }
 
@@ -1452,29 +1615,63 @@ fn chapter_source(conn: &Connection, chapter_id: i64) -> Result<(String, String)
     .map_err(|e| format!("failed loading chapter source: {e}"))
 }
 
-fn extract_page_bytes(
+fn compute_chapter_source(
     source_path: &str,
     source_type: &str,
-    page_index: usize,
-) -> Result<(Vec<u8>, String), String> {
+) -> Result<ChapterSource, String> {
     match source_type {
-        "folder" => {
-            let pages = image_entries_in_dir(Path::new(source_path));
+        "folder" => Ok(ChapterSource::Folder(Arc::new(image_entries_in_dir(
+            Path::new(source_path),
+        )))),
+        "zip" | "cbz" => Ok(ChapterSource::Archive(Arc::new(open_chapter_archive(
+            Path::new(source_path),
+        )?))),
+        other => Err(format!("unsupported source type: {other}")),
+    }
+}
+
+fn get_or_load_page_list(
+    app: &AppHandle,
+    chapter_id: i64,
+) -> Result<ChapterSource, String> {
+    if let Some(source) = page_cache_read(app)?.by_chapter.get(&chapter_id).cloned() {
+        return Ok(source);
+    }
+
+    let (source_path, source_type) = {
+        let conn = get_conn(app)?;
+        chapter_source(&conn, chapter_id)?
+    };
+    let source = compute_chapter_source(&source_path, &source_type)?;
+    page_cache_write(app)?
+        .by_chapter
+        .insert(chapter_id, source.clone());
+    Ok(source)
+}
+
+fn read_page_bytes(
+    source: &ChapterSource,
+    page_index: usize,
+) -> Result<(Vec<u8>, &'static str), String> {
+    match source {
+        ChapterSource::Folder(pages) => {
             let page_path = pages
                 .get(page_index)
                 .ok_or_else(|| "page index out of range".to_string())?;
-            let bytes =
-                fs::read(page_path).map_err(|e| format!("failed reading image file: {e}"))?;
-            Ok((bytes, page_path.to_string_lossy().to_string()))
+            let bytes = fs::read(page_path)
+                .map_err(|e| format!("failed reading image file: {e}"))?;
+            Ok((bytes, mime_for_path(page_path)))
         }
-        "zip" | "cbz" => {
-            let file =
-                fs::File::open(source_path).map_err(|e| format!("failed opening archive: {e}"))?;
-            let mut archive = ZipArchive::new(file).map_err(|e| format!("invalid archive: {e}"))?;
-            let names = image_names_in_archive(Path::new(source_path))?;
-            let name = names
+        ChapterSource::Archive(arc) => {
+            let name = arc
+                .pages
                 .get(page_index)
                 .ok_or_else(|| "page index out of range".to_string())?;
+            let mime = mime_for_path(Path::new(name));
+            let mut archive = arc
+                .archive
+                .lock()
+                .map_err(|_| "archive lock poisoned".to_string())?;
             let mut entry = archive
                 .by_name(name)
                 .map_err(|e| format!("failed reading archive entry: {e}"))?;
@@ -1482,9 +1679,8 @@ fn extract_page_bytes(
             entry
                 .read_to_end(&mut bytes)
                 .map_err(|e| format!("failed extracting image: {e}"))?;
-            Ok((bytes, name.clone()))
+            Ok((bytes, mime))
         }
-        other => Err(format!("unsupported source type: {other}")),
     }
 }
 
@@ -1492,10 +1688,27 @@ fn load_chapter_page_bytes(
     app: &AppHandle,
     chapter_id: i64,
     page_index: usize,
-) -> Result<(Vec<u8>, String), String> {
-    let conn = open_conn(app)?;
-    let (source_path, source_type) = chapter_source(&conn, chapter_id)?;
-    extract_page_bytes(&source_path, &source_type, page_index)
+) -> Result<(Vec<u8>, &'static str), String> {
+    if let Some((bytes, mime)) = page_cache_read(app)?
+        .bytes
+        .lock()
+        .map_err(|_| "bytes cache lock poisoned".to_string())?
+        .get(&(chapter_id, page_index))
+        .cloned()
+    {
+        return Ok((bytes.as_ref().clone(), mime));
+    }
+    let source = get_or_load_page_list(app, chapter_id)?;
+    let (bytes, mime) = read_page_bytes(&source, page_index)?;
+    {
+        let cache = page_cache_read(app)?;
+        let mut bytes_cache = cache
+            .bytes
+            .lock()
+            .map_err(|_| "bytes cache lock poisoned".to_string())?;
+        bytes_cache.put((chapter_id, page_index), (Arc::new(bytes.clone()), mime));
+    }
+    Ok((bytes, mime))
 }
 
 fn simple_text_response(
@@ -1540,12 +1753,9 @@ fn comicrd_protocol_response(
     };
 
     match load_chapter_page_bytes(app, chapter_id, page_index) {
-        Ok((bytes, name_or_path)) => tauri::http::Response::builder()
+        Ok((bytes, mime)) => tauri::http::Response::builder()
             .status(tauri::http::StatusCode::OK)
-            .header(
-                tauri::http::header::CONTENT_TYPE,
-                mime_for_path(Path::new(&name_or_path)),
-            )
+            .header(tauri::http::header::CONTENT_TYPE, mime)
             .header(tauri::http::header::CACHE_CONTROL, "public, max-age=86400")
             .body(bytes)
             .unwrap_or_else(|_| tauri::http::Response::new(Vec::new())),
@@ -1561,10 +1771,13 @@ async fn get_chapter_pages(app: AppHandle, chapter_id: i64) -> Result<Vec<PageIn
 }
 
 fn get_chapter_pages_sync(app: AppHandle, chapter_id: i64) -> Result<Vec<PageInfo>, String> {
-    let conn = open_conn(&app)?;
-    let (source_path, source_type) = chapter_source(&conn, chapter_id)?;
-    let names = match source_type.as_str() {
-        "folder" => image_entries_in_dir(Path::new(&source_path))
+    let (source_path, source_type) = {
+        let conn = get_conn(&app)?;
+        chapter_source(&conn, chapter_id)?
+    };
+    let source = compute_chapter_source(&source_path, &source_type)?;
+    let names: Vec<String> = match &source {
+        ChapterSource::Folder(paths) => paths
             .iter()
             .map(|p| {
                 p.file_name()
@@ -1572,16 +1785,21 @@ fn get_chapter_pages_sync(app: AppHandle, chapter_id: i64) -> Result<Vec<PageInf
                     .unwrap_or_default()
                     .to_string()
             })
-            .collect::<Vec<_>>(),
-        "zip" | "cbz" => image_names_in_archive(Path::new(&source_path))?,
-        other => return Err(format!("unsupported source type: {other}")),
+            .collect(),
+        ChapterSource::Archive(arc) => arc.pages.iter().cloned().collect(),
     };
     let page_count = names.len() as i64;
     let modified_at = file_modified_ts(Path::new(&source_path));
-    let _ = conn.execute(
-        "UPDATE chapters SET page_count = ?1, date_modified = ?2, updated_at = ?3 WHERE id = ?4",
-        params![page_count, modified_at, now_ts(), chapter_id],
-    );
+    {
+        let conn = get_conn(&app)?;
+        let _ = conn.execute(
+            "UPDATE chapters SET page_count = ?1, date_modified = ?2, updated_at = ?3 WHERE id = ?4",
+            params![page_count, modified_at, now_ts(), chapter_id],
+        );
+    }
+    page_cache_write(&app)?
+        .by_chapter
+        .insert(chapter_id, source);
     Ok(names
         .into_iter()
         .enumerate()
@@ -1590,25 +1808,29 @@ fn get_chapter_pages_sync(app: AppHandle, chapter_id: i64) -> Result<Vec<PageInf
 }
 
 fn mime_for_path(path: &Path) -> &'static str {
-    match path
-        .extension()
-        .and_then(|v| v.to_str())
-        .map(|v| v.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("png") => "image/png",
-        Some("webp") => "image/webp",
-        Some("gif") => "image/gif",
-        Some("bmp") => "image/bmp",
-        Some("avif") => "image/avif",
-        _ => "application/octet-stream",
+    let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+        return "application/octet-stream";
+    };
+    if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
+        "image/jpeg"
+    } else if ext.eq_ignore_ascii_case("png") {
+        "image/png"
+    } else if ext.eq_ignore_ascii_case("webp") {
+        "image/webp"
+    } else if ext.eq_ignore_ascii_case("gif") {
+        "image/gif"
+    } else if ext.eq_ignore_ascii_case("bmp") {
+        "image/bmp"
+    } else if ext.eq_ignore_ascii_case("avif") {
+        "image/avif"
+    } else {
+        "application/octet-stream"
     }
 }
 
 #[tauri::command]
 fn save_progress(app: AppHandle, payload: SaveProgressPayload) -> Result<(), String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     save_progress_conn(&conn, &payload)
 }
 
@@ -1640,7 +1862,7 @@ fn save_progress_conn(conn: &Connection, payload: &SaveProgressPayload) -> Resul
 
 #[tauri::command]
 fn get_progress(app: AppHandle, chapter_id: i64) -> Result<Option<ReadingProgress>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     get_progress_conn(&conn, chapter_id)
 }
 
@@ -1687,7 +1909,7 @@ fn get_progress_conn(
 
 #[tauri::command]
 fn add_bookmark(app: AppHandle, payload: SaveBookmarkPayload) -> Result<i64, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let ts = now_ts();
     conn.execute(
         "INSERT INTO bookmarks (chapter_id, page, created_at, note) VALUES (?1, ?2, ?3, ?4)",
@@ -1704,7 +1926,7 @@ fn add_bookmark(app: AppHandle, payload: SaveBookmarkPayload) -> Result<i64, Str
 
 #[tauri::command]
 fn remove_bookmark(app: AppHandle, bookmark_id: i64) -> Result<(), String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     conn.execute("DELETE FROM bookmarks WHERE id = ?1", params![bookmark_id])
         .map_err(|e| format!("failed deleting bookmark: {e}"))?;
     Ok(())
@@ -1712,7 +1934,7 @@ fn remove_bookmark(app: AppHandle, bookmark_id: i64) -> Result<(), String> {
 
 #[tauri::command]
 fn list_bookmarks(app: AppHandle, chapter_id: i64) -> Result<Vec<Bookmark>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
     .prepare(
       "SELECT id, chapter_id, page, created_at, note FROM bookmarks WHERE chapter_id = ?1 ORDER BY page ASC, created_at DESC",
@@ -1735,7 +1957,7 @@ fn list_bookmarks(app: AppHandle, chapter_id: i64) -> Result<Vec<Bookmark>, Stri
 
 #[tauri::command]
 fn list_all_bookmarks(app: AppHandle) -> Result<Vec<ComicBookmark>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
     .prepare(
       r#"
@@ -1762,7 +1984,7 @@ fn list_all_bookmarks(app: AppHandle) -> Result<Vec<ComicBookmark>, String> {
 
 #[tauri::command]
 fn add_comic_bookmark(app: AppHandle, comic_source_path: String) -> Result<i64, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let ts = now_ts();
     conn.execute(
         "INSERT OR IGNORE INTO comic_bookmarks (comic_source_path, created_at) VALUES (?1, ?2)",
@@ -1774,7 +1996,7 @@ fn add_comic_bookmark(app: AppHandle, comic_source_path: String) -> Result<i64, 
 
 #[tauri::command]
 fn remove_comic_bookmark(app: AppHandle, comic_source_path: String) -> Result<(), String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     conn.execute(
         "DELETE FROM comic_bookmarks WHERE comic_source_path = ?1",
         params![comic_source_path],
@@ -1785,15 +2007,15 @@ fn remove_comic_bookmark(app: AppHandle, comic_source_path: String) -> Result<()
 
 #[tauri::command]
 fn is_comic_bookmarked(app: AppHandle, comic_source_path: String) -> Result<bool, String> {
-    let conn = open_conn(&app)?;
-    let count: i64 = conn
+    let conn = get_conn(&app)?;
+    let exists: bool = conn
         .query_row(
-            "SELECT COUNT(*) FROM comic_bookmarks WHERE comic_source_path = ?1",
+            "SELECT EXISTS(SELECT 1 FROM comic_bookmarks WHERE comic_source_path = ?1)",
             params![comic_source_path],
             |row| row.get(0),
         )
         .map_err(|e| format!("failed checking comic bookmark: {e}"))?;
-    Ok(count > 0)
+    Ok(exists)
 }
 
 #[tauri::command]
@@ -1802,7 +2024,7 @@ fn add_chapter_favorite(
     chapter_source_path: String,
     comic_source_path: String,
 ) -> Result<i64, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let ts = now_ts();
     conn.execute(
         "INSERT OR IGNORE INTO chapter_favorites (chapter_source_path, comic_source_path, created_at) VALUES (?1, ?2, ?3)",
@@ -1814,7 +2036,7 @@ fn add_chapter_favorite(
 
 #[tauri::command]
 fn remove_chapter_favorite(app: AppHandle, chapter_source_path: String) -> Result<(), String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     conn.execute(
         "DELETE FROM chapter_favorites WHERE chapter_source_path = ?1",
         params![chapter_source_path],
@@ -1828,7 +2050,7 @@ fn list_chapter_favorites(
     app: AppHandle,
     comic_source_path: String,
 ) -> Result<Vec<String>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare(
             "SELECT chapter_source_path FROM chapter_favorites WHERE comic_source_path = ?1 ORDER BY created_at DESC",
@@ -1846,7 +2068,7 @@ fn list_chapter_favorites(
 
 #[tauri::command]
 fn list_reading_history(app: AppHandle) -> Result<Vec<ReadingHistoryEntry>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare(
           r#"
@@ -1888,7 +2110,7 @@ fn list_reading_history(app: AppHandle) -> Result<Vec<ReadingHistoryEntry>, Stri
 
 #[tauri::command]
 fn list_comics_with_progress(app: AppHandle) -> Result<Vec<String>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare(
             r#"
@@ -1908,7 +2130,7 @@ fn list_comics_with_progress(app: AppHandle) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 fn set_setting(app: AppHandle, key: String, value_json: String) -> Result<(), String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     conn.execute(
         r#"
       INSERT INTO app_settings (key, value_json, updated_at)
@@ -1923,7 +2145,7 @@ fn set_setting(app: AppHandle, key: String, value_json: String) -> Result<(), St
 
 #[tauri::command]
 fn get_setting(app: AppHandle, key: String) -> Result<Option<String>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare("SELECT value_json FROM app_settings WHERE key = ?1")
         .map_err(|e| format!("failed preparing setting query: {e}"))?;
@@ -1944,7 +2166,7 @@ fn get_setting(app: AppHandle, key: String) -> Result<Option<String>, String> {
 
 #[tauri::command]
 fn list_settings(app: AppHandle) -> Result<Vec<SettingEntry>, String> {
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare("SELECT key, value_json, updated_at FROM app_settings ORDER BY key")
         .map_err(|e| format!("failed preparing settings query: {e}"))?;
@@ -1968,7 +2190,7 @@ fn export_database_backup(app: AppHandle, output_path: String) -> Result<(), Str
         return Err("output path kosong".to_string());
     }
 
-    let conn = open_conn(&app)?;
+    let conn = get_conn(&app)?;
     let _ = conn.execute_batch("PRAGMA wal_checkpoint(FULL);");
     drop(conn);
 
@@ -2074,7 +2296,7 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            let _ = open_conn(app.handle());
+            initialize_db(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -2084,6 +2306,7 @@ pub fn run() {
             scan_libraries,
             start_scan_libraries,
             get_library_scan_status,
+            check_library_source,
             list_comics,
             list_library_comics_raw,
             list_chapters,
@@ -2220,5 +2443,91 @@ mod tests {
             }
         }
         img.save(path).expect("save test png");
+    }
+
+    #[test]
+    fn smoke_chapter_context_window_sql() {
+        let conn = Connection::open_in_memory().expect("open");
+        run_migrations(&conn).expect("migrations");
+        let ts = now_ts();
+        conn.execute(
+            "INSERT INTO libraries (path, created_at, updated_at) VALUES (?1, ?2, ?3)",
+            params!["/lib", ts, ts],
+        )
+        .expect("lib");
+        let lib_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO comics (library_id, title, history_key, source_path, source_type, created_at, updated_at, date_modified)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![lib_id, "Comic", "hk", "/comic", "folder", ts, ts, ts],
+        )
+        .expect("comic");
+        let comic_id = conn.last_insert_rowid();
+        for i in 1..=5 {
+            conn.execute(
+                "INSERT INTO chapters (comic_id, title, chapter_index, history_key, source_path, source_type, page_count, created_at, updated_at, date_modified)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![comic_id, format!("Ch{}", i), i, format!("hk{}", i), format!("/ch{}", i), "folder", 10, ts, ts, ts],
+            )
+            .expect("chapter");
+        }
+        let chapter_id: i64 = conn
+            .query_row("SELECT id FROM chapters WHERE chapter_index = 3", [], |r| r.get(0))
+            .expect("find chapter 3");
+        let ctx = get_chapter_context_conn(&conn, chapter_id).expect("get ctx").expect("ctx exists");
+        assert_eq!(ctx.chapter_total, 5);
+        assert_eq!(ctx.chapter_position, 3);
+        assert!(ctx.prev_chapter_id.is_some());
+        assert!(ctx.next_chapter_id.is_some());
+    }
+
+    #[test]
+    fn library_source_status_unconfigured() {
+        let status = library_source_status_for("");
+        assert!(!status.configured);
+        assert_eq!(status.path, "");
+        assert!(!status.exists);
+        assert!(!status.is_dir);
+        assert!(!status.readable);
+        assert!(status.error.is_none());
+    }
+
+    #[test]
+    fn library_source_status_valid_dir() {
+        let dir = tempdir().expect("tempdir");
+        let status = library_source_status_for(dir.path().to_str().unwrap());
+        assert!(status.configured);
+        assert!(status.exists);
+        assert!(status.is_dir);
+        assert!(status.readable);
+        assert!(status.error.is_none());
+    }
+
+    #[test]
+    fn library_source_status_nonexistent() {
+        let dir = tempdir().expect("tempdir");
+        let bogus = dir.path().join("definitely-not-mounted");
+        let status = library_source_status_for(bogus.to_str().unwrap());
+        assert!(status.configured);
+        assert!(!status.exists);
+        assert!(!status.is_dir);
+        assert!(!status.readable);
+        let err = status.error.expect("error must be set");
+        assert!(err.contains("not found"), "got: {err}");
+        assert!(err.contains("mount"), "got: {err}");
+    }
+
+    #[test]
+    fn library_source_status_path_is_file() {
+        let dir = tempdir().expect("tempdir");
+        let file = dir.path().join("not-a-dir.txt");
+        fs::write(&file, b"x").expect("write");
+        let status = library_source_status_for(file.to_str().unwrap());
+        assert!(status.configured);
+        assert!(status.exists);
+        assert!(!status.is_dir);
+        assert!(!status.readable);
+        let err = status.error.expect("error must be set");
+        assert!(err.contains("not a directory"), "got: {err}");
     }
 }

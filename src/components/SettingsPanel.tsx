@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { AlertTriangle, FolderOpen, X } from "lucide-react";
-import { exportDatabaseBackup, importDatabaseBackup, listSettings, setSetting } from "@/api/tauri";
+import { AlertTriangle, Check, FolderOpen, HardDrive, RefreshCw, X } from "lucide-react";
+import {
+  checkLibrarySource,
+  exportDatabaseBackup,
+  importDatabaseBackup,
+  listSettings,
+  setSetting,
+} from "@/api/tauri";
 import { SkeletonList } from "@/components/feedback/states";
 import { localeOptions, type LocalePreference, useAppI18n } from "@/i18n";
 import { usePreferencesStore } from "@/stores/libraryStore";
@@ -63,6 +69,48 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     const storedLibrarySource = parse<string>(map.get("library_source_input"), "");
     setLibrarySource(storedLibrarySource);
   }, [settingsQuery.data]);
+
+  const sourceStatusQuery = useQuery({
+    queryKey: ["library-source-status"],
+    queryFn: checkLibrarySource,
+    refetchOnWindowFocus: true,
+    enabled: open,
+  });
+
+  const trimmedLiveSource = librarySource.trim();
+  const sourceStatus = useMemo(() => {
+    const s = sourceStatusQuery.data;
+    if (!s) return null;
+    if (trimmedLiveSource === "") {
+      return {
+        state: "empty" as const,
+        label: t("settings.librarySource.statusUnconfigured"),
+        tone: "muted" as const,
+      };
+    }
+    if (s.path.trim() !== trimmedLiveSource) {
+      return {
+        state: "pending" as const,
+        label: t("settings.librarySource.statusUnconfigured"),
+        tone: "muted" as const,
+      };
+    }
+    if (s.readable) {
+      return {
+        state: "ok" as const,
+        label: t("settings.librarySource.statusAccessible"),
+        tone: "ok" as const,
+      };
+    }
+    const tone = "warn" as const;
+    if (!s.exists) {
+      return { state: "warn" as const, label: t("settings.librarySource.statusNotFound"), tone };
+    }
+    if (!s.is_dir) {
+      return { state: "warn" as const, label: t("settings.librarySource.statusNotDirectory"), tone };
+    }
+    return { state: "warn" as const, label: t("settings.librarySource.statusNotReadable"), tone };
+  }, [sourceStatusQuery.data, trimmedLiveSource, t]);
 
   useEffect(() => {
     if (open) {
@@ -207,7 +255,40 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   >
                     {t("settings.browse")}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void sourceStatusQuery.refetch()}
+                    title={t("common.refresh")}
+                    aria-label={t("common.refresh")}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-surface text-app-muted transition-colors hover:bg-app-bg hover:text-app-text"
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={sourceStatusQuery.isFetching ? "animate-spin" : undefined}
+                    />
+                  </button>
                 </div>
+                {sourceStatus ? (
+                  <div
+                    role="status"
+                    className={`mt-2 flex items-start gap-2 rounded-md px-2.5 py-1.5 text-[11px] ${
+                      sourceStatus.tone === "ok"
+                        ? "bg-emerald-500/10 text-emerald-500"
+                        : sourceStatus.tone === "warn"
+                          ? "bg-amber-500/10 text-amber-500"
+                          : "bg-app-bg text-app-muted"
+                    }`}
+                  >
+                    {sourceStatus.tone === "ok" ? (
+                      <Check size={12} className="mt-0.5 flex-shrink-0" />
+                    ) : sourceStatus.tone === "warn" ? (
+                      <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <HardDrive size={12} className="mt-0.5 flex-shrink-0" />
+                    )}
+                    <span className="leading-snug">{sourceStatus.label}</span>
+                  </div>
+                ) : null}
               </div>
 
               {/* Reader */}

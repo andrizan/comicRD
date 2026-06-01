@@ -6,7 +6,7 @@ authors = ["andrizan"]
 license = "MIT"
 repository = "https://github.com/andrizan/comicRD.git"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.95"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,7 +27,9 @@ tauri-plugin-dialog = "2"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 walkdir = "2.5.0"
 zip = { version = "2.2.3", default-features = false, features = ["deflate"] }
-image = { version = "0.25.8", default-features = true }
+ahash = "0.8"
+lru = "0.16"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+image = { version = "0.25.8", default-features = false, features = ["png"] }

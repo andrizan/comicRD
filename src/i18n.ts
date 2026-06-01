@@ -93,6 +93,13 @@ const enMessages = {
   "settings.librarySource.description":
     "This folder is used as the library root. The Library page only reads comic titles from here.",
   "settings.librarySource.placeholder": "/path/to/comic-folder",
+  "settings.librarySource.statusAccessible": "Folder is readable",
+  "settings.librarySource.statusNotFound":
+    "Folder not found. On Linux, you may need to mount the partition before opening ComicRD.",
+  "settings.librarySource.statusNotDirectory": "Path exists but is not a folder.",
+  "settings.librarySource.statusNotReadable": "Folder is not readable (permission denied).",
+  "settings.librarySource.statusUnconfigured": "No library folder has been set yet.",
+  "settings.librarySource.statusHint": "Open Settings to set the library folder.",
   "settings.browse": "Browse",
   "settings.setFolder": "Set Folder",
   "settings.reader.title": "Reader Settings",
@@ -223,6 +230,13 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "settings.librarySource.description":
     "Folder ini digunakan sebagai root library. Halaman Library hanya membaca judul komik dari sini.",
   "settings.librarySource.placeholder": "/path/ke/folder-komik",
+  "settings.librarySource.statusAccessible": "Folder dapat dibaca",
+  "settings.librarySource.statusNotFound":
+    "Folder tidak ditemukan. Di Linux, kamu mungkin perlu mount partisi terlebih dahulu sebelum membuka ComicRD.",
+  "settings.librarySource.statusNotDirectory": "Path ada tetapi bukan folder.",
+  "settings.librarySource.statusNotReadable": "Folder tidak dapat dibaca (izin ditolak).",
+  "settings.librarySource.statusUnconfigured": "Belum ada folder library yang disetel.",
+  "settings.librarySource.statusHint": "Buka Pengaturan untuk mengatur folder library.",
   "settings.browse": "Pilih",
   "settings.setFolder": "Simpan Folder",
   "settings.reader.title": "Pengaturan Reader",

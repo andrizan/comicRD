@@ -9,6 +9,7 @@ import type {
   RawComic,
   LibraryScanStatus,
   Library,
+  LibrarySourceStatus,
   PageInfo,
   ReadingHistoryEntry,
   ReadingProgress,
@@ -41,6 +42,10 @@ export async function startScanLibraries() {
 
 export async function getLibraryScanStatus() {
   return invoke<LibraryScanStatus>("get_library_scan_status");
+}
+
+export async function checkLibrarySource() {
+  return invoke<LibrarySourceStatus>("check_library_source");
 }
 
 export async function listComics(sortBy: SortBy, sortDir: SortDir) {

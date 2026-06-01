@@ -47,6 +47,15 @@ async function mockTauriIPC(page: import("@playwright/test").Page) {
             return null;
           }
           if (cmd === "init_db") return null;
+          if (cmd === "check_library_source")
+            return {
+              configured: true,
+              path: "/mock/library",
+              exists: true,
+              is_dir: true,
+              readable: true,
+              error: null,
+            };
           if (cmd === "list_library_comics_raw") return comics;
           if (cmd === "list_all_bookmarks") return [];
           if (cmd === "list_reading_history") return [];
