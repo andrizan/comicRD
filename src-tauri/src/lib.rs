@@ -2446,6 +2446,26 @@ mod tests {
     }
 
     #[test]
+    fn page_bytes_reader_serves_sorted_folder_images() {
+        let tmp = tempdir().expect("tempdir");
+        create_test_png(tmp.path().join("002.png"));
+        create_test_png(tmp.path().join("001.png"));
+
+        let entries = image_entries_in_dir(tmp.path());
+        let names = entries
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["001.png", "002.png"]);
+
+        let source = ChapterSource::Folder(Arc::new(entries));
+        let (bytes, mime) = read_page_bytes(&source, 0).expect("read first page");
+        assert_eq!(mime, "image/png");
+        assert!(!bytes.is_empty());
+        assert!(read_page_bytes(&source, 2).is_err());
+    }
+
+    #[test]
     fn smoke_chapter_context_window_sql() {
         let conn = Connection::open_in_memory().expect("open");
         run_migrations(&conn).expect("migrations");

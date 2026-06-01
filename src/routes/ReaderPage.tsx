@@ -46,74 +46,110 @@ function normalizePageGap(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value / 10) * 10));
 }
 
+function imageAspectRatio(width: number, height: number): string | undefined {
+  if (width <= 0 || height <= 0) return undefined;
+  return `${width} / ${height}`;
+}
+
 const READER_OUTLINE_BUTTON_CLASS =
   "dark:border-white/20 bg-transparent text-white/70 hover:bg-transparent hover:text-white/70 dark:bg-transparent dark:hover:bg-transparent cursor-pointer";
 const READER_TOOLBAR_BUTTON_CLASS = `${READER_OUTLINE_BUTTON_CLASS} px-2 py-1 text-xs`;
 const READER_REVEAL_BUTTON_CLASS =
   "fixed right-3 top-3 z-50 rounded-full border dark:border-white/20 bg-transparent p-2 text-white/70 backdrop-blur transition-all duration-300 hover:bg-transparent hover:text-white/70 dark:bg-transparent dark:hover:bg-transparent";
+const READER_PAGE_FRAME_CLASS =
+  "mx-auto w-full transition-[max-width] duration-200 ease-out motion-reduce:transition-none";
 
 const READER_PAGE_WINDOW = 3;
-
-const PAGE_ASPECT_RATIO = "2 / 3";
+const DEFAULT_PAGE_PLACEHOLDER_ASPECT_RATIO = "2 / 3";
 
 function PageImage({
   chapterId,
   pageIndex,
   zoom,
+  aspectRatio,
+  loading,
+  onDimensions,
 }: {
   chapterId: number;
   pageIndex: number;
   zoom: number;
+  aspectRatio: string | undefined;
+  loading: "eager" | "lazy";
+  onDimensions: (pageIndex: number, width: number, height: number) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     setLoaded(false);
+    setFailed(false);
   }, [chapterId, pageIndex]);
 
   const pageSrc = comicPageSrc(chapterId, pageIndex);
+  const placeholderAspectRatio = aspectRatio ?? DEFAULT_PAGE_PLACEHOLDER_ASPECT_RATIO;
+
+  if (!loaded || failed) {
+    return (
+      <div
+        className={READER_PAGE_FRAME_CLASS}
+        style={{
+          maxWidth: `${Math.round(980 * zoom)}px`,
+        }}
+      >
+        <div
+          className="relative w-full bg-white/5"
+          style={{ aspectRatio: placeholderAspectRatio }}
+          data-reader-page-loading={pageIndex}
+        >
+          {failed ? (
+            <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-white/50">
+              Failed to load page {pageIndex + 1}
+            </div>
+          ) : null}
+          <img
+            src={pageSrc}
+            alt={`Page ${pageIndex + 1}`}
+            loading={loading}
+            decoding="async"
+            draggable={false}
+            data-reader-page-image={pageIndex}
+            className="absolute inset-0 h-full w-full object-contain opacity-0"
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              setLoaded(true);
+              onDimensions(pageIndex, image.naturalWidth, image.naturalHeight);
+            }}
+            onError={() => setFailed(true)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
-      className="mx-auto w-full"
+      className={READER_PAGE_FRAME_CLASS}
       style={{
         maxWidth: `${Math.round(980 * zoom)}px`,
       }}
     >
-      <div className="relative w-full" style={{ aspectRatio: PAGE_ASPECT_RATIO }}>
-        {!loaded ? (
-          <div
-            className="absolute inset-0 animate-pulse rounded-sm bg-white/5"
-            aria-hidden="true"
-          />
-        ) : null}
-        <img
-          src={pageSrc}
-          alt={`Page ${pageIndex + 1}`}
-          loading="eager"
-          decoding="async"
-          draggable={false}
-          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
-            loaded ? "opacity-100" : "opacity-0"
-          }`}
-          onLoad={() => setLoaded(true)}
-          onError={() => setLoaded(true)}
-        />
-      </div>
-    </div>
-  );
-}
-
-function PagePlaceholder({ zoom }: { zoom: number }) {
-  return (
-    <div
-      className="mx-auto w-full"
-      style={{ maxWidth: `${Math.round(980 * zoom)}px` }}
-    >
-      <div
-        className="w-full animate-pulse rounded-sm bg-white/5"
-        style={{ aspectRatio: PAGE_ASPECT_RATIO }}
-        aria-hidden="true"
+      <img
+        src={pageSrc}
+        alt={`Page ${pageIndex + 1}`}
+        loading={loading}
+        decoding="async"
+        draggable={false}
+        data-reader-page-image={pageIndex}
+        className="mx-auto block h-auto w-full transition-opacity duration-150"
+        onLoad={(event) => {
+          const image = event.currentTarget;
+          setLoaded(true);
+          onDimensions(pageIndex, image.naturalWidth, image.naturalHeight);
+        }}
+        onError={() => {
+          setLoaded(false);
+          setFailed(true);
+        }}
       />
     </div>
   );
@@ -156,6 +192,16 @@ export function ReaderPage() {
   const currentPageRef = useRef(0);
   const [zoom, setZoom] = useState(defaultZoom);
   const [pageGap, setPageGap] = useState(defaultPageGap);
+  const [pageAspectRatios, setPageAspectRatios] = useState<Record<number, string>>({});
+
+  const rememberPageAspectRatio = (pageIndex: number, width: number, height: number) => {
+    const aspectRatio = imageAspectRatio(width, height);
+    if (!aspectRatio) return;
+    setPageAspectRatios((prev) => {
+      if (prev[pageIndex] === aspectRatio) return prev;
+      return { ...prev, [pageIndex]: aspectRatio };
+    });
+  };
 
   useEffect(() => {
     setZoom(defaultZoom);
@@ -255,10 +301,12 @@ export function ReaderPage() {
     const behind = currentPage - READER_PAGE_WINDOW;
     for (let idx = ahead + 1; idx <= Math.min(totalPages - 1, ahead + 3); idx++) {
       const image = new Image();
+      image.onload = () => rememberPageAspectRatio(idx, image.naturalWidth, image.naturalHeight);
       image.src = comicPageSrc(chapterIdNum, idx);
     }
     for (let idx = behind - 1; idx >= Math.max(0, behind - 3); idx--) {
       const image = new Image();
+      image.onload = () => rememberPageAspectRatio(idx, image.naturalWidth, image.naturalHeight);
       image.src = comicPageSrc(chapterIdNum, idx);
     }
   }, [chapterIdNum, currentPage, totalPages]);
@@ -277,6 +325,7 @@ export function ReaderPage() {
     restoredChapterRef.current = null;
     lastWebtoonPageSyncTsRef.current = 0;
     currentPageRef.current = 0;
+    setPageAspectRatios({});
     setCurrentPage(0);
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
@@ -716,11 +765,14 @@ export function ReaderPage() {
                     marginBottom: `${index >= totalPages - 1 ? 0 : Math.max(0, pageGap)}px`,
                   }}
                 >
-                  {isNear ? (
-                    <PageImage chapterId={chapterIdNum} pageIndex={index} zoom={zoom} />
-                  ) : (
-                    <PagePlaceholder zoom={zoom} />
-                  )}
+                  <PageImage
+                    chapterId={chapterIdNum}
+                    pageIndex={index}
+                    zoom={zoom}
+                    aspectRatio={pageAspectRatios[index]}
+                    loading={isNear ? "eager" : "lazy"}
+                    onDimensions={rememberPageAspectRatio}
+                  />
                 </div>
               );
             })}
