@@ -82,7 +82,7 @@ function PageImage({
       <img
         src={pageSrc}
         alt={`Page ${pageIndex + 1}`}
-        loading="lazy"
+        loading="eager"
         decoding="async"
         draggable={false}
         className={`mx-auto block w-full ${loaded ? "opacity-100" : "opacity-0"} transition-opacity duration-150`}
@@ -226,6 +226,20 @@ export function ReaderPage() {
     const timer = window.setTimeout(() => persistProgressDebounced(currentPage), 900);
     return () => window.clearTimeout(timer);
   }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (totalPages <= 1) return;
+    const ahead = currentPage + READER_PAGE_WINDOW;
+    const behind = currentPage - READER_PAGE_WINDOW;
+    for (let idx = ahead + 1; idx <= Math.min(totalPages - 1, ahead + 3); idx++) {
+      const image = new Image();
+      image.src = comicPageSrc(chapterIdNum, idx);
+    }
+    for (let idx = behind - 1; idx >= Math.max(0, behind - 3); idx--) {
+      const image = new Image();
+      image.src = comicPageSrc(chapterIdNum, idx);
+    }
+  }, [chapterIdNum, currentPage, totalPages]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
