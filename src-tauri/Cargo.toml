@@ -1,6 +1,6 @@
 [package]
 name = "comicrd"
-version = "0.5.2"
+version = "0.5.3"
 description = "A simple comic reader."
 authors = ["andrizan"]
 license = "MIT"
