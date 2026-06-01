@@ -9,6 +9,8 @@ import {
   Minimize2,
   Settings,
   Shrink,
+  SkipBack,
+  SkipForward,
   X,
   ZoomIn,
   ZoomOut,
@@ -442,6 +444,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className={READER_OUTLINE_BUTTON_CLASS}
+              title={t("reader.close")}
               onClick={() => void closeReader()}
             >
               <X size={14} />
@@ -477,6 +480,7 @@ export function ReaderPage() {
             <Button
               variant="outline"
               className={READER_OUTLINE_BUTTON_CLASS}
+              title={t("reader.close")}
               onClick={() => void closeReader()}
             >
               <X size={14} />
@@ -513,6 +517,11 @@ export function ReaderPage() {
               <Button
                 variant="outline"
                 className={READER_TOOLBAR_BUTTON_CLASS}
+                title={
+                  currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id
+                    ? t("reader.prevChapter")
+                    : t("reader.prevPage")
+                }
                 onClick={() => {
                   if (currentPageRef.current <= 0 && chapterContextQuery.data?.prev_chapter_id) {
                     void goToChapter(chapterContextQuery.data.prev_chapter_id);
@@ -526,8 +535,16 @@ export function ReaderPage() {
               <Button
                 variant="outline"
                 className={READER_TOOLBAR_BUTTON_CLASS}
+                title={
+                  currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id
+                    ? t("reader.nextChapter")
+                    : t("reader.nextPage")
+                }
                 onClick={() => {
-                  if (currentPageRef.current >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id) {
+                  if (
+                    currentPageRef.current >= totalPages - 1 &&
+                    chapterContextQuery.data?.next_chapter_id
+                  ) {
                     void goToChapter(chapterContextQuery.data.next_chapter_id);
                     return;
                   }
@@ -539,6 +556,45 @@ export function ReaderPage() {
               <Button
                 variant="outline"
                 className={READER_TOOLBAR_BUTTON_CLASS}
+                title={
+                  chapterContextQuery.data?.prev_chapter_title
+                    ? t("reader.prevChapterTitle", {
+                        title: chapterContextQuery.data.prev_chapter_title,
+                      })
+                    : t("reader.prevChapter")
+                }
+                disabled={chapterContextQuery.data?.prev_chapter_id == null}
+                onClick={() => {
+                  const prevId = chapterContextQuery.data?.prev_chapter_id;
+                  if (prevId == null) return;
+                  void goToChapter(prevId);
+                }}
+              >
+                <SkipBack size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className={READER_TOOLBAR_BUTTON_CLASS}
+                title={
+                  chapterContextQuery.data?.next_chapter_title
+                    ? t("reader.nextChapterTitle", {
+                        title: chapterContextQuery.data.next_chapter_title,
+                      })
+                    : t("reader.nextChapter")
+                }
+                disabled={chapterContextQuery.data?.next_chapter_id == null}
+                onClick={() => {
+                  const nextId = chapterContextQuery.data?.next_chapter_id;
+                  if (nextId == null) return;
+                  void goToChapter(nextId);
+                }}
+              >
+                <SkipForward size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                className={READER_TOOLBAR_BUTTON_CLASS}
+                title={t("reader.zoomOut")}
                 onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
               >
                 <ZoomOut size={14} />
@@ -549,6 +605,7 @@ export function ReaderPage() {
               <Button
                 variant="outline"
                 className={READER_TOOLBAR_BUTTON_CLASS}
+                title={t("reader.zoomIn")}
                 onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
               >
                 <ZoomIn size={14} />
@@ -588,6 +645,7 @@ export function ReaderPage() {
         className={`${READER_REVEAL_BUTTON_CLASS} ${
           toolbarVisible ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
+        title={t("reader.showToolbar")}
         onMouseEnter={showToolbar}
         onClick={showToolbar}
       >

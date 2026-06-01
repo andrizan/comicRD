@@ -131,6 +131,16 @@ const enMessages = {
   "reader.resetZoom": "Reset zoom",
   "reader.fullscreen": "Fullscreen",
   "reader.pageTitle": "Page {page}",
+  "reader.close": "Close reader",
+  "reader.prevPage": "Previous page",
+  "reader.nextPage": "Next page",
+  "reader.zoomOut": "Zoom out",
+  "reader.zoomIn": "Zoom in",
+  "reader.showToolbar": "Show toolbar",
+  "reader.prevChapter": "Previous chapter",
+  "reader.prevChapterTitle": "Previous chapter: {title}",
+  "reader.nextChapter": "Next chapter",
+  "reader.nextChapterTitle": "Next chapter: {title}",
 };
 
 export type MessageKey = keyof typeof enMessages;
@@ -251,6 +261,16 @@ const idMessages: Record<keyof typeof enMessages, string> = {
   "reader.resetZoom": "Reset zoom",
   "reader.fullscreen": "Layar penuh",
   "reader.pageTitle": "Halaman {page}",
+  "reader.close": "Tutup reader",
+  "reader.prevPage": "Halaman sebelumnya",
+  "reader.nextPage": "Halaman berikutnya",
+  "reader.zoomOut": "Perkecil",
+  "reader.zoomIn": "Perbesar",
+  "reader.showToolbar": "Tampilkan toolbar",
+  "reader.prevChapter": "Chapter sebelumnya",
+  "reader.prevChapterTitle": "Chapter sebelumnya: {title}",
+  "reader.nextChapter": "Chapter berikutnya",
+  "reader.nextChapterTitle": "Chapter berikutnya: {title}",
 };
 
 const catalogs = {
