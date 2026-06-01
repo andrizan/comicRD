@@ -54,6 +54,8 @@ const READER_REVEAL_BUTTON_CLASS =
 
 const READER_PAGE_WINDOW = 3;
 
+const PAGE_ASPECT_RATIO = "2 / 3";
+
 function PageImage({
   chapterId,
   pageIndex,
@@ -78,23 +80,43 @@ function PageImage({
         maxWidth: `${Math.round(980 * zoom)}px`,
       }}
     >
-      {!loaded ? <div className="my-2 h-[220px] bg-white/10" /> : null}
-      <img
-        src={pageSrc}
-        alt={`Page ${pageIndex + 1}`}
-        loading="eager"
-        decoding="async"
-        draggable={false}
-        className={`mx-auto block w-full ${loaded ? "opacity-100" : "opacity-0"} transition-opacity duration-150`}
-        onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
-      />
+      <div className="relative w-full" style={{ aspectRatio: PAGE_ASPECT_RATIO }}>
+        {!loaded ? (
+          <div
+            className="absolute inset-0 animate-pulse rounded-sm bg-white/5"
+            aria-hidden="true"
+          />
+        ) : null}
+        <img
+          src={pageSrc}
+          alt={`Page ${pageIndex + 1}`}
+          loading="eager"
+          decoding="async"
+          draggable={false}
+          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-150 ${
+            loaded ? "opacity-100" : "opacity-0"
+          }`}
+          onLoad={() => setLoaded(true)}
+          onError={() => setLoaded(true)}
+        />
+      </div>
     </div>
   );
 }
 
-function PagePlaceholder() {
-  return <div className="my-2 h-[220px] bg-white/10" aria-hidden="true" />;
+function PagePlaceholder({ zoom }: { zoom: number }) {
+  return (
+    <div
+      className="mx-auto w-full"
+      style={{ maxWidth: `${Math.round(980 * zoom)}px` }}
+    >
+      <div
+        className="w-full animate-pulse rounded-sm bg-white/5"
+        style={{ aspectRatio: PAGE_ASPECT_RATIO }}
+        aria-hidden="true"
+      />
+    </div>
+  );
 }
 
 export function ReaderPage() {
@@ -697,7 +719,7 @@ export function ReaderPage() {
                   {isNear ? (
                     <PageImage chapterId={chapterIdNum} pageIndex={index} zoom={zoom} />
                   ) : (
-                    <PagePlaceholder />
+                    <PagePlaceholder zoom={zoom} />
                   )}
                 </div>
               );
