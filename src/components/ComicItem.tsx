@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAppI18n } from "@/i18n";
 import { unixToLocale } from "@/lib/utils";
@@ -22,7 +23,7 @@ function ReadingBadge({ label }: { label: string }) {
   );
 }
 
-export function ComicItem({ comic, variant, index, isBookmarked, isReading, onBookmark }: ComicItemProps) {
+function ComicItemImpl({ comic, variant, index, isBookmarked, isReading, onBookmark }: ComicItemProps) {
   const { t } = useAppI18n();
   if (variant === "grid") {
     return (
@@ -70,3 +71,5 @@ export function ComicItem({ comic, variant, index, isBookmarked, isReading, onBo
     </Link>
   );
 }
+
+export const ComicItem = memo(ComicItemImpl);

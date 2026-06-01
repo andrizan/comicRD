@@ -52,6 +52,8 @@ const READER_TOOLBAR_BUTTON_CLASS = `${READER_OUTLINE_BUTTON_CLASS} px-2 py-1 te
 const READER_REVEAL_BUTTON_CLASS =
   "fixed right-3 top-3 z-50 rounded-full border dark:border-white/20 bg-transparent p-2 text-white/70 backdrop-blur transition-all duration-300 hover:bg-transparent hover:text-white/70 dark:bg-transparent dark:hover:bg-transparent";
 
+const READER_PAGE_WINDOW = 3;
+
 function PageImage({
   chapterId,
   pageIndex,
@@ -91,6 +93,10 @@ function PageImage({
   );
 }
 
+function PagePlaceholder() {
+  return <div className="my-2 h-[220px] bg-white/10" aria-hidden="true" />;
+}
+
 export function ReaderPage() {
   const { t } = useAppI18n();
   const { chapterId } = useParams({ from: "/reader/$chapterId" });
@@ -105,15 +111,18 @@ export function ReaderPage() {
   const pagesQuery = useQuery({
     queryKey: ["chapter-pages", chapterIdNum],
     queryFn: () => getChapterPages(chapterIdNum),
+    gcTime: 60_000,
   });
   const chapterContextQuery = useQuery({
     queryKey: ["chapter-context", chapterIdNum],
     queryFn: () => getChapterContext(chapterIdNum),
+    gcTime: 60_000,
   });
   const progressQuery = useQuery({
     queryKey: ["progress", chapterIdNum],
     queryFn: () => getProgress(chapterIdNum),
     staleTime: 0,
+    gcTime: 60_000,
   });
 
   const settingMap = useMemo(() => parseSettingMap(settingsQuery.data ?? []), [settingsQuery.data]);
@@ -218,17 +227,6 @@ export function ReaderPage() {
     return () => window.clearTimeout(timer);
   }, [currentPage, totalPages]);
 
-  useEffect(() => {
-    if (totalPages <= 1) return;
-    const ahead = [currentPage + 1, currentPage + 2, currentPage + 3].filter(
-      (idx) => idx >= 0 && idx < totalPages,
-    );
-    for (const idx of ahead) {
-      const image = new Image();
-      image.src = comicPageSrc(chapterIdNum, idx);
-    }
-  }, [chapterIdNum, currentPage, totalPages]);
-
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
   const lastWebtoonPageSyncTsRef = useRef(0);
@@ -267,7 +265,15 @@ export function ReaderPage() {
         pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
       });
     }
+  }, [
+    chapterIdNum,
+    progressQuery.data,
+    progressQuery.isFetched,
+    progressQuery.isFetching,
+    totalPages,
+  ]);
 
+  useEffect(() => {
     const root = scrollRef.current;
     if (!root) return;
     const observer = new IntersectionObserver(
@@ -294,14 +300,7 @@ export function ReaderPage() {
       observer.observe(node);
     }
     return () => observer.disconnect();
-  }, [
-    chapterIdNum,
-    progressQuery.data,
-    progressQuery.isFetched,
-    progressQuery.isFetching,
-    totalPages,
-    pagesQuery.data,
-  ]);
+  }, [chapterIdNum, totalPages, pagesQuery.data]);
 
   const handleReaderScroll = () => {
     const root = scrollRef.current;
@@ -661,25 +660,34 @@ export function ReaderPage() {
           onScroll={handleReaderScroll}
         >
           <div className="w-full">
-            {Array.from({ length: totalPages }).map((_, index) => (
-              <div
-                key={`${chapterIdNum}-${index}`}
-                ref={(node) => {
-                  if (node) {
-                    pageRefs.current.set(index, node);
-                    return;
-                  }
-                  pageRefs.current.delete(index);
-                }}
-                data-page-index={index}
-                className="w-full"
-                style={{
-                  marginBottom: `${index >= totalPages - 1 ? 0 : Math.max(0, pageGap)}px`,
-                }}
-              >
-                <PageImage chapterId={chapterIdNum} pageIndex={index} zoom={zoom} />
-              </div>
-            ))}
+            {Array.from({ length: totalPages }).map((_, index) => {
+              const isNear =
+                index >= currentPage - READER_PAGE_WINDOW &&
+                index <= currentPage + READER_PAGE_WINDOW;
+              return (
+                <div
+                  key={`${chapterIdNum}-${index}`}
+                  ref={(node) => {
+                    if (node) {
+                      pageRefs.current.set(index, node);
+                      return;
+                    }
+                    pageRefs.current.delete(index);
+                  }}
+                  data-page-index={index}
+                  className="w-full"
+                  style={{
+                    marginBottom: `${index >= totalPages - 1 ? 0 : Math.max(0, pageGap)}px`,
+                  }}
+                >
+                  {isNear ? (
+                    <PageImage chapterId={chapterIdNum} pageIndex={index} zoom={zoom} />
+                  ) : (
+                    <PagePlaceholder />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

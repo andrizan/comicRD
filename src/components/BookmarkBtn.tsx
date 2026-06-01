@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Bookmark, BookmarkCheck } from "lucide-react";
 
 interface BookmarkBtnProps {
@@ -5,7 +6,7 @@ interface BookmarkBtnProps {
   onToggle: () => void;
 }
 
-export function BookmarkBtn({ isBookmarked, onToggle }: BookmarkBtnProps) {
+function BookmarkBtnImpl({ isBookmarked, onToggle }: BookmarkBtnProps) {
   return (
     <button
       type="button"
@@ -23,3 +24,5 @@ export function BookmarkBtn({ isBookmarked, onToggle }: BookmarkBtnProps) {
     </button>
   );
 }
+
+export const BookmarkBtn = memo(BookmarkBtnImpl);
