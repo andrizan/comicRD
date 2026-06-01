@@ -102,6 +102,9 @@
 - Windows/Android harus memakai Wry/Tauri custom-protocol workaround `http://comicrd.localhost/page/{chapterId}/{pageIndex}`.
 - `http://comicrd.localhost/...` bukan HTTP server biasa; hanya valid sebagai custom protocol workaround pada platform yang didukung. Jika Linux menerima URL ini, release build bisa menampilkan `Connection refused`.
 - React menampilkan halaman sebagai dokumen webtoon normal dengan lazy loading dan prefetch beberapa halaman ke depan; jangan memakai dynamic-height virtualizer untuk reader karena pernah menyebabkan overlap dan scroll jump.
+- Semua page reader harus tetap memiliki `<img>` di DOM; jangan mengganti page jauh dengan placeholder-only component. Page dekat boleh `loading="eager"`, page jauh `loading="lazy"`, supaya saat scroll turun browser tetap bisa load gambar berikutnya.
+- Placeholder/loading wrapper boleh dipakai untuk menjaga tinggi sementara, tetapi harus tetap berisi `<img>` asli yang menuju `comicPageSrc`.
+- Zoom reader dianimasikan lewat transisi `max-width` pada frame page (`transition-[max-width]`) supaya smooth tanpa transform yang mengganggu scroll/progress.
 
 ## Current i18n UX
 
@@ -112,8 +115,9 @@
 
 ## Testing
 
-- Unit: `pnpm test` — Vitest, 7 test files, test pure functions.
+- Unit: `pnpm test` — Vitest, 8 test files.
 - E2E: `npx playwright test` — Playwright dengan Chromium, mock Tauri IPC via `window.__TAURI_INTERNALS__`.
 - E2E config: `playwright.config.ts`, test dir `e2e/`.
 - E2E mock: 200 fake comics, mock settings, mock semua Tauri IPC commands yang dipakai frontend.
+- Reader image loading E2E: `e2e/reader-image-loading.spec.ts` memastikan gambar page berikutnya tetap dimount dan ter-load saat scroll turun.
 - Rust: `cargo test` di `src-tauri/`.

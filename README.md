@@ -7,9 +7,10 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 ## Features
 
 - **Library Management** — Set a library folder with automatic comic detection (similar to HakuNeko)
+- **Library Source Status** — Live check of the configured library path with a warning banner and refresh button when the folder is missing, not a directory, or unmounted (e.g., an external drive on Linux)
 - **Reading Progress** — Continue reading, bookmarks, and read/unread status tracking
 - **Navigation** — Previous/next page and chapter navigation, plus vertical keyboard scrolling with Arrow Up/Down and Page Up/Down
-- **Reader Controls** — Zoom, page gap/margin, and fullscreen with globally persisted settings
+- **Reader Controls** — Smooth animated zoom, page gap/margin, and fullscreen with globally persisted settings
 - **Sorting** — Comics sortable by `name` or `folder_date` (ascending/descending); chapters sortable by name
 - **Chapter Status** — Unread, reading, and read indicators per chapter
 - **Internationalization** — English and Indonesian UI via Lingui, with English as the default locale
@@ -24,7 +25,10 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 - **Lazy Database Writes** — Comic, chapter, and progress records created only when a chapter is read
 - **Relative History Paths** — Progress keys are relative to the library source, so history survives folder moves
 - **Virtual List Rendering** — Library and chapter lists use `@tanstack/react-virtual` to render only visible rows, keeping memory usage constant regardless of list size
-- **Stable Webtoon Rendering** — Pages are rendered as a normal vertical document with lazy `<img>` loading to avoid dynamic-height virtualization overlap
+- **Stable Webtoon Rendering** — Pages are rendered as a normal vertical document with native lazy `<img>` loading; page images stay mounted so scrolling down does not reveal unloaded placeholders
+- **i18n Code-Splitting** — English and Indonesian catalogs are dynamic-import chunks; the main bundle excludes both. The active locale is switched via an in-flight-deduped async loader
+- **Aggressive Query gcTime** — `pagesQuery`, `chapterContextQuery`, and `progressQuery` use a 60s gcTime so cached responses are released as soon as the user leaves the reader
+- **Backend Page Cache (Rust)** — `ahash` for path hashing, `RwLock<PageCache>` for concurrent reads, and `lru::LruCache` for byte-level LRU caching of the most recently read pages
 - **Custom Page Protocol** — Comic page bytes are served directly to `<img>` tags through Tauri's registered `comicrd` protocol. Linux/macOS use `comicrd://localhost/...`; Windows/Android use Wry's `http://comicrd.localhost/...` custom-protocol workaround.
 - **Persistent Settings** — Reader, library, theme, and locale preferences are stored in SQLite `app_settings`
 
@@ -75,6 +79,7 @@ pnpm lint          # Lint with oxlint
 pnpm typecheck     # TypeScript type checking
 pnpm test          # Run Vitest tests
 npx playwright test # Run Playwright E2E tests
+cargo test --manifest-path src-tauri/Cargo.toml # Run Rust tests
 ```
 
 ## Building
@@ -124,6 +129,8 @@ comicrd/
 ├── src/                 # React frontend (TypeScript)
 │   ├── api/             # Tauri IPC wrappers
 │   ├── components/      # UI components (virtual-list, card, button, feedback)
+│   ├── i18n/            # Lingui bootstrap and lazy-loaded catalogs
+│   │   └── messages/    # en / id catalogs as dynamic chunks
 │   ├── lib/             # Utilities and pure functions
 │   ├── routes/          # Page components (Layout, Library, Comic, Reader, Settings)
 │   └── stores/          # Zustand state stores
