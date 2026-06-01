@@ -28,6 +28,7 @@ interface PreferencesState {
   inputPath: string;
   chapterSortBy: SortBy;
   chapterSortDir: SortDir;
+  searchText: string;
   preferencesReady: boolean;
   setSortBy: (sortBy: SortBy) => void;
   setSortDir: (sortDir: SortDir) => void;
@@ -36,6 +37,7 @@ interface PreferencesState {
   setInputPath: (inputPath: string) => void;
   setChapterSortBy: (sortBy: SortBy) => void;
   setChapterSortDir: (dir: SortDir) => void;
+  setSearchText: (text: string) => void;
   loadPreferences: () => Promise<void>;
 }
 
@@ -47,6 +49,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   inputPath: "",
   chapterSortBy: "name",
   chapterSortDir: "asc",
+  searchText: "",
   preferencesReady: false,
 
   setSortBy: (sortBy) => {
@@ -84,6 +87,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     if (get().preferencesReady) void setSetting("chapter_sort_dir", chapterSortDir);
   },
 
+  setSearchText: (searchText) => {
+    set({ searchText });
+  },
+
   loadPreferences: async () => {
     const savedPath = parseStoredString(await getSetting("library_source_input"));
     const savedSortBy = parseStoredString(await getSetting("library_sort_by"));
@@ -114,10 +121,12 @@ const selectorLibraryView = (s: PreferencesState) => ({
   viewMode: s.viewMode,
   displayMode: s.displayMode,
   inputPath: s.inputPath,
+  searchText: s.searchText,
   setSortBy: s.setSortBy,
   setSortDir: s.setSortDir,
   setViewMode: s.setViewMode,
   setDisplayMode: s.setDisplayMode,
+  setSearchText: s.setSearchText,
   loadPreferences: s.loadPreferences,
 });
 

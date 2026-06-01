@@ -51,7 +51,6 @@ const ROW_HEIGHT = 56;
 export function LibraryPage() {
   const { t } = useAppI18n();
   const queryClient = useQueryClient();
-  const [searchText, setSearchText] = useState("");
   const [readFilter, setReadFilter] = useState<"all" | "read" | "unread">("all");
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
 
@@ -61,10 +60,12 @@ export function LibraryPage() {
     viewMode,
     displayMode,
     inputPath,
+    searchText,
     setSortBy,
     setSortDir,
     setViewMode,
     setDisplayMode,
+    setSearchText,
     loadPreferences,
   } = useLibraryPreferences();
   const activeLibraryPath = inputPath.trim();
