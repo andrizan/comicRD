@@ -26,5 +26,12 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "tests/reader-scrollbar.test.ts", "tests/settings-state.test.ts", "tests/i18n.test.ts", "tests/i18n-ui.test.ts", "tests/reader-progress.test.ts"]
+  "include": [
+    "src",
+    "tests/reader-scrollbar.test.ts",
+    "tests/settings-state.test.ts",
+    "tests/i18n.test.ts",
+    "tests/i18n-ui.test.ts",
+    "tests/reader-progress.test.ts"
+  ]
 }

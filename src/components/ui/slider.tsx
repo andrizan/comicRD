@@ -1,6 +1,6 @@
-import { Slider as SliderPrimitive } from "@base-ui/react/slider"
+import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function Slider({
   className,
@@ -14,7 +14,7 @@ function Slider({
     ? value
     : Array.isArray(defaultValue)
       ? defaultValue
-      : [min, max]
+      : [min, max];
 
   return (
     <SliderPrimitive.Root
@@ -28,14 +28,14 @@ function Slider({
       {...props}
     >
       <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
-          <SliderPrimitive.Track
-            data-slot="slider-track"
-            className="relative h-2 w-full grow overflow-hidden rounded-full bg-primary/20 select-none"
-          >
-            <SliderPrimitive.Indicator
-              data-slot="slider-range"
-              className="h-full w-full bg-app-accent select-none"
-            />
+        <SliderPrimitive.Track
+          data-slot="slider-track"
+          className="relative h-2 w-full grow overflow-hidden rounded-full bg-primary/20 select-none"
+        >
+          <SliderPrimitive.Indicator
+            data-slot="slider-range"
+            className="h-full w-full bg-app-accent select-none"
+          />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
           <SliderPrimitive.Thumb
@@ -46,7 +46,7 @@ function Slider({
         ))}
       </SliderPrimitive.Control>
     </SliderPrimitive.Root>
-  )
+  );
 }
 
-export { Slider }
+export { Slider };

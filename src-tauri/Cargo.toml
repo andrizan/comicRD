@@ -29,7 +29,13 @@ walkdir = "2.5.0"
 zip = { version = "2.2.3", default-features = false, features = ["deflate"] }
 ahash = "0.8"
 lru = "0.16"
-image = { version = "0.25.8", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
+image = { version = "0.25.8", default-features = false, features = [
+  "png",
+  "jpeg",
+  "webp",
+  "gif",
+  "bmp",
+] }
 
 [dev-dependencies]
 tempfile = "3.23.0"
