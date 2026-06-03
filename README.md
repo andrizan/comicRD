@@ -12,10 +12,12 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 - **Navigation** — Previous/next page and chapter navigation, plus vertical keyboard scrolling with Arrow Up/Down and Page Up/Down
 - **Reader Controls** — Smooth animated zoom, page gap/margin, and fullscreen with globally persisted settings
 - **Sorting** — Comics sortable by `name` or `folder_date` (ascending/descending); chapters sortable by name
+- **Image Formats** — Current Rust decoder pipeline supports PNG, JPEG, WebP, GIF, and BMP. AVIF is not enabled yet.
 - **Chapter Status** — Unread, reading, and read indicators per chapter
 - **Internationalization** — English and Indonesian UI via Lingui, with English as the default locale
 - **Page Indicator** — Segmented bottom progress bar with clickable segments for quick page jumping
 - **Responsive Toolbar** — Top toolbar with close, title, navigation, zoom, gap, fullscreen, and bookmark controls
+- **Base UI Tooltips** — Icon-only controls use the local shadcn/Base UI tooltip component instead of browser-native `title` tooltips
 - **`Esc` Navigation** — Returns to the chapter page based on `comic_source_path`
 - **Scroll Restoration** — Scroll position is maintained per page and per library tab when navigating away and back
 
@@ -25,10 +27,14 @@ The reader is locked to **webtoon mode** (vertical scroll) to keep the rendering
 - **Lazy Database Writes** — Comic, chapter, and progress records created only when a chapter is read
 - **Relative History Paths** — Progress keys are relative to the library source, so history survives folder moves
 - **Virtual List Rendering** — Library and chapter lists use `@tanstack/react-virtual` to render only visible rows, keeping memory usage constant regardless of list size
-- **Stable Webtoon Rendering** — Pages are rendered as a normal vertical document with native lazy `<img>` loading; page images stay mounted so scrolling down does not reveal unloaded placeholders
+- **Stable Webtoon Rendering** — Pages are rendered as a normal vertical document with stable sizing, eager loading near the current page, and lightweight placeholders for distant pages
+- **Native-Assisted Image Pipeline** — Rust reads page files, serves resized viewport-aware variants through the custom protocol, generates low-resolution previews, and deduplicates in-flight resize work
+- **Reader Page Windowing** — The reader keeps the current page and nearby pages active while distant pages use stable aspect-ratio placeholders, reducing WebView image memory pressure during long chapters
+- **Direction-Aware Prefetch** — The frontend asks Rust to prefetch resized variants ahead of the current scroll direction instead of pushing base64 image data through IPC
+- **Image Pipeline Profiles** — `performance`, `balanced`, and `quality` profiles tune target image width and prefetch distance from Settings
 - **i18n Code-Splitting** — English and Indonesian catalogs are dynamic-import chunks; the main bundle excludes both. The active locale is switched via an in-flight-deduped async loader
 - **Aggressive Query gcTime** — `pagesQuery`, `chapterContextQuery`, and `progressQuery` use a 60s gcTime so cached responses are released as soon as the user leaves the reader
-- **Backend Page Cache (Rust)** — `ahash` for path hashing, `RwLock<PageCache>` for concurrent reads, and `lru::LruCache` for byte-level LRU caching of the most recently read pages
+- **Backend Page Cache (Rust)** — `ahash` for path hashing, `RwLock<PageCache>` for concurrent reads, `lru::LruCache` for original page bytes, preview bytes, and resized image variants
 - **Custom Page Protocol** — Comic page bytes are served directly to `<img>` tags through Tauri's registered `comicrd` protocol. Linux/macOS use `comicrd://localhost/...`; Windows/Android use Wry's `http://comicrd.localhost/...` custom-protocol workaround.
 - **Persistent Settings** — Reader, library, theme, and locale preferences are stored in SQLite `app_settings`
 
@@ -70,6 +76,8 @@ pnpm install
 ```bash
 pnpm tauri:dev
 ```
+
+The Vite dev server is configured for `http://127.0.0.1:1520`. If Windows blocks that port with `EACCES`, check the excluded TCP port ranges before changing Tauri/Vite config.
 
 ### Quality Checks
 
