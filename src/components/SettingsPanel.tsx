@@ -11,10 +11,22 @@ import {
 } from "@/api/tauri";
 import { SkeletonList } from "@/components/feedback/states";
 import { localeOptions, type LocalePreference, useAppI18n } from "@/i18n";
+import {
+  imagePipelineProfileOptions,
+  parseImagePipelineProfile,
+  type ImagePipelineProfile,
+} from "@/lib/reader-image-policy";
 import { usePreferencesStore } from "@/stores/libraryStore";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { WithTooltip } from "@/components/ui/tooltip";
 
 function parse<T>(value: string | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -53,6 +65,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
   const [defaultZoom, setDefaultZoom] = useState(1);
   const [pageGap, setPageGap] = useState(10);
+  const [imagePipelineProfile, setImagePipelineProfile] =
+    useState<ImagePipelineProfile>("balanced");
   const [appTheme, setAppTheme] = useState<"light" | "dark">("light");
   const [localePreference, setLocalePreference] = useState<LocalePreference>("en");
   const [librarySource, setLibrarySource] = useState("");
@@ -64,6 +78,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     const map = new Map((settingsQuery.data ?? []).map((x) => [x.key, x.value_json]));
     setDefaultZoom(parse<number>(map.get("default_zoom"), 1));
     setPageGap(normalizePageGap(parse<number>(map.get("page_gap"), 10)));
+    setImagePipelineProfile(
+      parseImagePipelineProfile(parse<string>(map.get("image_pipeline_profile"), "balanced")),
+    );
     setAppTheme(parseTheme(map.get("app_theme")));
     setLocalePreference(parseLocalePreference(map.get("app_locale")));
     const storedLibrarySource = parse<string>(map.get("library_source_input"), "");
@@ -107,7 +124,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       return { state: "warn" as const, label: t("settings.librarySource.statusNotFound"), tone };
     }
     if (!s.is_dir) {
-      return { state: "warn" as const, label: t("settings.librarySource.statusNotDirectory"), tone };
+      return {
+        state: "warn" as const,
+        label: t("settings.librarySource.statusNotDirectory"),
+        tone,
+      };
     }
     return { state: "warn" as const, label: t("settings.librarySource.statusNotReadable"), tone };
   }, [sourceStatusQuery.data, trimmedLiveSource, t]);
@@ -126,6 +147,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       await setSetting("arrow_navigation_enabled", false);
       await setSetting("default_zoom", Number(defaultZoom.toFixed(2)));
       await setSetting("page_gap", normalizePageGap(pageGap));
+      await setSetting("image_pipeline_profile", imagePipelineProfile);
       await setSetting("app_theme", appTheme);
       await setSetting("app_locale", localePreference);
       if (trimmedSource) {
@@ -204,13 +226,16 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-app-border px-5 py-3">
           <h2 className="text-sm font-bold">{t("nav.settings")}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-surface hover:text-app-text"
-          >
-            <X size={16} />
-          </button>
+          <WithTooltip label={t("common.close")}>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("common.close")}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-surface hover:text-app-text"
+            >
+              <X size={16} />
+            </button>
+          </WithTooltip>
         </div>
 
         {/* Body */}
@@ -255,18 +280,19 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   >
                     {t("settings.browse")}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void sourceStatusQuery.refetch()}
-                    title={t("common.refresh")}
-                    aria-label={t("common.refresh")}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-surface text-app-muted transition-colors hover:bg-app-bg hover:text-app-text"
-                  >
-                    <RefreshCw
-                      size={14}
-                      className={sourceStatusQuery.isFetching ? "animate-spin" : undefined}
-                    />
-                  </button>
+                  <WithTooltip label={t("common.refresh")}>
+                    <button
+                      type="button"
+                      onClick={() => void sourceStatusQuery.refetch()}
+                      aria-label={t("common.refresh")}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-surface text-app-muted transition-colors hover:bg-app-bg hover:text-app-text"
+                    >
+                      <RefreshCw
+                        size={14}
+                        className={sourceStatusQuery.isFetching ? "animate-spin" : undefined}
+                      />
+                    </button>
+                  </WithTooltip>
                 </div>
                 {sourceStatus ? (
                   <div
@@ -328,6 +354,30 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     {t("common.value", { value: `${pageGap}px` })}
                   </p>
                 </label>
+                <label className="mt-3 block">
+                  <span className="mb-1.5 block text-xs font-medium">
+                    {t("settings.imagePipelineProfile")}
+                  </span>
+                  <Select
+                    items={imagePipelineProfileOptions().map((option) => ({
+                      label: t(`settings.imagePipelineProfile.${option}`),
+                      value: option,
+                    }))}
+                    value={imagePipelineProfile}
+                    onValueChange={(v) => setImagePipelineProfile(parseImagePipelineProfile(v))}
+                  >
+                    <SelectTrigger className="h-9 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {imagePipelineProfileOptions().map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {t(`settings.imagePipelineProfile.${option}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
               </div>
 
               {/* Appearance */}
@@ -361,7 +411,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </span>
                     <Select
                       items={localeOptions.map((option) => ({
-                        label: option.value === "id" ? t("settings.language.indonesian") : t("settings.language.english"),
+                        label:
+                          option.value === "id"
+                            ? t("settings.language.indonesian")
+                            : t("settings.language.english"),
                         value: option.value,
                       }))}
                       value={localePreference}

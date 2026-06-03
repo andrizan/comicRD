@@ -4,6 +4,7 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Home, Moon, Settings, Sun } from "lucide-react";
 import { listSettings, setSetting } from "@/api/tauri";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { WithTooltip } from "@/components/ui/tooltip";
 import { activateLocale, resolveLocalePreference, useAppI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -133,40 +134,46 @@ export function Layout() {
       {!isReaderRoute ? (
         <div className="flex h-10 items-center justify-between border-b border-app-border bg-app-surface px-4">
           <div className="flex items-center gap-2">
-            <Link
-              to="/"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
-              title="Home"
-            >
-              <Home size={14} />
-            </Link>
+            <WithTooltip label="Home">
+              <Link
+                to="/"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+                aria-label="Home"
+              >
+                <Home size={14} />
+              </Link>
+            </WithTooltip>
             <span className="font-display text-xs font-bold leading-tight tracking-widest text-app-muted">
               ComicRD
             </span>
           </div>
           <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => void toggleTheme()}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
-              title={t("app.toggleTheme")}
-            >
-              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen((v) => !v)}
-              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all hover:bg-app-bg ${
-                settingsOpen
-                  ? "bg-app-accent/10 text-app-accent"
-                  : isLibrarySourceEmpty
-                    ? "text-red-400 hover:text-red-500"
-                    : "text-app-muted hover:text-app-text"
-              }`}
-              title={t("nav.settings")}
-            >
-              <Settings size={14} />
-            </button>
+            <WithTooltip label={t("app.toggleTheme")}>
+              <button
+                type="button"
+                onClick={() => void toggleTheme()}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+                aria-label={t("app.toggleTheme")}
+              >
+                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+            </WithTooltip>
+            <WithTooltip label={t("nav.settings")}>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                className={`flex h-7 w-7 items-center justify-center rounded-md transition-all hover:bg-app-bg ${
+                  settingsOpen
+                    ? "bg-app-accent/10 text-app-accent"
+                    : isLibrarySourceEmpty
+                      ? "text-red-400 hover:text-red-500"
+                      : "text-app-muted hover:text-app-text"
+                }`}
+                aria-label={t("nav.settings")}
+              >
+                <Settings size={14} />
+              </button>
+            </WithTooltip>
           </div>
         </div>
       ) : null}

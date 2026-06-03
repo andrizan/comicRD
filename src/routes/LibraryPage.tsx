@@ -31,6 +31,7 @@ import { ComicItem } from "@/components/ComicItem";
 import { EmptyState, ErrorState, SkeletonList } from "@/components/feedback/states";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import { ScrollToTop } from "@/components/ui/scroll-to-top";
+import { WithTooltip } from "@/components/ui/tooltip";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   Select,
@@ -226,7 +227,11 @@ export function LibraryPage() {
     () =>
       (comicsQuery.data ?? []).filter((comic) => {
         const q = searchText.trim().toLowerCase();
-        if (q && !comic.title.toLowerCase().includes(q) && !comic.source_path.toLowerCase().includes(q)) {
+        if (
+          q &&
+          !comic.title.toLowerCase().includes(q) &&
+          !comic.source_path.toLowerCase().includes(q)
+        ) {
           return false;
         }
         if (readFilter === "read" && !readingSet.has(comic.source_path)) return false;
@@ -322,50 +327,65 @@ export function LibraryPage() {
   function renderHistoryRow(index: number, entry: ReadingHistoryEntry) {
     if (displayMode === "grid") {
       return (
-        <Link
-          to="/comic/$comicId"
-          params={{ comicId: encodeURIComponent(entry.comic_source_path) }}
-          title={entry.comic_title}
-          className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
-          onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
-        >
-          <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
-            <span className="font-display text-sm font-bold leading-tight text-app-accent opacity-80">
-              {entry.comic_title
-                .split(" ")
-                .slice(0, 2)
-                .map((w) => w[0] || "")
-                .join("")
-                .toUpperCase()}
-            </span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium hover:underline">{entry.comic_title}</p>
-            <p className="mt-1 truncate text-xs text-app-muted">{entry.chapter_title}</p>
-            <div className="mt-1 flex items-center justify-between">
-              <span className="text-[10px] text-app-muted">{unixToLocale(entry.updated_at)}</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  toggleBookmark(entry.comic_source_path);
-                }}
-                className={`transition-colors ${
-                  bookmarkSet.has(entry.comic_source_path)
-                    ? "text-app-accent"
-                    : "text-app-muted hover:text-app-text"
-                }`}
-              >
-                {bookmarkSet.has(entry.comic_source_path) ? (
-                  <BookmarkCheck size={16} />
-                ) : (
-                  <Bookmark size={16} />
-                )}
-              </button>
+        <WithTooltip label={entry.comic_title}>
+          <Link
+            to="/comic/$comicId"
+            params={{ comicId: encodeURIComponent(entry.comic_source_path) }}
+            aria-label={entry.comic_title}
+            className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
+            onContextMenu={(e) => ctxMenu.show(e, historyContextItems(entry))}
+          >
+            <div className="flex h-16 w-14 flex-shrink-0 items-center justify-center rounded-lg border border-app-border bg-app-accent/15">
+              <span className="font-display text-sm font-bold leading-tight text-app-accent opacity-80">
+                {entry.comic_title
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((w) => w[0] || "")
+                  .join("")
+                  .toUpperCase()}
+              </span>
             </div>
-          </div>
-        </Link>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium hover:underline">{entry.comic_title}</p>
+              <p className="mt-1 truncate text-xs text-app-muted">{entry.chapter_title}</p>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-[10px] text-app-muted">{unixToLocale(entry.updated_at)}</span>
+                <WithTooltip
+                  label={
+                    bookmarkSet.has(entry.comic_source_path)
+                      ? t("library.removeBookmark")
+                      : t("library.addBookmark")
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleBookmark(entry.comic_source_path);
+                    }}
+                    aria-label={
+                      bookmarkSet.has(entry.comic_source_path)
+                        ? t("library.removeBookmark")
+                        : t("library.addBookmark")
+                    }
+                    className={`transition-colors ${
+                      bookmarkSet.has(entry.comic_source_path)
+                        ? "text-app-accent"
+                        : "text-app-muted hover:text-app-text"
+                    }`}
+                  >
+                    {bookmarkSet.has(entry.comic_source_path) ? (
+                      <BookmarkCheck size={16} />
+                    ) : (
+                      <Bookmark size={16} />
+                    )}
+                  </button>
+                </WithTooltip>
+              </div>
+            </div>
+          </Link>
+        </WithTooltip>
       );
     }
     return (
@@ -393,25 +413,38 @@ export function LibraryPage() {
           <span className="hidden text-xs text-app-muted sm:block">
             {unixToLocale(entry.updated_at)}
           </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              toggleBookmark(entry.comic_source_path);
-            }}
-            className={`transition-colors ${
+          <WithTooltip
+            label={
               bookmarkSet.has(entry.comic_source_path)
-                ? "text-app-accent"
-                : "text-app-muted hover:text-app-text"
-            }`}
+                ? t("library.removeBookmark")
+                : t("library.addBookmark")
+            }
           >
-            {bookmarkSet.has(entry.comic_source_path) ? (
-              <BookmarkCheck size={18} />
-            ) : (
-              <Bookmark size={18} />
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleBookmark(entry.comic_source_path);
+              }}
+              aria-label={
+                bookmarkSet.has(entry.comic_source_path)
+                  ? t("library.removeBookmark")
+                  : t("library.addBookmark")
+              }
+              className={`transition-colors ${
+                bookmarkSet.has(entry.comic_source_path)
+                  ? "text-app-accent"
+                  : "text-app-muted hover:text-app-text"
+              }`}
+            >
+              {bookmarkSet.has(entry.comic_source_path) ? (
+                <BookmarkCheck size={18} />
+              ) : (
+                <Bookmark size={18} />
+              )}
+            </button>
+          </WithTooltip>
         </div>
       </Link>
     );
@@ -421,7 +454,7 @@ export function LibraryPage() {
     if (displayMode === "grid") {
       return (
         <div
-          title={bm.comic_title || bm.comic_source_path}
+          aria-label={bm.comic_title || bm.comic_source_path}
           className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
           onContextMenu={(e) =>
             ctxMenu.show(
@@ -453,16 +486,19 @@ export function LibraryPage() {
             </Link>
             <div className="mt-1 flex items-center justify-between">
               <span className="text-[10px] text-app-muted">{unixToLocale(bm.created_at)}</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleBookmark(bm.comic_source_path);
-                }}
-                className="text-app-accent transition-colors hover:opacity-70"
-              >
-                <BookmarkCheck size={16} />
-              </button>
+              <WithTooltip label={t("library.removeBookmark")}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleBookmark(bm.comic_source_path);
+                  }}
+                  aria-label={t("library.removeBookmark")}
+                  className="text-app-accent transition-colors hover:opacity-70"
+                >
+                  <BookmarkCheck size={16} />
+                </button>
+              </WithTooltip>
             </div>
           </div>
         </div>
@@ -498,16 +534,19 @@ export function LibraryPage() {
           <span className="hidden text-xs text-app-muted sm:block">
             {unixToLocale(bm.created_at)}
           </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleBookmark(bm.comic_source_path);
-            }}
-            className="text-app-accent transition-colors hover:opacity-70"
-          >
-            <BookmarkCheck size={18} />
-          </button>
+          <WithTooltip label={t("library.removeBookmark")}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleBookmark(bm.comic_source_path);
+              }}
+              aria-label={t("library.removeBookmark")}
+              className="text-app-accent transition-colors hover:opacity-70"
+            >
+              <BookmarkCheck size={18} />
+            </button>
+          </WithTooltip>
         </div>
       </div>
     );
@@ -570,19 +609,21 @@ export function LibraryPage() {
               {t("library.bookmarks")}
             </button>
           </nav>
-          <button
-            type="button"
-            onClick={() => {
-              void comicsQuery.refetch();
-              void historyQuery.refetch();
-              void bookmarksQuery.refetch();
-              void comicsWithProgressQuery.refetch();
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
-            title={t("library.refresh")}
-          >
-            <RefreshCw size={14} />
-          </button>
+          <WithTooltip label={t("library.refresh")}>
+            <button
+              type="button"
+              onClick={() => {
+                void comicsQuery.refetch();
+                void historyQuery.refetch();
+                void bookmarksQuery.refetch();
+                void comicsWithProgressQuery.refetch();
+              }}
+              aria-label={t("library.refresh")}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </WithTooltip>
         </div>
       </div>
 
@@ -686,32 +727,34 @@ export function LibraryPage() {
             </Select>
           ) : null}
           <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-app-border bg-app-surface">
-            <button
-              type="button"
-              onClick={() => setDisplayMode("grid")}
-              aria-label="Grid"
-              title="Grid"
-              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
-                displayMode === "grid"
-                  ? "bg-app-accent/10 text-app-accent"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDisplayMode("list")}
-              aria-label="List"
-              title="List"
-              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
-                displayMode === "list"
-                  ? "bg-app-accent/10 text-app-accent"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              <List size={16} />
-            </button>
+            <WithTooltip label="Grid">
+              <button
+                type="button"
+                onClick={() => setDisplayMode("grid")}
+                aria-label="Grid"
+                className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
+                  displayMode === "grid"
+                    ? "bg-app-accent/10 text-app-accent"
+                    : "text-app-muted hover:text-app-text"
+                }`}
+              >
+                <LayoutGrid size={16} />
+              </button>
+            </WithTooltip>
+            <WithTooltip label="List">
+              <button
+                type="button"
+                onClick={() => setDisplayMode("list")}
+                aria-label="List"
+                className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
+                  displayMode === "list"
+                    ? "bg-app-accent/10 text-app-accent"
+                    : "text-app-muted hover:text-app-text"
+                }`}
+              >
+                <List size={16} />
+              </button>
+            </WithTooltip>
           </div>
         </div>
 

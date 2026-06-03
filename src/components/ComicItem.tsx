@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAppI18n } from "@/i18n";
 import { unixToLocale } from "@/lib/utils";
+import { WithTooltip } from "@/components/ui/tooltip";
 import { BookmarkBtn } from "./BookmarkBtn";
 import { SpineThumb } from "./SpineThumb";
 import type { RawComic } from "@/types";
@@ -23,28 +24,39 @@ function ReadingBadge({ label }: { label: string }) {
   );
 }
 
-function ComicItemImpl({ comic, variant, index, isBookmarked, isReading, onBookmark }: ComicItemProps) {
+function ComicItemImpl({
+  comic,
+  variant,
+  index,
+  isBookmarked,
+  isReading,
+  onBookmark,
+}: ComicItemProps) {
   const { t } = useAppI18n();
   if (variant === "grid") {
     return (
-      <Link
-        to="/comic/$comicId"
-        params={{ comicId: encodeURIComponent(comic.source_path) }}
-        title={comic.title}
-        className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
-      >
-        <SpineThumb title={comic.title} index={index} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium hover:underline">{comic.title}</p>
-          <div className="mt-1 flex items-center justify-between">
-            <span className="text-[10px] text-app-muted">{unixToLocale(comic.date_modified)}</span>
-            <div className="flex items-center gap-1">
-              {isReading && <ReadingBadge label={t("comic.badge.reading")} />}
-              <BookmarkBtn isBookmarked={isBookmarked} onToggle={onBookmark} />
+      <WithTooltip label={comic.title}>
+        <Link
+          to="/comic/$comicId"
+          params={{ comicId: encodeURIComponent(comic.source_path) }}
+          aria-label={comic.title}
+          className="flex cursor-pointer items-start gap-2.5 border-b border-r border-app-border bg-app-surface p-3 transition-colors hover:bg-app-bg"
+        >
+          <SpineThumb title={comic.title} index={index} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium hover:underline">{comic.title}</p>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-[10px] text-app-muted">
+                {unixToLocale(comic.date_modified)}
+              </span>
+              <div className="flex items-center gap-1">
+                {isReading && <ReadingBadge label={t("comic.badge.reading")} />}
+                <BookmarkBtn isBookmarked={isBookmarked} onToggle={onBookmark} />
+              </div>
             </div>
           </div>
-        </div>
-      </Link>
+        </Link>
+      </WithTooltip>
     );
   }
 

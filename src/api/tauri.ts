@@ -82,6 +82,16 @@ export async function getChapterPages(chapterId: number) {
   return invoke<PageInfo[]>("get_chapter_pages", { chapterId });
 }
 
+export async function prefetchPageVariants(payload: {
+  chapter_id: number;
+  start_page: number;
+  end_page: number;
+  target_width: number;
+  profile?: string;
+}) {
+  return invoke("prefetch_page_variants", { payload });
+}
+
 export async function saveProgress(payload: {
   chapter_id: number;
   last_page: number;

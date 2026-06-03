@@ -5,6 +5,7 @@ export const enMessages = {
 
   "common.retry": "Retry",
   "common.refresh": "Refresh",
+  "common.close": "Close",
   "common.search": "Search",
   "common.name": "Name",
   "common.asc": "Asc",
@@ -91,6 +92,10 @@ export const enMessages = {
   "settings.webtoon": "Webtoon",
   "settings.defaultZoom": "Default Zoom",
   "settings.pageGap": "Page Margin / Gap",
+  "settings.imagePipelineProfile": "Image Pipeline",
+  "settings.imagePipelineProfile.performance": "Performance",
+  "settings.imagePipelineProfile.balanced": "Balanced",
+  "settings.imagePipelineProfile.quality": "Quality",
   "settings.saveSettings": "Save Settings",
   "settings.appearance.title": "Appearance",
   "settings.theme": "Theme",

@@ -5,6 +5,7 @@ export const idMessages = {
 
   "common.retry": "Coba lagi",
   "common.refresh": "Muat ulang",
+  "common.close": "Tutup",
   "common.search": "Cari",
   "common.name": "Nama",
   "common.asc": "A-Z",
@@ -28,8 +29,7 @@ export const idMessages = {
   "library.readError.title": "Gagal membaca folder library",
   "library.readError.description": "Pastikan path folder valid dan bisa diakses.",
   "library.emptyFilter.title": "Tidak ada komik yang cocok",
-  "library.emptyFilter.description":
-    "Ubah pencarian atau filter, atau periksa isi folder library.",
+  "library.emptyFilter.description": "Ubah pencarian atau filter, atau periksa isi folder library.",
   "library.modified": "Diubah: {value}",
   "library.groupCount": "{count} komik",
   "library.noComicsInFolder": "Tidak ada komik di folder ini.",
@@ -91,6 +91,10 @@ export const idMessages = {
   "settings.webtoon": "Webtoon",
   "settings.defaultZoom": "Zoom Default",
   "settings.pageGap": "Jarak Antar Halaman",
+  "settings.imagePipelineProfile": "Pipeline Gambar",
+  "settings.imagePipelineProfile.performance": "Performa",
+  "settings.imagePipelineProfile.balanced": "Seimbang",
+  "settings.imagePipelineProfile.quality": "Kualitas",
   "settings.saveSettings": "Simpan Pengaturan",
   "settings.appearance.title": "Tampilan",
   "settings.theme": "Tema",
@@ -99,8 +103,7 @@ export const idMessages = {
   "settings.language.indonesian": "Indonesia",
   "settings.saveAppearance": "Simpan Tampilan",
   "settings.backup.title": "Backup Database",
-  "settings.backup.description":
-    "Export/import semua riwayat baca, bookmark, dan pengaturan.",
+  "settings.backup.description": "Export/import semua riwayat baca, bookmark, dan pengaturan.",
   "settings.exportBackup": "Export Backup",
   "settings.importBackup": "Import Backup",
   "settings.loadError.title": "Gagal memuat pengaturan",

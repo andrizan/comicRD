@@ -20,13 +20,23 @@ import {
   getChapterPages,
   getProgress,
   listSettings,
+  prefetchPageVariants,
   saveProgress,
   setSetting,
 } from "@/api/tauri";
 import { ErrorState, SkeletonList } from "@/components/feedback/states";
 import { Button } from "@/components/ui/button";
+import { WithTooltip } from "@/components/ui/tooltip";
 import { useAppI18n } from "@/i18n";
-import { comicPageSrc } from "@/lib/comic-protocol";
+import { comicPagePreviewSrc, comicPageSrc } from "@/lib/comic-protocol";
+import {
+  computePrefetchRange,
+  DEFAULT_IMAGE_PIPELINE_PROFILE,
+  DEFAULT_READER_IMAGE_WIDTH,
+  parseImagePipelineProfile,
+  targetReaderImageWidth,
+  type ScrollDirection,
+} from "@/lib/reader-image-policy";
 import { buildProgressPayload } from "@/lib/reader-progress";
 
 function parseSettingMap(entries: { key: string; value_json: string }[]) {
@@ -59,7 +69,8 @@ const READER_REVEAL_BUTTON_CLASS =
 const READER_PAGE_FRAME_CLASS =
   "mx-auto w-full transition-[max-width] duration-200 ease-out motion-reduce:transition-none";
 
-const READER_PAGE_WINDOW = 3;
+const READER_PAGE_WINDOW = 1;
+const IMAGE_PREFETCH_DELAY_MS = 160;
 const DEFAULT_PAGE_PLACEHOLDER_ASPECT_RATIO = "2 / 3";
 
 function PageImage({
@@ -67,6 +78,9 @@ function PageImage({
   pageIndex,
   zoom,
   aspectRatio,
+  targetWidth,
+  profile,
+  active,
   loading,
   onDimensions,
 }: {
@@ -74,19 +88,39 @@ function PageImage({
   pageIndex: number;
   zoom: number;
   aspectRatio: string | undefined;
+  targetWidth: number;
+  profile: string;
+  active: boolean;
   loading: "eager" | "lazy";
   onDimensions: (pageIndex: number, width: number, height: number) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const pageSrc = comicPageSrc(chapterId, pageIndex, { targetWidth, profile });
+  const previewSrc = comicPagePreviewSrc(chapterId, pageIndex);
+  const placeholderAspectRatio = aspectRatio ?? DEFAULT_PAGE_PLACEHOLDER_ASPECT_RATIO;
 
   useEffect(() => {
     setLoaded(false);
     setFailed(false);
-  }, [chapterId, pageIndex]);
+  }, [pageSrc]);
 
-  const pageSrc = comicPageSrc(chapterId, pageIndex);
-  const placeholderAspectRatio = aspectRatio ?? DEFAULT_PAGE_PLACEHOLDER_ASPECT_RATIO;
+  if (!active) {
+    return (
+      <div
+        className={READER_PAGE_FRAME_CLASS}
+        style={{
+          maxWidth: `${Math.round(980 * zoom)}px`,
+        }}
+      >
+        <div
+          className="w-full bg-white/5"
+          style={{ aspectRatio: placeholderAspectRatio }}
+          data-reader-page-placeholder={pageIndex}
+        />
+      </div>
+    );
+  }
 
   if (!loaded || failed) {
     return (
@@ -98,7 +132,13 @@ function PageImage({
       >
         <div
           className="relative w-full bg-white/5"
-          style={{ aspectRatio: placeholderAspectRatio }}
+          style={{
+            aspectRatio: placeholderAspectRatio,
+            backgroundImage: failed ? undefined : `url("${previewSrc}")`,
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "contain",
+          }}
           data-reader-page-loading={pageIndex}
         >
           {failed ? (
@@ -186,13 +226,19 @@ export function ReaderPage() {
   const settingMap = useMemo(() => parseSettingMap(settingsQuery.data ?? []), [settingsQuery.data]);
   const defaultZoom = parseJsonOr<number>(settingMap.get("default_zoom"), 1);
   const defaultPageGap = normalizePageGap(parseJsonOr<number>(settingMap.get("page_gap"), 10));
+  const imagePipelineProfile = parseImagePipelineProfile(
+    parseJsonOr<string>(settingMap.get("image_pipeline_profile"), DEFAULT_IMAGE_PIPELINE_PROFILE),
+  );
 
   const totalPages = pagesQuery.data?.length ?? 0;
   const [currentPage, setCurrentPage] = useState(0);
   const currentPageRef = useRef(0);
+  const scrollDirectionRef = useRef<ScrollDirection>("forward");
   const [zoom, setZoom] = useState(defaultZoom);
   const [pageGap, setPageGap] = useState(defaultPageGap);
   const [pageAspectRatios, setPageAspectRatios] = useState<Record<number, string>>({});
+  const [imageTargetWidth, setImageTargetWidth] = useState(DEFAULT_READER_IMAGE_WIDTH);
+  const [readerReady, setReaderReady] = useState(false);
 
   const rememberPageAspectRatio = (pageIndex: number, width: number, height: number) => {
     const aspectRatio = imageAspectRatio(width, height);
@@ -284,6 +330,11 @@ export function ReaderPage() {
 
   const syncCurrentPage = (nextPage: number) => {
     const clampedPage = clampPage(nextPage);
+    if (clampedPage > currentPageRef.current) {
+      scrollDirectionRef.current = "forward";
+    } else if (clampedPage < currentPageRef.current) {
+      scrollDirectionRef.current = "backward";
+    }
     currentPageRef.current = clampedPage;
     setCurrentPage((prev) => (prev === clampedPage ? prev : clampedPage));
     return clampedPage;
@@ -294,22 +345,6 @@ export function ReaderPage() {
     const timer = window.setTimeout(() => persistProgressDebounced(currentPage), 900);
     return () => window.clearTimeout(timer);
   }, [currentPage, totalPages]);
-
-  useEffect(() => {
-    if (totalPages <= 1) return;
-    const ahead = currentPage + READER_PAGE_WINDOW;
-    const behind = currentPage - READER_PAGE_WINDOW;
-    for (let idx = ahead + 1; idx <= Math.min(totalPages - 1, ahead + 3); idx++) {
-      const image = new Image();
-      image.onload = () => rememberPageAspectRatio(idx, image.naturalWidth, image.naturalHeight);
-      image.src = comicPageSrc(chapterIdNum, idx);
-    }
-    for (let idx = behind - 1; idx >= Math.max(0, behind - 3); idx--) {
-      const image = new Image();
-      image.onload = () => rememberPageAspectRatio(idx, image.naturalWidth, image.naturalHeight);
-      image.src = comicPageSrc(chapterIdNum, idx);
-    }
-  }, [chapterIdNum, currentPage, totalPages]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
@@ -326,6 +361,7 @@ export function ReaderPage() {
     lastWebtoonPageSyncTsRef.current = 0;
     currentPageRef.current = 0;
     setPageAspectRatios({});
+    setReaderReady(false);
     setCurrentPage(0);
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
@@ -345,9 +381,11 @@ export function ReaderPage() {
           if (scrollRef.current) {
             scrollRef.current.scrollTop = 0;
           }
+          setReaderReady(true);
           return;
         }
         pageRefs.current.get(target)?.scrollIntoView({ block: "start" });
+        setReaderReady(true);
       });
     }
   }, [
@@ -424,6 +462,43 @@ export function ReaderPage() {
       root.scrollTop = scrollTop;
     });
   }, [pageGap, zoom]);
+
+  useEffect(() => {
+    const updateImageTargetWidth = () => {
+      const width = targetReaderImageWidth(
+        scrollRef.current?.clientWidth ?? window.innerWidth,
+        zoom,
+        window.devicePixelRatio,
+        imagePipelineProfile,
+      );
+      setImageTargetWidth((prev) => (prev === width ? prev : width));
+    };
+    updateImageTargetWidth();
+    window.addEventListener("resize", updateImageTargetWidth);
+    return () => window.removeEventListener("resize", updateImageTargetWidth);
+  }, [imagePipelineProfile, zoom]);
+
+  useEffect(() => {
+    if (!readerReady || totalPages <= 1) return;
+    const timer = window.setTimeout(() => {
+      const { startPage, endPage } = computePrefetchRange(
+        currentPage,
+        totalPages,
+        scrollDirectionRef.current,
+        imagePipelineProfile,
+      );
+      void prefetchPageVariants({
+        chapter_id: chapterIdNum,
+        start_page: startPage,
+        end_page: endPage,
+        target_width: imageTargetWidth,
+        profile: imagePipelineProfile,
+      });
+    }, IMAGE_PREFETCH_DELAY_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [chapterIdNum, currentPage, imagePipelineProfile, imageTargetWidth, readerReady, totalPages]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toolbarVisible, setToolbarVisible] = useState(true);
@@ -525,14 +600,16 @@ export function ReaderPage() {
       <section className="min-h-[100dvh] bg-[#0f1115] text-[#f4f4f5]">
         <div className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#151922]/60 px-3 py-2 backdrop-blur-md">
           <div className="mx-auto flex max-w-[1400px] items-center gap-3">
-            <Button
-              variant="outline"
-              className={READER_OUTLINE_BUTTON_CLASS}
-              title={t("reader.close")}
-              onClick={() => void closeReader()}
-            >
-              <X size={14} />
-            </Button>
+            <WithTooltip label={t("reader.close")}>
+              <Button
+                variant="outline"
+                className={READER_OUTLINE_BUTTON_CLASS}
+                aria-label={t("reader.close")}
+                onClick={() => void closeReader()}
+              >
+                <X size={14} />
+              </Button>
+            </WithTooltip>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">
                 {chapterContextQuery.data?.comic_title ?? t("reader.comicFallback")}
@@ -561,14 +638,16 @@ export function ReaderPage() {
           }`}
         >
           <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              className={READER_OUTLINE_BUTTON_CLASS}
-              title={t("reader.close")}
-              onClick={() => void closeReader()}
-            >
-              <X size={14} />
-            </Button>
+            <WithTooltip label={t("reader.close")}>
+              <Button
+                variant="outline"
+                className={READER_OUTLINE_BUTTON_CLASS}
+                aria-label={t("reader.close")}
+                onClick={() => void closeReader()}
+              >
+                <X size={14} />
+              </Button>
+            </WithTooltip>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">
                 {chapterContextQuery.data?.comic_title ?? t("reader.comicFallback")}
@@ -582,140 +661,192 @@ export function ReaderPage() {
               </p>
             </div>
             <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={t("reader.decreaseGap")}
-                onClick={() => setPageGap((value) => Math.max(0, value - 10))}
-              >
-                <Minimize2 size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={t("reader.increaseGap")}
-                onClick={() => setPageGap((value) => Math.min(100, value + 10))}
-              >
-                <Maximize2 size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={
+              <WithTooltip label={t("reader.decreaseGap")}>
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={t("reader.decreaseGap")}
+                  onClick={() => setPageGap((value) => Math.max(0, value - 10))}
+                >
+                  <Minimize2 size={14} />
+                </Button>
+              </WithTooltip>
+              <WithTooltip label={t("reader.increaseGap")}>
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={t("reader.increaseGap")}
+                  onClick={() => setPageGap((value) => Math.min(100, value + 10))}
+                >
+                  <Maximize2 size={14} />
+                </Button>
+              </WithTooltip>
+              <WithTooltip
+                label={
                   currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id
                     ? t("reader.prevChapter")
                     : t("reader.prevPage")
                 }
-                onClick={() => {
-                  if (currentPageRef.current <= 0 && chapterContextQuery.data?.prev_chapter_id) {
-                    void goToChapter(chapterContextQuery.data.prev_chapter_id);
-                    return;
-                  }
-                  goToPage(currentPageRef.current - 1);
-                }}
               >
-                <ChevronLeft size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={
+                    currentPage <= 0 && chapterContextQuery.data?.prev_chapter_id
+                      ? t("reader.prevChapter")
+                      : t("reader.prevPage")
+                  }
+                  onClick={() => {
+                    if (currentPageRef.current <= 0 && chapterContextQuery.data?.prev_chapter_id) {
+                      void goToChapter(chapterContextQuery.data.prev_chapter_id);
+                      return;
+                    }
+                    goToPage(currentPageRef.current - 1);
+                  }}
+                >
+                  <ChevronLeft size={14} />
+                </Button>
+              </WithTooltip>
+              <WithTooltip
+                label={
                   currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id
                     ? t("reader.nextChapter")
                     : t("reader.nextPage")
                 }
-                onClick={() => {
-                  if (
-                    currentPageRef.current >= totalPages - 1 &&
-                    chapterContextQuery.data?.next_chapter_id
-                  ) {
-                    void goToChapter(chapterContextQuery.data.next_chapter_id);
-                    return;
-                  }
-                  goToPage(currentPageRef.current + 1);
-                }}
               >
-                <ChevronRight size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={
+                    currentPage >= totalPages - 1 && chapterContextQuery.data?.next_chapter_id
+                      ? t("reader.nextChapter")
+                      : t("reader.nextPage")
+                  }
+                  onClick={() => {
+                    if (
+                      currentPageRef.current >= totalPages - 1 &&
+                      chapterContextQuery.data?.next_chapter_id
+                    ) {
+                      void goToChapter(chapterContextQuery.data.next_chapter_id);
+                      return;
+                    }
+                    goToPage(currentPageRef.current + 1);
+                  }}
+                >
+                  <ChevronRight size={14} />
+                </Button>
+              </WithTooltip>
+              <WithTooltip
+                label={
                   chapterContextQuery.data?.prev_chapter_title
                     ? t("reader.prevChapterTitle", {
                         title: chapterContextQuery.data.prev_chapter_title,
                       })
                     : t("reader.prevChapter")
                 }
-                disabled={chapterContextQuery.data?.prev_chapter_id == null}
-                onClick={() => {
-                  const prevId = chapterContextQuery.data?.prev_chapter_id;
-                  if (prevId == null) return;
-                  void goToChapter(prevId);
-                }}
               >
-                <SkipBack size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={
+                <span className="inline-flex">
+                  <Button
+                    variant="outline"
+                    className={READER_TOOLBAR_BUTTON_CLASS}
+                    aria-label={
+                      chapterContextQuery.data?.prev_chapter_title
+                        ? t("reader.prevChapterTitle", {
+                            title: chapterContextQuery.data.prev_chapter_title,
+                          })
+                        : t("reader.prevChapter")
+                    }
+                    disabled={chapterContextQuery.data?.prev_chapter_id == null}
+                    onClick={() => {
+                      const prevId = chapterContextQuery.data?.prev_chapter_id;
+                      if (prevId == null) return;
+                      void goToChapter(prevId);
+                    }}
+                  >
+                    <SkipBack size={14} />
+                  </Button>
+                </span>
+              </WithTooltip>
+              <WithTooltip
+                label={
                   chapterContextQuery.data?.next_chapter_title
                     ? t("reader.nextChapterTitle", {
                         title: chapterContextQuery.data.next_chapter_title,
                       })
                     : t("reader.nextChapter")
                 }
-                disabled={chapterContextQuery.data?.next_chapter_id == null}
-                onClick={() => {
-                  const nextId = chapterContextQuery.data?.next_chapter_id;
-                  if (nextId == null) return;
-                  void goToChapter(nextId);
-                }}
               >
-                <SkipForward size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={t("reader.zoomOut")}
-                onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
-              >
-                <ZoomOut size={14} />
-              </Button>
+                <span className="inline-flex">
+                  <Button
+                    variant="outline"
+                    className={READER_TOOLBAR_BUTTON_CLASS}
+                    aria-label={
+                      chapterContextQuery.data?.next_chapter_title
+                        ? t("reader.nextChapterTitle", {
+                            title: chapterContextQuery.data.next_chapter_title,
+                          })
+                        : t("reader.nextChapter")
+                    }
+                    disabled={chapterContextQuery.data?.next_chapter_id == null}
+                    onClick={() => {
+                      const nextId = chapterContextQuery.data?.next_chapter_id;
+                      if (nextId == null) return;
+                      void goToChapter(nextId);
+                    }}
+                  >
+                    <SkipForward size={14} />
+                  </Button>
+                </span>
+              </WithTooltip>
+              <WithTooltip label={t("reader.zoomOut")}>
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={t("reader.zoomOut")}
+                  onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
+                >
+                  <ZoomOut size={14} />
+                </Button>
+              </WithTooltip>
               <span className="w-12 text-center text-xs font-semibold">
                 {Math.round(zoom * 100)}%
               </span>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={t("reader.zoomIn")}
-                onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
-              >
-                <ZoomIn size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={t("reader.resetZoom")}
-                onClick={() => setZoom(1)}
-              >
-                <Shrink size={14} />
-              </Button>
-              <Button
-                variant="outline"
-                className={READER_TOOLBAR_BUTTON_CLASS}
-                title={t("reader.fullscreen")}
-                onClick={() => {
-                  if (document.fullscreenElement) {
-                    void document.exitFullscreen();
-                    return;
-                  }
-                  void document.documentElement.requestFullscreen();
-                }}
-              >
-                <Fullscreen size={14} className={isFullscreen ? "text-app-accent" : ""} />
-              </Button>
+              <WithTooltip label={t("reader.zoomIn")}>
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={t("reader.zoomIn")}
+                  onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
+                >
+                  <ZoomIn size={14} />
+                </Button>
+              </WithTooltip>
+              <WithTooltip label={t("reader.resetZoom")}>
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={t("reader.resetZoom")}
+                  onClick={() => setZoom(1)}
+                >
+                  <Shrink size={14} />
+                </Button>
+              </WithTooltip>
+              <WithTooltip label={t("reader.fullscreen")}>
+                <Button
+                  variant="outline"
+                  className={READER_TOOLBAR_BUTTON_CLASS}
+                  aria-label={t("reader.fullscreen")}
+                  onClick={() => {
+                    if (document.fullscreenElement) {
+                      void document.exitFullscreen();
+                      return;
+                    }
+                    void document.documentElement.requestFullscreen();
+                  }}
+                >
+                  <Fullscreen size={14} className={isFullscreen ? "text-app-accent" : ""} />
+                </Button>
+              </WithTooltip>
               <span className="w-10 text-center text-xs font-semibold text-white/80">
                 {pageGap}px
               </span>
@@ -724,17 +855,19 @@ export function ReaderPage() {
         </div>
       </div>
 
-      <button
-        type="button"
-        className={`${READER_REVEAL_BUTTON_CLASS} ${
-          toolbarVisible ? "pointer-events-none opacity-0" : "opacity-100"
-        }`}
-        title={t("reader.showToolbar")}
-        onMouseEnter={showToolbar}
-        onClick={showToolbar}
-      >
-        <Settings size={16} />
-      </button>
+      <WithTooltip label={t("reader.showToolbar")}>
+        <button
+          type="button"
+          className={`${READER_REVEAL_BUTTON_CLASS} ${
+            toolbarVisible ? "pointer-events-none opacity-0" : "opacity-100"
+          }`}
+          aria-label={t("reader.showToolbar")}
+          onMouseEnter={showToolbar}
+          onClick={showToolbar}
+        >
+          <Settings size={16} />
+        </button>
+      </WithTooltip>
 
       <div className="h-full bg-black">
         <div
@@ -746,6 +879,11 @@ export function ReaderPage() {
         >
           <div className="w-full">
             {Array.from({ length: totalPages }).map((_, index) => {
+              const pageInfo = pagesQuery.data?.[index];
+              const metadataAspectRatio = imageAspectRatio(
+                pageInfo?.width ?? 0,
+                pageInfo?.height ?? 0,
+              );
               const isNear =
                 index >= currentPage - READER_PAGE_WINDOW &&
                 index <= currentPage + READER_PAGE_WINDOW;
@@ -769,7 +907,10 @@ export function ReaderPage() {
                     chapterId={chapterIdNum}
                     pageIndex={index}
                     zoom={zoom}
-                    aspectRatio={pageAspectRatios[index]}
+                    aspectRatio={pageAspectRatios[index] ?? metadataAspectRatio}
+                    targetWidth={imageTargetWidth}
+                    profile={imagePipelineProfile}
+                    active={readerReady && isNear}
                     loading={isNear ? "eager" : "lazy"}
                     onDimensions={rememberPageAspectRatio}
                   />
@@ -794,17 +935,18 @@ export function ReaderPage() {
             </span>
             <div className="flex flex-1 items-center gap-0.5 group-hover:gap-1">
               {Array.from({ length: segmentCount }).map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  title={t("reader.pageTitle", { page: idx + 1 })}
-                  className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
-                    idx <= activeSegment ? "bg-app-accent" : "bg-white/20"
-                  }`}
-                  onClick={() => {
-                    goToPage(idx);
-                  }}
-                />
+                <WithTooltip key={idx} label={t("reader.pageTitle", { page: idx + 1 })}>
+                  <button
+                    type="button"
+                    aria-label={t("reader.pageTitle", { page: idx + 1 })}
+                    className={`h-1 flex-1 rounded-sm transition-all duration-150 group-hover:h-3 ${
+                      idx <= activeSegment ? "bg-app-accent" : "bg-white/20"
+                    }`}
+                    onClick={() => {
+                      goToPage(idx);
+                    }}
+                  />
+                </WithTooltip>
               ))}
             </div>
             <span className="w-0 overflow-hidden text-right text-sm text-white opacity-0 transition-all duration-150 group-hover:w-8 group-hover:opacity-100">

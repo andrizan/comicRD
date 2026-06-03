@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { I18nProvider } from "@lingui/react";
 import { AppErrorBoundary } from "./components/feedback/app-error-boundary";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { i18n } from "./i18n";
 import { router } from "./router";
 import "./index.css";
@@ -22,9 +23,11 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <I18nProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>
-        <AppErrorBoundary>
-          <RouterProvider router={router} />
-        </AppErrorBoundary>
+        <TooltipProvider delay={500} closeDelay={80}>
+          <AppErrorBoundary>
+            <RouterProvider router={router} />
+          </AppErrorBoundary>
+        </TooltipProvider>
       </QueryClientProvider>
     </I18nProvider>
   </StrictMode>,

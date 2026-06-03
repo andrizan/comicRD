@@ -19,11 +19,13 @@ import {
   listComicChaptersRaw,
   openChapterForReading,
   openContainingFolder,
+  prefetchPageVariants,
   removeChapterFavorite,
 } from "@/api/tauri";
 import { EmptyState, ErrorState, SkeletonList } from "@/components/feedback/states";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "@/components/ui/context-menu";
 import { ScrollToTop } from "@/components/ui/scroll-to-top";
+import { WithTooltip } from "@/components/ui/tooltip";
 import { VirtualList, type VirtualListHandle } from "@/components/ui/virtual-list";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
@@ -34,6 +36,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { t as translate, useAppI18n } from "@/i18n";
+import {
+  DEFAULT_IMAGE_PIPELINE_PROFILE,
+  DEFAULT_READER_IMAGE_WIDTH,
+} from "@/lib/reader-image-policy";
 import { useChapterSort, useLibraryPreferences } from "@/stores/libraryStore";
 import { setScrollKey, restoreScroll, scrollPositions } from "@/routes/Layout";
 import type { RawChapter, SortBy, SortDir } from "@/types";
@@ -177,7 +183,14 @@ export function ComicPage() {
       return chapterSortDir === "desc" ? -order : order;
     });
     return filtered;
-  }, [chapterSortBy, chapterSortDir, chaptersQuery.data, searchText, showFavoritesOnly, favoriteSet]);
+  }, [
+    chapterSortBy,
+    chapterSortDir,
+    chaptersQuery.data,
+    searchText,
+    showFavoritesOnly,
+    favoriteSet,
+  ]);
   const totalChapters = chaptersQuery.data?.length ?? 0;
 
   async function onOpenChapter(chapterSourcePath: string) {
@@ -185,6 +198,21 @@ export function ComicPage() {
     const chapterId = await openChapterMutation.mutateAsync({
       comic_source_path: comicSourcePath,
       chapter_source_path: chapterSourcePath,
+    });
+    const selectedChapter = chaptersQuery.data?.find(
+      (chapter) => chapter.source_path === chapterSourcePath,
+    );
+    const warmStartPage = Math.max(0, selectedChapter?.last_page ?? 0);
+    const warmEndPage =
+      selectedChapter?.page_count && selectedChapter.page_count > 0
+        ? Math.min(selectedChapter.page_count - 1, warmStartPage + 4)
+        : warmStartPage + 4;
+    void prefetchPageVariants({
+      chapter_id: chapterId,
+      start_page: warmStartPage,
+      end_page: warmEndPage,
+      target_width: DEFAULT_READER_IMAGE_WIDTH,
+      profile: DEFAULT_IMAGE_PIPELINE_PROFILE,
     });
     navigate({
       to: "/reader/$chapterId",
@@ -257,7 +285,7 @@ export function ComicPage() {
         <div
           role="button"
           tabIndex={0}
-          title={chapter.title}
+          aria-label={chapter.title}
           onClick={() => void onOpenChapter(chapter.source_path)}
           onContextMenu={(e) => ctxMenu.show(e, chapterContextItems(chapter))}
           onKeyDown={(e) => {
@@ -289,19 +317,22 @@ export function ComicPage() {
                 >
                   {chapterStatusLabel(chapter)}
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleFavorite(chapter.source_path);
-                  }}
-                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
-                    isFav ? "text-red-400" : "text-app-muted hover:text-red-400"
-                  }`}
-                >
-                  <Heart size={18} fill={isFav ? "currentColor" : "none"} />
-                </button>
+                <WithTooltip label={isFav ? t("comic.removeFavorite") : t("comic.addFavorite")}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleFavorite(chapter.source_path);
+                    }}
+                    aria-label={isFav ? t("comic.removeFavorite") : t("comic.addFavorite")}
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
+                      isFav ? "text-red-400" : "text-app-muted hover:text-red-400"
+                    }`}
+                  >
+                    <Heart size={18} fill={isFav ? "currentColor" : "none"} />
+                  </button>
+                </WithTooltip>
               </div>
             </div>
           </div>
@@ -338,20 +369,22 @@ export function ComicPage() {
             >
               {chapterStatusLabel(chapter)}
             </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleFavorite(chapter.source_path);
-              }}
-              className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
-                isFav ? "text-red-400" : "text-app-muted hover:bg-app-bg hover:text-red-400"
-              }`}
-              title={isFav ? t("comic.removeFavorite") : t("comic.addFavorite")}
-            >
-              <Heart size={18} fill={isFav ? "currentColor" : "none"} />
-            </button>
+            <WithTooltip label={isFav ? t("comic.removeFavorite") : t("comic.addFavorite")}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleFavorite(chapter.source_path);
+                }}
+                aria-label={isFav ? t("comic.removeFavorite") : t("comic.addFavorite")}
+                className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
+                  isFav ? "text-red-400" : "text-app-muted hover:bg-app-bg hover:text-red-400"
+                }`}
+              >
+                <Heart size={18} fill={isFav ? "currentColor" : "none"} />
+              </button>
+            </WithTooltip>
           </div>
           <p className="mt-0.5 text-xs text-app-muted">
             {chapter.page_count
@@ -368,13 +401,16 @@ export function ComicPage() {
       {/* Header */}
       <div className="border-b border-app-border bg-app-surface">
         <div className="flex items-center gap-3 px-5 py-3">
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/" })}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
-          >
-            <ArrowLeft size={18} />
-          </button>
+          <WithTooltip label={t("nav.library")}>
+            <button
+              type="button"
+              onClick={() => navigate({ to: "/" })}
+              aria-label={t("nav.library")}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          </WithTooltip>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-bold">{comicTitle}</h2>
             <p className="truncate text-[10px] text-app-muted">{comicSourcePath}</p>
@@ -382,18 +418,22 @@ export function ComicPage() {
           <span className="shrink-0 rounded-full border border-app-border bg-app-bg px-2.5 py-1 text-[11px] font-semibold text-app-muted">
             {t("comic.chapters", { count: totalChapters })}
           </span>
-          <button
-            type="button"
-            onClick={() => void chaptersQuery.refetch()}
-            disabled={chaptersQuery.isFetching}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text"
-            title={t("comic.refreshChapters")}
-          >
-            <RefreshCw
-              size={14}
-              className={chaptersQuery.isFetching ? "animate-spin" : undefined}
-            />
-          </button>
+          <WithTooltip label={t("comic.refreshChapters")}>
+            <span className="inline-flex">
+              <button
+                type="button"
+                onClick={() => void chaptersQuery.refetch()}
+                disabled={chaptersQuery.isFetching}
+                aria-label={t("comic.refreshChapters")}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-app-muted transition-all hover:bg-app-bg hover:text-app-text disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={14}
+                  className={chaptersQuery.isFetching ? "animate-spin" : undefined}
+                />
+              </button>
+            </span>
+          </WithTooltip>
         </div>
       </div>
 
@@ -442,45 +482,49 @@ export function ComicPage() {
               <SelectItem value="desc">{t("common.desc")}</SelectItem>
             </SelectContent>
           </Select>
-          <button
-            type="button"
-            onClick={() => setShowFavoritesOnly((v) => !v)}
-            className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-all ${
-              showFavoritesOnly
-                ? "border-red-400/30 bg-red-500/10 text-red-400"
-                : "border-app-border bg-app-surface text-app-muted hover:text-red-400"
-            }`}
-            title={t("comic.showFavorites")}
-          >
-            <Heart size={16} fill={showFavoritesOnly ? "currentColor" : "none"} />
-          </button>
+          <WithTooltip label={t("comic.showFavorites")}>
+            <button
+              type="button"
+              onClick={() => setShowFavoritesOnly((v) => !v)}
+              aria-label={t("comic.showFavorites")}
+              className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-all ${
+                showFavoritesOnly
+                  ? "border-red-400/30 bg-red-500/10 text-red-400"
+                  : "border-app-border bg-app-surface text-app-muted hover:text-red-400"
+              }`}
+            >
+              <Heart size={16} fill={showFavoritesOnly ? "currentColor" : "none"} />
+            </button>
+          </WithTooltip>
           <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-app-border bg-app-surface">
-            <button
-              type="button"
-              onClick={() => setDisplayMode("grid")}
-              aria-label="Grid"
-              title="Grid"
-              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
-                displayMode === "grid"
-                  ? "bg-app-accent/10 text-app-accent"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDisplayMode("list")}
-              aria-label="List"
-              title="List"
-              className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
-                displayMode === "list"
-                  ? "bg-app-accent/10 text-app-accent"
-                  : "text-app-muted hover:text-app-text"
-              }`}
-            >
-              <List size={16} />
-            </button>
+            <WithTooltip label="Grid">
+              <button
+                type="button"
+                onClick={() => setDisplayMode("grid")}
+                aria-label="Grid"
+                className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
+                  displayMode === "grid"
+                    ? "bg-app-accent/10 text-app-accent"
+                    : "text-app-muted hover:text-app-text"
+                }`}
+              >
+                <LayoutGrid size={16} />
+              </button>
+            </WithTooltip>
+            <WithTooltip label="List">
+              <button
+                type="button"
+                onClick={() => setDisplayMode("list")}
+                aria-label="List"
+                className={`flex h-10 w-10 items-center justify-center text-sm transition-all ${
+                  displayMode === "list"
+                    ? "bg-app-accent/10 text-app-accent"
+                    : "text-app-muted hover:text-app-text"
+                }`}
+              >
+                <List size={16} />
+              </button>
+            </WithTooltip>
           </div>
         </div>
 

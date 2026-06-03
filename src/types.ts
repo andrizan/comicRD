@@ -62,6 +62,8 @@ export type RawChapter = {
 export type PageInfo = {
   index: number;
   name: string;
+  width?: number | null;
+  height?: number | null;
 };
 
 export type Bookmark = {

@@ -1,8 +1,8 @@
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 use std::fs;
-use std::io::Read;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Condvar, LazyLock, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -192,13 +192,93 @@ struct ChapterArchive {
     archive: Mutex<ZipArchive<std::fs::File>>,
 }
 
-const PAGE_BYTES_CACHE_CAP: usize = 512;
+const PAGE_BYTES_CACHE_CAP: usize = 32;
+const PAGE_VARIANT_CACHE_CAP: usize = 128;
+const PAGE_VARIANT_CACHE_BYTE_BUDGET: usize = 192 * 1024 * 1024;
+const MAX_VARIANT_WIDTH: u32 = 4096;
+const MIN_VARIANT_WIDTH: u32 = 320;
 
 type CachedPageBytes = (Arc<Vec<u8>>, &'static str);
+type PageVariantKey = (i64, usize, u32, u8);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ImageVariantProfile {
+    Performance,
+    Balanced,
+    Quality,
+}
+
+impl ImageVariantProfile {
+    fn from_raw(value: Option<&str>) -> Self {
+        match value {
+            Some("performance") => Self::Performance,
+            Some("quality") => Self::Quality,
+            _ => Self::Balanced,
+        }
+    }
+
+    fn code(self) -> u8 {
+        match self {
+            Self::Performance => 1,
+            Self::Balanced => 2,
+            Self::Quality => 3,
+        }
+    }
+
+    fn jpeg_quality(self) -> u8 {
+        match self {
+            Self::Performance => 78,
+            Self::Balanced => 82,
+            Self::Quality => 88,
+        }
+    }
+
+    fn filter(self) -> image::imageops::FilterType {
+        match self {
+            Self::Performance => image::imageops::FilterType::Nearest,
+            Self::Balanced => image::imageops::FilterType::Triangle,
+            Self::Quality => image::imageops::FilterType::CatmullRom,
+        }
+    }
+
+    fn resize_threshold(self, source_mime: &'static str) -> (u32, u32) {
+        if source_mime == "image/jpeg" || source_mime == "image/webp" {
+            return match self {
+                Self::Performance => (3, 2),
+                Self::Balanced => (4, 3),
+                Self::Quality => (6, 5),
+            };
+        }
+        match self {
+            Self::Performance => (6, 5),
+            Self::Balanced => (6, 5),
+            Self::Quality => (11, 10),
+        }
+    }
+}
+
+struct PageVariantCache {
+    entries: lru::LruCache<PageVariantKey, CachedPageBytes>,
+    total_bytes: usize,
+}
+
+impl Default for PageVariantCache {
+    fn default() -> Self {
+        Self {
+            entries: lru::LruCache::new(
+                std::num::NonZeroUsize::new(PAGE_VARIANT_CACHE_CAP).expect("cap > 0"),
+            ),
+            total_bytes: 0,
+        }
+    }
+}
 
 struct PageCache {
     by_chapter: AHashMap<i64, ChapterSource>,
     bytes: Mutex<lru::LruCache<(i64, usize), CachedPageBytes>>,
+    variants: Mutex<PageVariantCache>,
+    in_flight_variants: Mutex<AHashSet<PageVariantKey>>,
+    in_flight_variants_cvar: Condvar,
 }
 
 impl Default for PageCache {
@@ -208,6 +288,9 @@ impl Default for PageCache {
             bytes: Mutex::new(lru::LruCache::new(
                 std::num::NonZeroUsize::new(PAGE_BYTES_CACHE_CAP).expect("cap > 0"),
             )),
+            variants: Mutex::new(PageVariantCache::default()),
+            in_flight_variants: Mutex::new(AHashSet::new()),
+            in_flight_variants_cvar: Condvar::new(),
         }
     }
 }
@@ -235,6 +318,15 @@ struct SaveBookmarkPayload {
 struct OpenChapterPayload {
     comic_source_path: String,
     chapter_source_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrefetchPageVariantsPayload {
+    chapter_id: i64,
+    start_page: usize,
+    end_page: usize,
+    target_width: u32,
+    profile: Option<String>,
 }
 
 static LIBRARY_SCAN_STATE: LazyLock<Mutex<LibraryScanState>> =
@@ -300,9 +392,7 @@ fn initialize_db(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn get_conn<'a>(
-    _app: &'a AppHandle,
-) -> Result<std::sync::MutexGuard<'a, Connection>, String> {
+fn get_conn<'a>(_app: &'a AppHandle) -> Result<std::sync::MutexGuard<'a, Connection>, String> {
     DB_CONN
         .get()
         .ok_or_else(|| "db not initialized".to_string())?
@@ -513,13 +603,11 @@ fn upsert_comic(
     date_modified: i64,
 ) -> Result<i64, String> {
     let ts = now_ts();
-    if let Ok(id) = conn
-        .query_row(
-            "SELECT id FROM comics WHERE history_key = ?1 LIMIT 1",
-            params![history_key],
-            |row| row.get::<_, i64>(0),
-        )
-    {
+    if let Ok(id) = conn.query_row(
+        "SELECT id FROM comics WHERE history_key = ?1 LIMIT 1",
+        params![history_key],
+        |row| row.get::<_, i64>(0),
+    ) {
         conn
       .execute(
         r#"
@@ -558,13 +646,11 @@ struct ChapterUpsert<'a> {
 
 fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Result<i64, String> {
     let ts = now_ts();
-    if let Ok(id) = conn
-        .query_row(
-            "SELECT id FROM chapters WHERE history_key = ?1 LIMIT 1",
-            params![params.history_key],
-            |row| row.get::<_, i64>(0),
-        )
-    {
+    if let Ok(id) = conn.query_row(
+        "SELECT id FROM chapters WHERE history_key = ?1 LIMIT 1",
+        params![params.history_key],
+        |row| row.get::<_, i64>(0),
+    ) {
         conn
       .execute(
         r#"
@@ -726,7 +812,9 @@ fn library_source_status_for(path: &str) -> LibrarySourceStatus {
     } else if !is_dir {
         Some(format!("path '{path}' exists but is not a directory."))
     } else if !readable {
-        Some(format!("path '{path}' is not readable (permission denied)."))
+        Some(format!(
+            "path '{path}' is not readable (permission denied)."
+        ))
     } else {
         None
     };
@@ -1586,8 +1674,14 @@ fn get_chapter_context_conn(
             ))
         })
         .map_err(|e| format!("failed loading chapter neighbors: {e}"))?;
-    let (chapter_position, chapter_total, prev_chapter_id, prev_chapter_title, next_chapter_id, next_chapter_title) =
-        row;
+    let (
+        chapter_position,
+        chapter_total,
+        prev_chapter_id,
+        prev_chapter_title,
+        next_chapter_id,
+        next_chapter_title,
+    ) = row;
 
     Ok(Some(ChapterContext {
         chapter_id,
@@ -1615,10 +1709,7 @@ fn chapter_source(conn: &Connection, chapter_id: i64) -> Result<(String, String)
     .map_err(|e| format!("failed loading chapter source: {e}"))
 }
 
-fn compute_chapter_source(
-    source_path: &str,
-    source_type: &str,
-) -> Result<ChapterSource, String> {
+fn compute_chapter_source(source_path: &str, source_type: &str) -> Result<ChapterSource, String> {
     match source_type {
         "folder" => Ok(ChapterSource::Folder(Arc::new(image_entries_in_dir(
             Path::new(source_path),
@@ -1630,10 +1721,7 @@ fn compute_chapter_source(
     }
 }
 
-fn get_or_load_page_list(
-    app: &AppHandle,
-    chapter_id: i64,
-) -> Result<ChapterSource, String> {
+fn get_or_load_page_list(app: &AppHandle, chapter_id: i64) -> Result<ChapterSource, String> {
     if let Some(source) = page_cache_read(app)?.by_chapter.get(&chapter_id).cloned() {
         return Ok(source);
     }
@@ -1658,8 +1746,8 @@ fn read_page_bytes(
             let page_path = pages
                 .get(page_index)
                 .ok_or_else(|| "page index out of range".to_string())?;
-            let bytes = fs::read(page_path)
-                .map_err(|e| format!("failed reading image file: {e}"))?;
+            let bytes =
+                fs::read(page_path).map_err(|e| format!("failed reading image file: {e}"))?;
             Ok((bytes, mime_for_path(page_path)))
         }
         ChapterSource::Archive(arc) => {
@@ -1711,6 +1799,217 @@ fn load_chapter_page_bytes(
     Ok((bytes, mime))
 }
 
+fn normalize_variant_width(width: u32) -> Option<u32> {
+    if width == 0 {
+        return None;
+    }
+    let clamped = width.clamp(MIN_VARIANT_WIDTH, MAX_VARIANT_WIDTH);
+    Some(((clamped + 31) / 64) * 64)
+}
+
+fn parse_page_variant_width(query: Option<&str>) -> Option<u32> {
+    let query = query?;
+    query.split('&').find_map(|part| {
+        let (key, value) = part.split_once('=')?;
+        if key != "w" && key != "width" {
+            return None;
+        }
+        value.parse::<u32>().ok().and_then(normalize_variant_width)
+    })
+}
+
+fn parse_page_variant_profile(query: Option<&str>) -> ImageVariantProfile {
+    let raw = query.and_then(|query| {
+        query.split('&').find_map(|part| {
+            let (key, value) = part.split_once('=')?;
+            if key == "p" || key == "profile" {
+                Some(value)
+            } else {
+                None
+            }
+        })
+    });
+    ImageVariantProfile::from_raw(raw)
+}
+
+fn page_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
+}
+
+fn should_resize_page(
+    source_width: u32,
+    source_height: u32,
+    target_width: u32,
+    source_mime: &'static str,
+    profile: ImageVariantProfile,
+) -> bool {
+    if source_width == 0 || source_height == 0 {
+        return false;
+    }
+    let (num, den) = profile.resize_threshold(source_mime);
+    source_width.saturating_mul(den) > target_width.saturating_mul(num)
+}
+
+fn resize_page_bytes(
+    bytes: &[u8],
+    target_width: u32,
+    source_mime: &'static str,
+    profile: ImageVariantProfile,
+) -> Option<(Vec<u8>, &'static str)> {
+    let (source_width, source_height) = page_dimensions_from_bytes(bytes)?;
+    if !should_resize_page(
+        source_width,
+        source_height,
+        target_width,
+        source_mime,
+        profile,
+    ) {
+        return None;
+    }
+
+    let image = image::load_from_memory(bytes).ok()?;
+    let target_height =
+        ((source_height as f64) * (target_width as f64 / source_width as f64)).round() as u32;
+    let resized = image.resize_exact(target_width, target_height.max(1), profile.filter());
+
+    let mut out = Vec::new();
+    let rgb = resized.to_rgb8();
+    let mut encoder =
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, profile.jpeg_quality());
+    encoder.encode_image(&rgb).ok()?;
+    Some((out, "image/jpeg"))
+}
+
+fn remember_variant_bytes(
+    cache: &mut PageVariantCache,
+    key: PageVariantKey,
+    bytes: Vec<u8>,
+    mime: &'static str,
+) -> (Vec<u8>, &'static str) {
+    let size = bytes.len();
+    let cached = (Arc::new(bytes.clone()), mime);
+    if let Some((_old_key, (old_bytes, _))) = cache.entries.push(key, cached) {
+        cache.total_bytes = cache.total_bytes.saturating_sub(old_bytes.len());
+    }
+    cache.total_bytes = cache.total_bytes.saturating_add(size);
+
+    while cache.total_bytes > PAGE_VARIANT_CACHE_BYTE_BUDGET {
+        let Some((_old_key, (old_bytes, _old_mime))) = cache.entries.pop_lru() else {
+            break;
+        };
+        cache.total_bytes = cache.total_bytes.saturating_sub(old_bytes.len());
+    }
+
+    (bytes, mime)
+}
+
+fn load_chapter_page_variant_bytes(
+    app: &AppHandle,
+    chapter_id: i64,
+    page_index: usize,
+    target_width: Option<u32>,
+    profile: ImageVariantProfile,
+) -> Result<(Vec<u8>, &'static str), String> {
+    let Some(target_width) = target_width.and_then(normalize_variant_width) else {
+        return load_chapter_page_bytes(app, chapter_id, page_index);
+    };
+    let key = (chapter_id, page_index, target_width, profile.code());
+
+    if let Some((bytes, mime)) = page_cache_read(app)?
+        .variants
+        .lock()
+        .map_err(|_| "variant cache lock poisoned".to_string())?
+        .entries
+        .get(&key)
+        .cloned()
+    {
+        return Ok((bytes.as_ref().clone(), mime));
+    }
+
+    let cache = page_cache_read(app)?;
+    let mut in_flight = cache
+        .in_flight_variants
+        .lock()
+        .map_err(|_| "variant in-flight lock poisoned".to_string())?;
+    while in_flight.contains(&key) {
+        in_flight = cache
+            .in_flight_variants_cvar
+            .wait(in_flight)
+            .map_err(|_| "variant in-flight wait poisoned".to_string())?;
+        if let Some((bytes, mime)) = cache
+            .variants
+            .lock()
+            .map_err(|_| "variant cache lock poisoned".to_string())?
+            .entries
+            .get(&key)
+            .cloned()
+        {
+            return Ok((bytes.as_ref().clone(), mime));
+        }
+    }
+    in_flight.insert(key);
+    drop(in_flight);
+    drop(cache);
+
+    let result = (|| -> Result<(Vec<u8>, &'static str), String> {
+        let (source_bytes, source_mime) = load_chapter_page_bytes(app, chapter_id, page_index)?;
+        if source_mime == "image/gif" {
+            return Ok((source_bytes, source_mime));
+        }
+        if let Some((resized, resized_mime)) =
+            resize_page_bytes(&source_bytes, target_width, source_mime, profile)
+        {
+            let (bytes, mime) = {
+                let cache = page_cache_read(app)?;
+                let mut variants = cache
+                    .variants
+                    .lock()
+                    .map_err(|_| "variant cache lock poisoned".to_string())?;
+                remember_variant_bytes(&mut variants, key, resized, resized_mime)
+            };
+            return Ok((bytes, mime));
+        }
+        Ok((source_bytes, source_mime))
+    })();
+
+    let cache = page_cache_read(app)?;
+    let mut in_flight = cache
+        .in_flight_variants
+        .lock()
+        .map_err(|_| "variant in-flight lock poisoned".to_string())?;
+    in_flight.remove(&key);
+    cache.in_flight_variants_cvar.notify_all();
+    result
+}
+
+fn prefetch_page_variants_sync(
+    app: AppHandle,
+    payload: PrefetchPageVariantsPayload,
+) -> Result<(), String> {
+    let Some(target_width) = normalize_variant_width(payload.target_width) else {
+        return Ok(());
+    };
+    let profile = ImageVariantProfile::from_raw(payload.profile.as_deref());
+    let start = payload.start_page.min(payload.end_page);
+    let end = payload.end_page.max(payload.start_page);
+    let end = end.min(start.saturating_add(8));
+
+    for page_index in start..=end {
+        let _ = load_chapter_page_variant_bytes(
+            &app,
+            payload.chapter_id,
+            page_index,
+            Some(target_width),
+            profile,
+        );
+    }
+    Ok(())
+}
+
 fn simple_text_response(
     status: tauri::http::StatusCode,
     message: &str,
@@ -1734,7 +2033,7 @@ fn comicrd_protocol_response(
     let Some(resource) = parts.next() else {
         return simple_text_response(tauri::http::StatusCode::BAD_REQUEST, "invalid path");
     };
-    if resource != "page" {
+    if resource != "page" && resource != "preview" {
         return simple_text_response(tauri::http::StatusCode::NOT_FOUND, "not found");
     }
 
@@ -1752,7 +2051,20 @@ fn comicrd_protocol_response(
         return simple_text_response(tauri::http::StatusCode::BAD_REQUEST, "invalid page index");
     };
 
-    match load_chapter_page_bytes(app, chapter_id, page_index) {
+    let query = request.uri().query();
+    let target_width = parse_page_variant_width(query);
+    let profile = if resource == "preview" {
+        ImageVariantProfile::Performance
+    } else {
+        parse_page_variant_profile(query)
+    };
+    let target_width = if resource == "preview" {
+        Some(target_width.unwrap_or(64))
+    } else {
+        target_width
+    };
+
+    match load_chapter_page_variant_bytes(app, chapter_id, page_index, target_width, profile) {
         Ok((bytes, mime)) => tauri::http::Response::builder()
             .status(tauri::http::StatusCode::OK)
             .header(tauri::http::header::CONTENT_TYPE, mime)
@@ -1768,6 +2080,16 @@ async fn get_chapter_pages(app: AppHandle, chapter_id: i64) -> Result<Vec<PageIn
     tauri::async_runtime::spawn_blocking(move || get_chapter_pages_sync(app, chapter_id))
         .await
         .map_err(|e| format!("chapter page task join error: {e}"))?
+}
+
+#[tauri::command]
+async fn prefetch_page_variants(
+    app: AppHandle,
+    payload: PrefetchPageVariantsPayload,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || prefetch_page_variants_sync(app, payload))
+        .await
+        .map_err(|e| format!("prefetch page variants task join error: {e}"))?
 }
 
 fn get_chapter_pages_sync(app: AppHandle, chapter_id: i64) -> Result<Vec<PageInfo>, String> {
@@ -1799,7 +2121,7 @@ fn get_chapter_pages_sync(app: AppHandle, chapter_id: i64) -> Result<Vec<PageInf
     }
     page_cache_write(&app)?
         .by_chapter
-        .insert(chapter_id, source);
+        .insert(chapter_id, source.clone());
     Ok(names
         .into_iter()
         .enumerate()
@@ -1959,15 +2281,15 @@ fn list_bookmarks(app: AppHandle, chapter_id: i64) -> Result<Vec<Bookmark>, Stri
 fn list_all_bookmarks(app: AppHandle) -> Result<Vec<ComicBookmark>, String> {
     let conn = get_conn(&app)?;
     let mut stmt = conn
-    .prepare(
-      r#"
+        .prepare(
+            r#"
       SELECT cb.id, cb.comic_source_path, COALESCE(c.title, ''), cb.created_at
       FROM comic_bookmarks cb
       LEFT JOIN comics c ON c.source_path = cb.comic_source_path
       ORDER BY cb.created_at DESC
       "#,
-    )
-    .map_err(|e| format!("failed preparing comic bookmarks query: {e}"))?;
+        )
+        .map_err(|e| format!("failed preparing comic bookmarks query: {e}"))?;
     let rows = stmt
         .query_map([], |row| {
             Ok(ComicBookmark {
@@ -2071,7 +2393,7 @@ fn list_reading_history(app: AppHandle) -> Result<Vec<ReadingHistoryEntry>, Stri
     let conn = get_conn(&app)?;
     let mut stmt = conn
         .prepare(
-          r#"
+            r#"
           SELECT
             c.source_path,
             c.title,
@@ -2314,6 +2636,7 @@ pub fn run() {
             open_chapter_for_reading,
             get_chapter_context,
             get_chapter_pages,
+            prefetch_page_variants,
             save_progress,
             get_progress,
             add_bookmark,
@@ -2466,6 +2789,53 @@ mod tests {
     }
 
     #[test]
+    fn page_variant_width_query_is_normalized() {
+        assert_eq!(parse_page_variant_width(Some("w=0")), None);
+        assert_eq!(parse_page_variant_width(Some("w=1")), Some(320));
+        assert_eq!(parse_page_variant_width(Some("width=1000")), Some(1024));
+        assert_eq!(parse_page_variant_width(Some("foo=1&w=99999")), Some(4096));
+        assert_eq!(parse_page_variant_width(None), None);
+        assert_eq!(
+            parse_page_variant_profile(Some("w=800&p=performance")),
+            ImageVariantProfile::Performance
+        );
+        assert_eq!(
+            parse_page_variant_profile(Some("profile=quality")),
+            ImageVariantProfile::Quality
+        );
+        assert_eq!(
+            parse_page_variant_profile(None),
+            ImageVariantProfile::Balanced
+        );
+    }
+
+    #[test]
+    fn page_variant_resize_downscales_to_jpeg() {
+        let tmp = tempdir().expect("tempdir");
+        let path = tmp.path().join("page.png");
+        create_test_png(path.clone());
+        let bytes = fs::read(path).expect("read test png");
+
+        let (resized, mime) =
+            resize_page_bytes(&bytes, 4, "image/png", ImageVariantProfile::Balanced)
+                .expect("resize");
+        assert_eq!(mime, "image/jpeg");
+        let decoded = image::load_from_memory(&resized).expect("decode resized");
+        assert_eq!((decoded.width(), decoded.height()), (4, 4));
+    }
+
+    #[test]
+    fn page_variant_skips_near_target_width() {
+        let tmp = tempdir().expect("tempdir");
+        let path = tmp.path().join("page.png");
+        create_test_png(path.clone());
+        let bytes = fs::read(path).expect("read test png");
+
+        assert!(resize_page_bytes(&bytes, 7, "image/png", ImageVariantProfile::Balanced).is_none());
+        assert_eq!(page_dimensions_from_bytes(&bytes), Some((8, 8)));
+    }
+
+    #[test]
     fn smoke_chapter_context_window_sql() {
         let conn = Connection::open_in_memory().expect("open");
         run_migrations(&conn).expect("migrations");
@@ -2492,9 +2862,13 @@ mod tests {
             .expect("chapter");
         }
         let chapter_id: i64 = conn
-            .query_row("SELECT id FROM chapters WHERE chapter_index = 3", [], |r| r.get(0))
+            .query_row("SELECT id FROM chapters WHERE chapter_index = 3", [], |r| {
+                r.get(0)
+            })
             .expect("find chapter 3");
-        let ctx = get_chapter_context_conn(&conn, chapter_id).expect("get ctx").expect("ctx exists");
+        let ctx = get_chapter_context_conn(&conn, chapter_id)
+            .expect("get ctx")
+            .expect("ctx exists");
         assert_eq!(ctx.chapter_total, 5);
         assert_eq!(ctx.chapter_position, 3);
         assert!(ctx.prev_chapter_id.is_some());
