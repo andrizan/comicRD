@@ -444,14 +444,13 @@ jobs:
       - name: Generate .SRCINFO
         run: |
           docker run --rm \
-            -v "$PWD/aur-repo:/pkg" \
+            -v "$PWD/aur-repo:/pkg:ro" \
             archlinux:latest \
             bash -lc "
               pacman -Sy --noconfirm pacman &&
               useradd -m builder &&
-              chown -R builder:builder /pkg &&
-              su builder -c 'cd /pkg && makepkg --printsrcinfo > .SRCINFO'
-            "
+              su builder -c 'cd /pkg && makepkg --printsrcinfo'
+            " > aur-repo/.SRCINFO
           cat aur-repo/.SRCINFO
 
       - name: Push to AUR
