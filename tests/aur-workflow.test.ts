@@ -14,5 +14,6 @@ describe("AUR workflow", () => {
     expect(desktopBuildWorkflow).toContain("install -m 644 /aur-src/PKGBUILD /pkg/PKGBUILD");
     expect(desktopBuildWorkflow).toContain("su builder -c 'cd /pkg && makepkg --printsrcinfo'");
     expect(desktopBuildWorkflow).not.toContain('-v "$PWD/aur-repo:/pkg:ro"');
+    expect(desktopBuildWorkflow).not.toContain("pacman -Sy --noconfirm pacman");
   });
 });
