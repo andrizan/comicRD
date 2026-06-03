@@ -448,8 +448,9 @@ jobs:
             archlinux:latest \
             bash -lc "
               pacman -Sy --noconfirm pacman &&
-              cd /pkg &&
-              makepkg --printsrcinfo > .SRCINFO
+              useradd -m builder &&
+              chown -R builder:builder /pkg &&
+              su builder -c 'cd /pkg && makepkg --printsrcinfo > .SRCINFO'
             "
           cat aur-repo/.SRCINFO
 
