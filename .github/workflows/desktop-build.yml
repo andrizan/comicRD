@@ -265,6 +265,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: comicrd-arch-cachyos
+          include-hidden-files: true
           path: |
             pkgbuild/*.pkg.tar.zst
             pkgbuild/comicrd-*-linux-x86_64.tar.gz
@@ -308,8 +309,14 @@ jobs:
             -name ".SRCINFO" \
           \) -exec cp -v {} release-upload/ \;
 
+          # softprops/action-gh-release uses @actions/glob which excludes hidden
+          # files (dotfiles) by default. Rename .SRCINFO so release-upload/* matches it.
+          if [ -f release-upload/.SRCINFO ]; then
+            mv release-upload/.SRCINFO release-upload/SRCINFO
+          fi
+
           echo "Release files:"
-          find release-upload -type f -maxdepth 1 -print | sort
+          ls -la release-upload/
 
           FILE_COUNT="$(find release-upload -type f -maxdepth 1 | wc -l)"
           if [ "$FILE_COUNT" -eq 0 ]; then
@@ -321,8 +328,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           name: ComicRD ${{ github.ref_name }}
-          files: |
-            release-upload/*
-            release-upload/.SRCINFO
+          files: release-upload/*
           fail_on_unmatched_files: true
           generate_release_notes: true
