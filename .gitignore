@@ -25,3 +25,6 @@ dist-ssr
 pkgbuild/
 release/
 test-results/
+aur/
+
+key*

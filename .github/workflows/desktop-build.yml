@@ -321,6 +321,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           name: ComicRD ${{ github.ref_name }}
-          files: release-upload/*
+          files: |
+            release-upload/*
+            release-upload/.SRCINFO
           fail_on_unmatched_files: true
           generate_release_notes: true
