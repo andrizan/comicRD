@@ -279,6 +279,9 @@ Important data types:
 - [ ] Verify Windows build no longer starts WebView2 or `msedgewebview2.exe`.
 - [ ] Verify macOS bundle uses the correct name, icon, and support directory.
 - [x] Document build commands for Windows, Linux, and macOS in the README.
+- [x] Replace the old Tauri GitHub Actions workflow with Flutter desktop builds.
+- [x] Add Linux release tarball packaging for GitHub Releases and AUR.
+- [x] Add AUR `comicrd-bin` publish flow based on release tag `vX.Y.Z`.
 
 Notes:
 

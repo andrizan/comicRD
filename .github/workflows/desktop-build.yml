@@ -11,280 +11,218 @@ on:
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 concurrency:
   group: desktop-build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FLUTTER_VERSION: "3.44.1"
+  APP_NAME: ComicRD
+
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux-deb-rpm
-            os: ubuntu-24.04
-            rust_targets: x86_64-unknown-linux-gnu
-            script: tauri:build:linux
-            artifact_name: comicrd-linux-deb-rpm
-            artifact_paths: |
-              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
-
-          - name: linux-appimage
-            os: ubuntu-24.04
-            rust_targets: x86_64-unknown-linux-gnu
-            script: tauri:build:linux:appimage
-            artifact_name: comicrd-linux-appimage
-            artifact_paths: |
-              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-
-          - name: windows
-            os: windows-latest
-            rust_targets: x86_64-pc-windows-msvc
-            script: tauri:build:windows
-            artifact_name: comicrd-windows
-            artifact_paths: |
-              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-
-          - name: macos
-            os: macos-latest
-            rust_targets: x86_64-apple-darwin,aarch64-apple-darwin
-            script: tauri:build:macos
-            artifact_name: comicrd-macos
-            artifact_paths: |
-              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
-
-    runs-on: ${{ matrix.os }}
+  quality:
+    name: Quality Checks
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          node-version: 24
-          cache: pnpm
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_targets }}
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            clang \
+            cmake \
             curl \
-            wget \
             file \
-            libssl-dev \
+            git \
             libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            patchelf \
-            rpm
+            ninja-build \
+            pkg-config \
+            unzip \
+            xz-utils
 
-          if apt-cache show libfuse2t64 >/dev/null 2>&1; then
-            sudo apt-get install -y libfuse2t64
-          else
-            sudo apt-get install -y libfuse2
-          fi
+      - name: Fetch Flutter dependencies
+        working-directory: app_flutter
+        run: flutter pub get
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Run Rust tests
+        run: cargo test
 
-      - name: Generate macOS .icns icon
-        if: runner.os == 'macOS'
-        run: |
-          ICONSET="src-tauri/icons/icon.iconset"
-          mkdir -p "$ICONSET"
-          for size in 16 32 64 128 256 512; do
-            sips -z $size $size src-tauri/icons/icon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-            double=$((size * 2))
-            sips -z $double $double src-tauri/icons/icon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
-          done
-          iconutil -c icns "$ICONSET" -o src-tauri/icons/icon.icns
-          rm -rf "$ICONSET"
+      - name: Analyze Flutter app
+        working-directory: app_flutter
+        run: flutter analyze
 
-      - name: Build Desktop Bundle
-        run: pnpm run ${{ matrix.script }}
+      - name: Run Flutter tests
+        working-directory: app_flutter
+        run: flutter test
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_paths }}
-          if-no-files-found: error
-
-  arch-package:
-    name: Build Arch/CachyOS Package
-    if: startsWith(github.ref, 'refs/tags/')
+  build-linux:
+    name: Build Linux Bundle
+    needs: quality
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    container:
-      image: archlinux:latest
 
     steps:
-      - name: Install Arch build dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm \
-            base-devel \
-            git \
-            rust \
-            curl \
-            wget \
-            file \
-            openssl \
-            gtk3 \
-            webkit2gtk-4.1 \
-            libayatana-appindicator \
-            librsvg \
-            xdotool \
-            patchelf \
-            desktop-file-utils
-
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          node-version: 24
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
-      - name: Prepare build user
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux build dependencies
         run: |
-          useradd -m builder
-          chown -R builder:builder "$GITHUB_WORKSPACE"
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            cmake \
+            file \
+            git \
+            libgtk-3-dev \
+            ninja-build \
+            pkg-config \
+            xz-utils
 
-      - name: Install dependencies
-        run: |
-          su builder -c "cd '$GITHUB_WORKSPACE' && pnpm install --frozen-lockfile"
-
-      - name: Build Tauri binary without bundling
-        run: |
-          su builder -c "cd '$GITHUB_WORKSPACE' && pnpm tauri build --target x86_64-unknown-linux-gnu --no-bundle"
-
-      - name: Create Arch source tarball and PKGBUILD
+      - name: Build Linux release tarball
+        env:
+          FLUTTER_BIN: flutter
         run: |
           set -euo pipefail
-
           VERSION="${GITHUB_REF_NAME#v}"
-          PKGDIR="$GITHUB_WORKSPACE/pkgbuild"
-          SRCDIR="$PKGDIR/src/comicrd-$VERSION"
-
-          mkdir -p "$SRCDIR"
-
-          install -Dm755 \
-            "$GITHUB_WORKSPACE/src-tauri/target/x86_64-unknown-linux-gnu/release/comicrd" \
-            "$SRCDIR/comicrd"
-
-          cat > "$SRCDIR/comicrd.desktop" <<'EOF'
-          [Desktop Entry]
-          Type=Application
-          Name=ComicRD
-          Comment=ComicRD Desktop App
-          Exec=comicrd
-          Icon=comicrd
-          Terminal=false
-          Categories=Utility;
-          EOF
-
-          if [ -f "$GITHUB_WORKSPACE/src-tauri/icons/128x128.png" ]; then
-            install -Dm644 \
-              "$GITHUB_WORKSPACE/src-tauri/icons/128x128.png" \
-              "$SRCDIR/comicrd.png"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION="manual-${GITHUB_RUN_NUMBER}"
           fi
+          ./scripts/package-linux.sh "$VERSION"
 
-          if [ -f "$GITHUB_WORKSPACE/LICENSE" ]; then
-            install -Dm644 "$GITHUB_WORKSPACE/LICENSE" "$SRCDIR/LICENSE"
-          fi
-
-          cd "$PKGDIR/src"
-          tar -czf "$PKGDIR/comicrd-$VERSION-linux-x86_64.tar.gz" "comicrd-$VERSION"
-
-          SHA256="$(sha256sum "$PKGDIR/comicrd-$VERSION-linux-x86_64.tar.gz" | awk '{print $1}')"
-
-          cat > "$PKGDIR/PKGBUILD" <<EOF
-          pkgname=comicrd-bin
-          pkgver=$VERSION
-          pkgrel=1
-          pkgdesc="ComicRD desktop app"
-          arch=('x86_64')
-          url="https://github.com/${GITHUB_REPOSITORY}"
-          license=('custom')
-          depends=(
-            'webkit2gtk-4.1'
-            'gtk3'
-            'libayatana-appindicator'
-            'librsvg'
-            'openssl'
-            'hicolor-icon-theme'
-          )
-          provides=('comicrd')
-          conflicts=('comicrd')
-          source=("comicrd-\${pkgver}-linux-x86_64.tar.gz::https://github.com/${GITHUB_REPOSITORY}/releases/download/v\${pkgver}/comicrd-\${pkgver}-linux-x86_64.tar.gz")
-          sha256sums=('$SHA256')
-
-          package() {
-            install -Dm755 "\${srcdir}/comicrd-\${pkgver}/comicrd" "\${pkgdir}/usr/bin/comicrd"
-            install -Dm644 "\${srcdir}/comicrd-\${pkgver}/comicrd.desktop" "\${pkgdir}/usr/share/applications/comicrd.desktop"
-
-            if [ -f "\${srcdir}/comicrd-\${pkgver}/comicrd.png" ]; then
-              install -Dm644 "\${srcdir}/comicrd-\${pkgver}/comicrd.png" "\${pkgdir}/usr/share/icons/hicolor/128x128/apps/comicrd.png"
-            fi
-
-            if [ -f "\${srcdir}/comicrd-\${pkgver}/LICENSE" ]; then
-              install -Dm644 "\${srcdir}/comicrd-\${pkgver}/LICENSE" "\${pkgdir}/usr/share/licenses/comicrd-bin/LICENSE"
-            fi
-          }
-          EOF
-
-          chown -R builder:builder "$PKGDIR"
-
-      - name: Build pacman package
-        run: |
-          # Arch container may have SRCDEST pointing elsewhere (e.g. /var/cache).
-          # Set it to . so makepkg finds the local tarball instead of downloading
-          # from the release URL (which doesn't exist yet).
-          su builder -c "cd '$GITHUB_WORKSPACE/pkgbuild' && SRCDEST=. makepkg -f --clean --skipinteg"
-
-      - name: Upload Arch package artifact
+      - name: Upload Linux tarball
         uses: actions/upload-artifact@v7
         with:
-          name: comicrd-arch-cachyos
-          path: |
-            pkgbuild/*.pkg.tar.zst
-            pkgbuild/comicrd-*-linux-x86_64.tar.gz
+          name: comicrd-linux-x86_64
+          path: dist/comicrd-*-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows Bundle
+    needs: quality
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Fetch Flutter dependencies
+        working-directory: app_flutter
+        run: flutter pub get
+
+      - name: Build Windows release
+        working-directory: app_flutter
+        run: flutter build windows --release
+
+      - name: Archive Windows bundle
+        shell: pwsh
+        run: |
+          $Version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
+          if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+            $Version = "manual-${env:GITHUB_RUN_NUMBER}"
+          }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive `
+            -Path app_flutter/build/windows/x64/runner/Release/* `
+            -DestinationPath "dist/comicrd-$Version-windows-x86_64.zip" `
+            -Force
+
+      - name: Upload Windows bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: comicrd-windows-x86_64
+          path: dist/comicrd-*-windows-x86_64.zip
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS Bundle
+    needs: quality
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Fetch Flutter dependencies
+        working-directory: app_flutter
+        run: flutter pub get
+
+      - name: Build macOS release
+        working-directory: app_flutter
+        run: flutter build macos --release
+
+      - name: Archive macOS bundle
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION="manual-${GITHUB_RUN_NUMBER}"
+          fi
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            app_flutter/build/macos/Build/Products/Release/ComicRD.app \
+            "dist/comicrd-${VERSION}-macos.zip"
+
+      - name: Upload macOS bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: comicrd-macos
+          path: dist/comicrd-*-macos.zip
           if-no-files-found: error
 
   release:
     name: Create GitHub Release
     needs:
-      - build
-      - arch-package
+      - build-linux
+      - build-windows
+      - build-macos
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Download all artifacts
+      - name: Download build artifacts
         uses: actions/download-artifact@v7
         with:
           path: release-artifacts
@@ -292,30 +230,15 @@ jobs:
       - name: Collect release files
         run: |
           set -euo pipefail
-
           mkdir -p release-upload
-
           find release-artifacts -type f \( \
-            -name "*.deb" -o \
-            -name "*.rpm" -o \
-            -name "*.AppImage" -o \
-            -name "*.msi" -o \
-            -name "*.exe" -o \
-            -name "*.dmg" -o \
-            -name "*.pkg.tar.zst" -o \
-            -name "*.tar.gz" \
+            -name "*.tar.gz" -o \
+            -name "*.zip" \
           \) -exec cp -v {} release-upload/ \;
+          ls -la release-upload
+          test "$(find release-upload -maxdepth 1 -type f | wc -l)" -gt 0
 
-          echo "Release files:"
-          ls -la release-upload/
-
-          FILE_COUNT="$(find release-upload -type f -maxdepth 1 | wc -l)"
-          if [ "$FILE_COUNT" -eq 0 ]; then
-            echo "No release files found."
-            exit 1
-          fi
-
-      - name: Create Release and Upload Assets
+      - name: Create release and upload assets
         uses: softprops/action-gh-release@v3
         with:
           name: ComicRD ${{ github.ref_name }}
@@ -327,45 +250,39 @@ jobs:
     name: Publish to AUR
     needs: release
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
 
     steps:
-      - name: Get version
+      - name: Resolve version
         id: version
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          if [[ -z "$VERSION" ]]; then
-            echo "Empty version"
-            exit 1
-          fi
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Invalid version format: $VERSION (expected x.y.z)"
+            echo "Invalid tag: $TAG. Expected vX.Y.Z."
             exit 1
           fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Download tarball and calculate checksum
+      - name: Download Linux tarball checksum
         id: checksum
         env:
-          VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
+          set -euo pipefail
           URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/comicrd-${VERSION}-linux-x86_64.tar.gz"
-          echo "Downloading $URL"
-          curl -fsSL "$URL" -o comicrd.tar.gz || {
-            echo "Failed to download source tarball. Make sure the release asset exists."
-            exit 1
-          }
-          SHA256="$(sha256sum comicrd.tar.gz | awk '{print $1}')"
-          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
-          echo "SHA256: $SHA256"
+          curl -fsSL "$URL" -o comicrd-linux.tar.gz
+          SHA256="$(sha256sum comicrd-linux.tar.gz | awk '{print $1}')"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
 
       - name: Install SSH key
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
@@ -378,29 +295,18 @@ jobs:
             StrictHostKeyChecking accept-new
           EOF
 
-      - name: Clone AUR repo
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
+      - name: Clone AUR repository
         run: |
-          if git clone ssh://aur@aur.archlinux.org/comicrd-bin.git aur-repo 2>/dev/null; then
-            echo "AUR repo cloned successfully"
-          else
-            echo "AUR repo does not exist yet - creating new package"
-            mkdir aur-repo
-            cd aur-repo
-            git init
-            git remote add origin ssh://aur@aur.archlinux.org/comicrd-bin.git
-          fi
-          ls -la aur-repo/
+          set -euo pipefail
+          git clone ssh://aur@aur.archlinux.org/comicrd-bin.git aur-repo
 
-      - name: Generate AUR PKGBUILD
+      - name: Generate PKGBUILD
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          TAG: ${{ steps.version.outputs.tag }}
           SHA256: ${{ steps.checksum.outputs.sha256 }}
         run: |
+          set -euo pipefail
           cd aur-repo
-
           cat > PKGBUILD <<PKGEOF
           # Maintainer: Riski Andriyanto <putra7a@gmail.com>
 
@@ -408,17 +314,17 @@ jobs:
           _pkgname=comicrd
           pkgver=${VERSION}
           pkgrel=1
-          pkgdesc="Lightweight high-performance desktop comic reader built with Tauri 2"
+          pkgdesc="ComicRD desktop comic reader built with Flutter and Rust"
           arch=('x86_64')
           url="https://github.com/${GITHUB_REPOSITORY}"
           license=('MIT')
           depends=(
-            'webkit2gtk-4.1'
+            'gcc-libs'
+            'glib2'
+            'glibc'
             'gtk3'
-            'libayatana-appindicator'
-            'librsvg'
-            'openssl'
             'hicolor-icon-theme'
+            'libepoxy'
           )
           provides=('comicrd')
           conflicts=('comicrd')
@@ -426,27 +332,26 @@ jobs:
           sha256sums=('${SHA256}')
 
           package() {
-            install -Dm755 "\${srcdir}/comicrd-\${pkgver}/comicrd" "\${pkgdir}/usr/bin/comicrd"
-            install -Dm644 "\${srcdir}/comicrd-\${pkgver}/comicrd.desktop" "\${pkgdir}/usr/share/applications/comicrd.desktop"
+            cp -R --no-preserve=ownership "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/opt" "\${pkgdir}/"
+            install -dm755 "\${pkgdir}/usr/bin"
+            ln -sf /opt/comicrd/ComicRD "\${pkgdir}/usr/bin/comicrd"
+            install -Dm644 "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/applications/comicrd.desktop" "\${pkgdir}/usr/share/applications/comicrd.desktop"
+            install -Dm644 "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/icons/hicolor/512x512/apps/comicrd.png" "\${pkgdir}/usr/share/icons/hicolor/512x512/apps/comicrd.png"
 
-            if [ -f "\${srcdir}/comicrd-\${pkgver}/comicrd.png" ]; then
-              install -Dm644 "\${srcdir}/comicrd-\${pkgver}/comicrd.png" "\${pkgdir}/usr/share/icons/hicolor/128x128/apps/comicrd.png"
-            fi
-
-            if [ -f "\${srcdir}/comicrd-\${pkgver}/LICENSE" ]; then
-              install -Dm644 "\${srcdir}/comicrd-\${pkgver}/LICENSE" "\${pkgdir}/usr/share/licenses/comicrd-bin/LICENSE"
+            if [ -f "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/licenses/comicrd-bin/LICENSE" ]; then
+              install -Dm644 "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/licenses/comicrd-bin/LICENSE" "\${pkgdir}/usr/share/licenses/comicrd-bin/LICENSE"
             fi
           }
           PKGEOF
 
-          cat PKGBUILD
-
       - name: Generate .SRCINFO
         run: |
+          set -euo pipefail
           docker run --rm \
             -v "$PWD/aur-repo:/aur-src:ro" \
             archlinux:latest \
             bash -lc "
+              pacman -Syu --noconfirm base-devel >/dev/null &&
               useradd -m builder &&
               install -d -o builder -g builder /pkg &&
               install -m 644 /aur-src/PKGBUILD /pkg/PKGBUILD &&
@@ -459,27 +364,14 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          set -euo pipefail
           cd aur-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add PKGBUILD .SRCINFO
-
           if git diff --cached --quiet; then
             echo "No AUR changes"
             exit 0
           fi
-
           git commit -m "Update to ${VERSION}"
-
-          for i in 1 2 3; do
-            if git push origin master 2>&1; then
-              echo "Push succeeded"
-              exit 0
-            fi
-            echo "Push attempt $i failed, retrying in 10s..."
-            sleep 10
-          done
-
-          echo "Push failed after 3 attempts"
-          exit 1
+          git push origin master
