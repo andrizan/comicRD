@@ -244,12 +244,12 @@ Important data types:
 
 ### Task 7: Reader Page And Image Rendering
 
-- [ ] Implement full-screen black reader surface with its own vertical scroll controller.
-- [ ] Load settings, chapter pages, chapter context, and progress before marking reader ready.
-- [ ] Restore last progress page once page metadata is available.
-- [ ] Track current page from scroll position without jitter.
-- [ ] Save progress debounced and save immediately before closing or switching chapter.
-- [ ] Implement top toolbar:
+- [x] Implement full-screen black reader surface with its own vertical scroll controller.
+- [x] Load settings, chapter pages, chapter context, and progress before marking reader ready.
+- [x] Restore last progress page once page metadata is available.
+- [x] Track current page from scroll position without jitter.
+- [x] Save progress debounced and save immediately before closing or switching chapter.
+- [x] Implement top toolbar:
   - close
   - comic/chapter title
   - chapter position
@@ -258,16 +258,16 @@ Important data types:
   - prev/next chapter
   - zoom controls
   - fullscreen
-- [ ] Implement bottom segmented page indicator with clickable page jumps.
-- [ ] Implement keyboard controls matching current behavior.
-- [ ] Replace protocol URLs with `renderPageVariant` and `Image.memory`.
-- [ ] Use stable aspect-ratio placeholders from `PageInfo` or `RenderedPage` dimensions.
-- [ ] Keep only nearby pages active around current page.
-- [ ] Prefetch direction-aware ranges with the existing profile policies:
+- [x] Implement bottom segmented page indicator with clickable page jumps.
+- [x] Implement keyboard controls matching current behavior.
+- [x] Replace protocol URLs with `renderPageVariant` and `Image.memory`.
+- [x] Use stable aspect-ratio placeholders from `PageInfo` or `RenderedPage` dimensions.
+- [x] Keep only nearby pages active around current page.
+- [x] Prefetch direction-aware ranges with the existing profile policies:
   - performance: max width 1280, max DPR 1, forward 6, backward 1
   - balanced: max width 1600, max DPR 1.25, forward 5, backward 1
   - quality: max width 2400, max DPR 1.75, forward 4, backward 2
-- [ ] Cap Flutter image cache bytes and evict far-page images as the active window moves.
+- [x] Cap Flutter image cache bytes and evict far-page images as the active window moves.
 
 ### Task 8: Packaging And Desktop Integration
 
@@ -283,7 +283,7 @@ Important data types:
 ## Test Plan
 
 - Rust:
-  - [ ] `cargo test` from the Rust workspace root.
+  - [x] `cargo test` from the Rust workspace root.
   - [ ] Migration test confirms default settings and all required tables/indexes.
   - [ ] Scan tests cover folder comic, root-image chapter, nested folder chapters, ZIP, and CBZ.
   - [ ] Sort tests cover numeric natural ordering for chapters/pages.
@@ -292,8 +292,8 @@ Important data types:
   - [ ] Image tests cover width normalization, resize/no-resize thresholds, GIF no-resize, preview, cache byte budget, and in-flight dedupe.
   - [ ] Backup tests cover export, import, pre-import backup, and migration after import.
 - Dart:
-  - [ ] `flutter analyze`
-  - [ ] `flutter test`
+  - [x] `flutter analyze`
+  - [x] `flutter test`
   - [ ] Unit tests for settings parsing/defaults.
   - [ ] Unit tests for route path encode/decode.
   - [ ] Unit tests for reader progress payload.

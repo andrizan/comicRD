@@ -19,6 +19,23 @@ final chapterBookmarksProvider =
       return ref.watch(comicRdApiProvider).listBookmarks(chapterId);
     });
 
+final renderedPageProvider =
+    FutureProvider.family<bridge.RenderedPage, RenderedPageRequest>((
+      ref,
+      request,
+    ) {
+      return ref
+          .watch(comicRdApiProvider)
+          .renderPageVariant(
+            bridge.RenderPagePayload(
+              chapterId: request.chapterId,
+              pageIndex: request.pageIndex,
+              targetWidth: request.targetWidth,
+              profile: request.profile,
+            ),
+          );
+    });
+
 class ReaderData {
   const ReaderData({
     required this.context,
@@ -29,4 +46,31 @@ class ReaderData {
   final bridge.ChapterContext? context;
   final List<bridge.PageInfo> pages;
   final bridge.ReadingProgress? progress;
+}
+
+class RenderedPageRequest {
+  const RenderedPageRequest({
+    required this.chapterId,
+    required this.pageIndex,
+    required this.targetWidth,
+    required this.profile,
+  });
+
+  final int chapterId;
+  final int pageIndex;
+  final int targetWidth;
+  final bridge.ImageVariantProfile profile;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RenderedPageRequest &&
+          runtimeType == other.runtimeType &&
+          chapterId == other.chapterId &&
+          pageIndex == other.pageIndex &&
+          targetWidth == other.targetWidth &&
+          profile == other.profile;
+
+  @override
+  int get hashCode => Object.hash(chapterId, pageIndex, targetWidth, profile);
 }
