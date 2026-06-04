@@ -136,9 +136,9 @@ Important data types:
 - [ ] Move reusable Rust logic from `/home/andrizan/CODE/PRIVATE/comicRD/src-tauri/src/lib.rs` into `comicrd_core`.
 - [x] Remove all Tauri dependencies from the core crate.
 - [x] Replace `AppHandle`-based database path resolution with `ComicRdCore::open(app_data_dir: PathBuf)`.
-- [ ] Convert global singleton state into a core-owned state object:
+- [x] Convert global singleton state into a core-owned state object:
   - SQLite connection mutex
-  - page list cache
+  - page list/source cache
   - page byte LRU cache
   - page variant LRU cache
   - in-flight variant dedupe set and condvar
@@ -152,20 +152,19 @@ Important data types:
   - JPEG output for resized variants
   - no GIF resize
   - performance/balanced/quality profile quality and filter behavior
-- [ ] Add Rust tests for migrations, scan, progress, bookmarks, chapter context, image variants, and backup/import.
-  - Covered so far: migrations/defaults, raw library listing, chapter discovery, reader progress/context, page variants, bookmarks/favorites/history, backup/import.
-  - Still missing: full `scan_libraries` parity and cache/dedupe behavior.
+- [x] Add Rust tests for migrations, scan, progress, bookmarks, chapter context, image variants, and backup/import.
+  - Covered: migrations/defaults, raw library listing, scan upsert/status, chapter discovery, reader progress/context, page variants, bookmarks/favorites/history, backup/import, page cache reuse, and concurrent in-flight variant dedupe.
 
 ### Task 2: Flutter Rust Bridge Integration
 
-- [ ] Add `flutter_rust_bridge` and generated bridge structure.
-- [ ] Expose a small bridge API that wraps `comicrd_core`.
-- [ ] Store the initialized core instance behind a bridge-level global after `initApp`.
-- [ ] Add typed request/response structs for every API listed in the Public API Boundary.
-- [ ] Use `path_provider` in Dart to resolve the app support directory and call `initApp` before rendering the main routes.
-- [ ] Add a thin Dart `ComicRdApi` facade so UI code does not call generated FRB symbols directly.
-- [ ] Verify `cargo test` passes for the Rust workspace.
-- [ ] Verify `flutter analyze` can see generated Dart code without analyzer errors.
+- [x] Add `flutter_rust_bridge` and generated bridge structure.
+- [x] Expose a small bridge API that wraps `comicrd_core`.
+- [x] Store the initialized core instance behind a bridge-level global after `initApp`.
+- [x] Add typed request/response structs for every API listed in the Public API Boundary.
+- [x] Use `path_provider` in Dart to resolve the app support directory and call `initApp` before rendering the main routes.
+- [x] Add a thin Dart `ComicRdApi` facade so UI code does not call generated FRB symbols directly.
+- [x] Verify `cargo test` passes for the Rust workspace.
+- [x] Verify `flutter analyze` can see generated Dart code without analyzer errors.
 
 ### Task 3: App Shell, Routing, Theme, And Localization
 

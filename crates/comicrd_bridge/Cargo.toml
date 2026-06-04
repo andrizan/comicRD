@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
 [dependencies]
 comicrd_core = { path = "../comicrd_core" }
-
+flutter_rust_bridge = "=2.12.0"

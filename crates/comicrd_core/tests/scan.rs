@@ -1,5 +1,8 @@
 use comicrd_core::{ComicRdCore, OpenChapterPayload, SaveProgressPayload, SortBy, SortDir};
 use std::fs;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use tempfile::tempdir;
 
 #[test]
@@ -30,6 +33,12 @@ fn scan_libraries_upserts_comics_chapters_and_progress_counts() {
     let summary = core.scan_libraries().expect("scan libraries");
     assert_eq!(summary.comics, 2);
     assert_eq!(summary.chapters, 3);
+    let scan_status = core.get_library_scan_status();
+    assert!(!scan_status.running);
+    assert!(scan_status.started_at.is_some());
+    assert!(scan_status.finished_at.is_some());
+    assert_eq!(scan_status.last_summary, Some(summary));
+    assert_eq!(scan_status.error, None);
 
     let comics = core
         .list_comics(SortBy::Name, SortDir::Asc)
@@ -64,4 +73,35 @@ fn scan_libraries_upserts_comics_chapters_and_progress_counts() {
         .expect("list comics after progress");
     assert_eq!(comics[0].read_chapter_count, 0);
     assert_eq!(comics[0].in_progress_chapter_count, 1);
+}
+
+#[test]
+fn start_scan_libraries_updates_core_owned_scan_status() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    fs::create_dir_all(comic.join("Chapter 1")).expect("chapter");
+    fs::write(comic.join("Chapter 1").join("001.png"), b"").expect("page");
+
+    let core = Arc::new(ComicRdCore::open(&app_data).expect("open core"));
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+
+    assert!(core.start_scan_libraries().expect("start scan"));
+
+    let mut scan_status = core.get_library_scan_status();
+    for _ in 0..100 {
+        if !scan_status.running && scan_status.finished_at.is_some() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+        scan_status = core.get_library_scan_status();
+    }
+
+    assert!(!scan_status.running);
+    assert!(scan_status.started_at.is_some());
+    assert!(scan_status.finished_at.is_some());
+    assert_eq!(scan_status.error, None);
+    assert_eq!(scan_status.last_summary.expect("summary").comics, 1);
 }

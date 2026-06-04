@@ -6,7 +6,8 @@ mod reader;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -68,6 +69,36 @@ pub struct Comic {
 pub struct ScanSummary {
     pub comics: usize,
     pub chapters: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LibraryScanStatus {
+    pub running: bool,
+    pub started_at: Option<i64>,
+    pub finished_at: Option<i64>,
+    pub last_summary: Option<ScanSummary>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct LibraryScanState {
+    running: bool,
+    started_at: Option<i64>,
+    finished_at: Option<i64>,
+    last_summary: Option<ScanSummary>,
+    error: Option<String>,
+}
+
+impl LibraryScanState {
+    fn status(&self) -> LibraryScanStatus {
+        LibraryScanStatus {
+            running: self.running,
+            started_at: self.started_at,
+            finished_at: self.finished_at,
+            last_summary: self.last_summary.clone(),
+            error: self.error.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -170,7 +201,7 @@ pub struct SaveBookmarkPayload {
     pub note: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ImageVariantProfile {
     Performance,
     Balanced,
@@ -219,6 +250,14 @@ pub struct RenderPagePayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PrefetchPageVariantsPayload {
+    pub chapter_id: i64,
+    pub page_indices: Vec<usize>,
+    pub target_width: Option<u32>,
+    pub profile: ImageVariantProfile,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RenderedPage {
     pub bytes: Vec<u8>,
     pub mime: String,
@@ -247,6 +286,8 @@ pub struct SettingEntry {
 pub struct ComicRdCore {
     db_path: PathBuf,
     conn: Mutex<Connection>,
+    page_cache: PageCache,
+    scan_state: Mutex<LibraryScanState>,
 }
 
 impl ComicRdCore {
@@ -265,6 +306,8 @@ impl ComicRdCore {
         Ok(Self {
             db_path,
             conn: Mutex::new(conn),
+            page_cache: PageCache::default(),
+            scan_state: Mutex::new(LibraryScanState::default()),
         })
     }
 
@@ -334,11 +377,83 @@ impl ComicRdCore {
     }
 
     pub fn scan_libraries(&self) -> Result<ScanSummary, String> {
+        self.mark_scan_started()?;
+        let result = self.scan_libraries_now();
+        self.mark_scan_finished(&result);
+        result
+    }
+
+    fn scan_libraries_now(&self) -> Result<ScanSummary, String> {
         let mut conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         scan_libraries_conn(&mut conn)
+    }
+
+    pub fn start_scan_libraries(self: &Arc<Self>) -> Result<bool, String> {
+        {
+            let mut state = self
+                .scan_state
+                .lock()
+                .map_err(|_| "failed locking scan state".to_string())?;
+            if state.running {
+                return Ok(false);
+            }
+            state.running = true;
+            state.started_at = Some(now_ts());
+            state.finished_at = None;
+            state.error = None;
+        }
+
+        let core = Arc::clone(self);
+        thread::spawn(move || {
+            let result = core.scan_libraries_now();
+            core.mark_scan_finished(&result);
+        });
+
+        Ok(true)
+    }
+
+    pub fn get_library_scan_status(&self) -> LibraryScanStatus {
+        match self.scan_state.lock() {
+            Ok(state) => state.status(),
+            Err(_) => LibraryScanStatus {
+                running: false,
+                started_at: None,
+                finished_at: None,
+                last_summary: None,
+                error: Some("scan state lock poisoned".to_string()),
+            },
+        }
+    }
+
+    fn mark_scan_started(&self) -> Result<(), String> {
+        let mut state = self
+            .scan_state
+            .lock()
+            .map_err(|_| "failed locking scan state".to_string())?;
+        state.running = true;
+        state.started_at = Some(now_ts());
+        state.finished_at = None;
+        state.error = None;
+        Ok(())
+    }
+
+    fn mark_scan_finished(&self, result: &Result<ScanSummary, String>) {
+        if let Ok(mut state) = self.scan_state.lock() {
+            state.running = false;
+            state.finished_at = Some(now_ts());
+            match result {
+                Ok(summary) => {
+                    state.last_summary = Some(summary.clone());
+                    state.error = None;
+                }
+                Err(error) => {
+                    state.error = Some(error.clone());
+                }
+            }
+        }
     }
 
     pub fn list_comics(&self, sort_by: SortBy, sort_dir: SortDir) -> Result<Vec<Comic>, String> {
@@ -405,7 +520,40 @@ impl ComicRdCore {
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        render_page_variant_conn(&conn, payload)
+        render_page_variant_conn(&conn, &self.page_cache, payload)
+    }
+
+    pub fn render_page_preview(
+        &self,
+        chapter_id: i64,
+        page_index: usize,
+    ) -> Result<RenderedPage, String> {
+        self.render_page_variant(RenderPagePayload {
+            chapter_id,
+            page_index,
+            target_width: Some(320),
+            profile: ImageVariantProfile::Performance,
+        })
+    }
+
+    pub fn prefetch_page_variants(
+        &self,
+        payload: PrefetchPageVariantsPayload,
+    ) -> Result<(), String> {
+        for page_index in payload.page_indices {
+            self.render_page_variant(RenderPagePayload {
+                chapter_id: payload.chapter_id,
+                page_index,
+                target_width: payload.target_width,
+                profile: payload.profile,
+            })?;
+        }
+        Ok(())
+    }
+
+    #[doc(hidden)]
+    pub fn cache_stats_for_test(&self) -> CacheStats {
+        self.page_cache.stats()
     }
 
     pub fn add_bookmark(&self, payload: SaveBookmarkPayload) -> Result<i64, String> {
