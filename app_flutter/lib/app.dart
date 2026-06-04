@@ -9,6 +9,7 @@ import 'pages/library_page.dart';
 import 'pages/reader_page.dart';
 import 'routes/path_codec.dart';
 import 'state/api_state.dart';
+import 'state/settings_data_state.dart';
 import 'state/settings_state.dart';
 import 'widgets/settings_panel.dart';
 
@@ -104,6 +105,11 @@ class ComicRdShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
+      next.whenData(
+        ref.read(appSettingsProvider.notifier).hydrateFromSettings,
+      );
+    });
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
     return Scaffold(
@@ -120,6 +126,7 @@ class ComicRdShell extends ConsumerWidget {
           Tooltip(
             message: text.theme,
             child: PopupMenuButton<ThemeMode>(
+              tooltip: text.theme,
               onSelected: (mode) async {
                 ref.read(appSettingsProvider.notifier).setThemeMode(mode);
                 await ref
@@ -188,6 +195,7 @@ class ComicRdShell extends ConsumerWidget {
           Tooltip(
             message: text.locale,
             child: PopupMenuButton<String>(
+              tooltip: text.locale,
               onSelected: (locale) async {
                 ref.read(appSettingsProvider.notifier).setLocale(locale);
                 await ref

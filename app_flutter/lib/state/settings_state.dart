@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,6 +33,24 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   void setLocale(String localeCode) {
     state = state.copyWith(localeCode: localeCode);
+  }
+
+  void hydrateFromSettings(Map<String, String> values) {
+    final theme = themeModeFromSetting(
+      _decodeString(values['app_theme'], 'system'),
+    );
+    final locale = _decodeString(values['app_locale'], 'en');
+    state = state.copyWith(themeMode: theme, localeCode: locale);
+  }
+
+  String _decodeString(String? raw, String fallback) {
+    if (raw == null) return fallback;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is String ? decoded : fallback;
+    } catch (_) {
+      return fallback;
+    }
   }
 
   void toggleTheme() {
