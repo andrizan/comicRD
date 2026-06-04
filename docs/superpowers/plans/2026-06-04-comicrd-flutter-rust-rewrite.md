@@ -168,18 +168,19 @@ Important data types:
 
 ### Task 3: App Shell, Routing, Theme, And Localization
 
-- [ ] Replace the template counter app in `lib/main.dart`.
-- [ ] Add `go_router` routes:
+- [x] Replace the template counter app in `lib/main.dart`.
+- [x] Add `go_router` routes:
   - `/`
   - `/comic/:comicPath`
   - `/reader/:chapterId`
-- [ ] Add Riverpod providers for settings, library preferences, library data, comic data, reader data, bookmarks, and history.
-- [ ] Implement light/dark theme matching the quiet desktop utility feel of the current app.
-- [ ] Implement en/id localization and keep `app_locale` default as `en`.
-- [ ] Implement top app chrome with home, app title, theme toggle, and settings button.
-- [ ] Hide main app chrome on reader route.
-- [ ] Implement in-memory scroll restoration for library tabs and comic pages.
-- [ ] Add route path encode/decode helpers for comic source paths.
+- [x] Add Riverpod providers for settings, library preferences, library data, comic data, reader data, bookmarks, and history.
+- [x] Implement light/dark theme matching the quiet desktop utility feel of the current app.
+- [x] Implement en/id localization and keep `app_locale` default as `en`.
+  - Current Flutter shell uses internal app strings for en/id. Material/Cupertino framework localizations remain English until `flutter_localizations` is added.
+- [x] Implement top app chrome with home, app title, theme toggle, and settings button.
+- [x] Hide main app chrome on reader route.
+- [x] Implement in-memory scroll restoration for library tabs and comic pages.
+- [x] Add route path encode/decode helpers for comic source paths.
 
 ### Task 4: Settings And Data Migration
 

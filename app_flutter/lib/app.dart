@@ -42,8 +42,8 @@ class ComicRdApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'ComicRD',
       debugShowCheckedModeBanner: false,
-      locale: Locale(settings.localeCode),
-      supportedLocales: const [Locale('en'), Locale('id')],
+      locale: const Locale('en'),
+      supportedLocales: const [Locale('en')],
       themeMode: settings.themeMode,
       theme: buildComicRdTheme(Brightness.light),
       darkTheme: buildComicRdTheme(Brightness.dark),
