@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/comicrd_api.dart';
 import '../bridge_generated.dart' as bridge;
 import '../routes/path_codec.dart';
 import '../state/api_state.dart';
@@ -35,6 +36,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   double _zoom = 1;
   double _pageGap = 10;
   bridge.ImageVariantProfile _profile = bridge.ImageVariantProfile.balanced;
+  late final ComicRdApi _api = const ComicRdApi();
+  ReaderData? _lastReaderData;
 
   @override
   void initState() {
@@ -46,7 +49,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void dispose() {
     _progressTimer?.cancel();
-    unawaited(_saveProgress(immediate: true));
+    unawaited(_saveProgressDirect());
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scroll.dispose();
     _focusNode.dispose();
@@ -301,6 +304,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _saveProgress({required bool immediate}) async {
     final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+    _lastReaderData = data;
     if (data == null || data.pages.isEmpty || _currentPage == _lastSavedPage) {
       return;
     }
@@ -316,6 +320,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             isRead: _currentPage >= data.pages.length - 1,
           ),
         );
+  }
+
+  Future<void> _saveProgressDirect() async {
+    final data = _lastReaderData;
+    if (data == null || data.pages.isEmpty || _currentPage == _lastSavedPage) {
+      return;
+    }
+    _lastSavedPage = _currentPage;
+    await _api.saveProgress(
+      bridge.SaveProgressPayload(
+        chapterId: widget.chapterId,
+        lastPage: _currentPage,
+        totalPages: data.pages.length,
+        mode: 'webtoon',
+        isRead: _currentPage >= data.pages.length - 1,
+      ),
+    );
   }
 
   Future<void> _prefetchAround(int page) async {
@@ -615,21 +636,19 @@ class _ReaderToolbar extends StatelessWidget {
                     icon: const Icon(Icons.tune, color: Colors.white),
                   )
                 else ...[
-                  _MiniSlider(
-                    tooltip: 'Gap',
+                  _ValueButton(
+                    tooltip: 'Gap −',
                     icon: Icons.vertical_align_center,
-                    value: pageGap,
-                    min: 0,
-                    max: 80,
-                    onChanged: onGapChanged,
+                    label: '${pageGap.round()}',
+                    onDecrease: () => onGapChanged((pageGap - 5).clamp(0, 80)),
+                    onIncrease: () => onGapChanged((pageGap + 5).clamp(0, 80)),
                   ),
-                  _MiniSlider(
+                  _ValueButton(
                     tooltip: 'Zoom',
                     icon: Icons.zoom_in,
-                    value: zoom,
-                    min: 0.5,
-                    max: 3,
-                    onChanged: onZoomChanged,
+                    label: '${zoom.toStringAsFixed(1)}×',
+                    onDecrease: () => onZoomChanged((zoom - 0.1).clamp(0.5, 3)),
+                    onIncrease: () => onZoomChanged((zoom + 0.1).clamp(0.5, 3)),
                   ),
                 ],
                 IconButton(
@@ -663,24 +682,36 @@ class _ReaderToolbar extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _SheetSlider(
+                    _SheetValueControl(
                       label: 'Gap',
                       value: sheetGap,
-                      min: 0,
-                      max: 80,
-                      onChanged: (value) {
-                        setSheetState(() => sheetGap = value);
-                        onGapChanged(value);
+                      decimals: 0,
+                      unit: '',
+                      onDecrease: () {
+                        final v = (sheetGap - 5).clamp(0, 80).toDouble();
+                        setSheetState(() => sheetGap = v);
+                        onGapChanged(v);
+                      },
+                      onIncrease: () {
+                        final v = (sheetGap + 5).clamp(0, 80).toDouble();
+                        setSheetState(() => sheetGap = v);
+                        onGapChanged(v);
                       },
                     ),
-                    _SheetSlider(
+                    _SheetValueControl(
                       label: 'Zoom',
                       value: sheetZoom,
-                      min: 0.5,
-                      max: 3,
-                      onChanged: (value) {
-                        setSheetState(() => sheetZoom = value);
-                        onZoomChanged(value);
+                      decimals: 1,
+                      unit: '×',
+                      onDecrease: () {
+                        final v = (sheetZoom - 0.1).clamp(0.5, 3).toDouble();
+                        setSheetState(() => sheetZoom = v);
+                        onZoomChanged(v);
+                      },
+                      onIncrease: () {
+                        final v = (sheetZoom + 0.1).clamp(0.5, 3).toDouble();
+                        setSheetState(() => sheetZoom = v);
+                        onZoomChanged(v);
                       },
                     ),
                   ],
@@ -694,61 +725,71 @@ class _ReaderToolbar extends StatelessWidget {
   }
 }
 
-class _MiniSlider extends StatelessWidget {
-  const _MiniSlider({
+class _ValueButton extends StatelessWidget {
+  const _ValueButton({
     required this.tooltip,
     required this.icon,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
+    required this.label,
+    required this.onDecrease,
+    required this.onIncrease,
   });
 
   final String tooltip;
   final IconData icon;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
+  final String label;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: SizedBox(
-        width: 132,
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 18),
-            Expanded(
-              child: Slider(
-                value: value.clamp(min, max),
-                min: min,
-                max: max,
-                onChanged: onChanged,
-              ),
-            ),
-          ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.white70, size: 16),
+        const SizedBox(width: 2),
+        _iconBtn(Icons.remove, onDecrease),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
         ),
+        _iconBtn(Icons.add, onIncrease),
+      ],
+    );
+  }
+
+  Widget _iconBtn(IconData icon, VoidCallback onPressed) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: 16,
+        icon: Icon(icon, color: Colors.white),
+        onPressed: onPressed,
       ),
     );
   }
 }
 
-class _SheetSlider extends StatelessWidget {
-  const _SheetSlider({
+class _SheetValueControl extends StatelessWidget {
+  const _SheetValueControl({
     required this.label,
     required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
+    required this.decimals,
+    required this.unit,
+    required this.onDecrease,
+    required this.onIncrease,
   });
 
   final String label;
   final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
+  final int decimals;
+  final String unit;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
 
   @override
   Widget build(BuildContext context) {
@@ -758,21 +799,21 @@ class _SheetSlider extends StatelessWidget {
           width: 56,
           child: Text(label, style: const TextStyle(color: Colors.white70)),
         ),
-        Expanded(
-          child: Slider(
-            value: value.clamp(min, max),
-            min: min,
-            max: max,
-            onChanged: onChanged,
-          ),
+        IconButton(
+          icon: const Icon(Icons.remove, color: Colors.white),
+          onPressed: onDecrease,
         ),
         SizedBox(
-          width: 44,
+          width: 56,
           child: Text(
-            value.toStringAsFixed(1),
-            textAlign: TextAlign.end,
-            style: const TextStyle(color: Colors.white70),
+            value.toStringAsFixed(decimals) + unit,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white),
           ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.add, color: Colors.white),
+          onPressed: onIncrease,
         ),
       ],
     );

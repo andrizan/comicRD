@@ -119,37 +119,124 @@ class ComicRdShell extends ConsumerWidget {
           ),
           Tooltip(
             message: text.theme,
-            child: IconButton(
-              onPressed: () async {
-                final nextMode = settings.themeMode == ThemeMode.dark
-                    ? ThemeMode.light
-                    : ThemeMode.dark;
-                ref.read(appSettingsProvider.notifier).setThemeMode(nextMode);
+            child: PopupMenuButton<ThemeMode>(
+              onSelected: (mode) async {
+                ref.read(appSettingsProvider.notifier).setThemeMode(mode);
                 await ref
                     .read(comicRdApiProvider)
                     .setSetting(
                       'app_theme',
-                      jsonEncode(themeModeToSetting(nextMode)),
+                      jsonEncode(themeModeToSetting(mode)),
                     );
               },
               icon: Icon(
                 settings.themeMode == ThemeMode.dark
                     ? Icons.dark_mode_outlined
-                    : Icons.light_mode_outlined,
+                    : settings.themeMode == ThemeMode.light
+                        ? Icons.light_mode_outlined
+                        : Icons.brightness_auto_outlined,
               ),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: ThemeMode.system,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.brightness_auto_outlined,
+                        color: settings.themeMode == ThemeMode.system
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(text.themeSystem),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: ThemeMode.light,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.light_mode_outlined,
+                        color: settings.themeMode == ThemeMode.light
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(text.themeLight),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: ThemeMode.dark,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.dark_mode_outlined,
+                        color: settings.themeMode == ThemeMode.dark
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(text.themeDark),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           Tooltip(
             message: text.locale,
-            child: IconButton(
-              onPressed: () async {
-                final nextLocale = settings.localeCode == 'en' ? 'id' : 'en';
-                ref.read(appSettingsProvider.notifier).setLocale(nextLocale);
+            child: PopupMenuButton<String>(
+              onSelected: (locale) async {
+                ref.read(appSettingsProvider.notifier).setLocale(locale);
                 await ref
                     .read(comicRdApiProvider)
-                    .setSetting('app_locale', jsonEncode(nextLocale));
+                    .setSetting('app_locale', jsonEncode(locale));
               },
               icon: const Icon(Icons.translate_outlined),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'en',
+                  child: Row(
+                    children: [
+                      Text(
+                        '🇺🇸',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'English',
+                        style: TextStyle(
+                          color: settings.localeCode == 'en'
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'id',
+                  child: Row(
+                    children: [
+                      Text(
+                        '🇮🇩',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Indonesian',
+                        style: TextStyle(
+                          color: settings.localeCode == 'id'
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           Tooltip(

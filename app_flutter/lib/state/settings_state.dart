@@ -69,6 +69,9 @@ class AppStrings {
   const AppStrings({
     required this.home,
     required this.theme,
+    required this.themeSystem,
+    required this.themeLight,
+    required this.themeDark,
     required this.locale,
     required this.settings,
     required this.history,
@@ -82,6 +85,9 @@ class AppStrings {
 
   final String home;
   final String theme;
+  final String themeSystem;
+  final String themeLight;
+  final String themeDark;
   final String locale;
   final String settings;
   final String history;
@@ -95,6 +101,9 @@ class AppStrings {
   static const en = AppStrings(
     home: 'Home',
     theme: 'Theme',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     locale: 'Language',
     settings: 'Settings',
     history: 'History',
@@ -109,6 +118,9 @@ class AppStrings {
   static const id = AppStrings(
     home: 'Beranda',
     theme: 'Tema',
+    themeSystem: 'Sistem',
+    themeLight: 'Terang',
+    themeDark: 'Gelap',
     locale: 'Bahasa',
     settings: 'Pengaturan',
     history: 'Riwayat',
