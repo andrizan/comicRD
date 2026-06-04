@@ -16,6 +16,11 @@ void main() {
     expect(find.text('Library'), findsOneWidget);
     expect(find.text('Bookmarks'), findsOneWidget);
     expect(find.byIcon(Icons.search), findsOneWidget);
+
+    await tester.tap(find.text('Library'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Demo Comic'), findsOneWidget);
   });
 
   testWidgets('toggles locale from English to Indonesian', (tester) async {
@@ -80,6 +85,23 @@ class _FakeComicRdApi extends ComicRdApi {
     required bridge.SortBy sortBy,
     required bridge.SortDir sortDir,
   }) async {
+    return const [
+      bridge.RawComic(
+        key: '/library/Demo Comic',
+        title: 'Demo Comic',
+        sourcePath: '/library/Demo Comic',
+        sourceType: 'folder',
+        libraryPath: '/library',
+        dateModified: 0,
+        chapterCount: 0,
+        readChapterCount: 0,
+        inProgressChapterCount: 0,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<String>> listComicsWithProgress() async {
     return const [];
   }
 

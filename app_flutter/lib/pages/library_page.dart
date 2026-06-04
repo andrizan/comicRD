@@ -1,11 +1,16 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../bridge_generated.dart' as bridge;
 import '../routes/path_codec.dart';
+import '../state/api_state.dart';
 import '../state/library_state.dart';
 import '../state/scroll_state.dart';
+import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
@@ -66,12 +71,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
+      next.whenData(
+        ref.read(libraryPreferencesProvider.notifier).hydrateFromSettings,
+      );
+    });
+
     final text = stringsFor(ref.watch(appSettingsProvider).localeCode);
     final preferences = ref.watch(libraryPreferencesProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
     final history = ref.watch(readingHistoryProvider);
     final comics = ref.watch(libraryComicsProvider);
     final bookmarks = ref.watch(allBookmarksProvider);
+    final bookmarkedPaths =
+        bookmarks.asData?.value
+            .map((bookmark) => bookmark.comicSourcePath)
+            .toSet() ??
+        const <String>{};
     return Column(
       children: [
         Padding(
@@ -102,26 +118,87 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                   ),
                 ],
                 selected: {preferences.displayMode},
-                onSelectionChanged: (selection) {
-                  ref
-                      .read(libraryPreferencesProvider.notifier)
-                      .setDisplayMode(selection.single);
+                onSelectionChanged: (selection) =>
+                    _setDisplayMode(selection.single),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          child: Row(
+            children: [
+              SegmentedButton<LibraryViewMode>(
+                segments: const [
+                  ButtonSegment(value: LibraryViewMode.all, label: Text('All')),
+                  ButtonSegment(
+                    value: LibraryViewMode.unread,
+                    label: Text('Unread'),
+                  ),
+                  ButtonSegment(
+                    value: LibraryViewMode.reading,
+                    label: Text('Progress'),
+                  ),
+                ],
+                selected: {preferences.viewMode},
+                onSelectionChanged: (selection) =>
+                    _setViewMode(selection.single),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<bridge.SortBy>(
+                value: preferences.sortBy,
+                items: const [
+                  DropdownMenuItem(
+                    value: bridge.SortBy.name,
+                    child: Text('Name'),
+                  ),
+                  DropdownMenuItem(
+                    value: bridge.SortBy.folderDate,
+                    child: Text('Folder date'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    _setSort(value, preferences.sortDir);
+                  }
                 },
+              ),
+              const SizedBox(width: 4),
+              Tooltip(
+                message: preferences.sortDir == bridge.SortDir.asc
+                    ? 'Ascending'
+                    : 'Descending',
+                child: IconButton(
+                  onPressed: () => _setSort(
+                    preferences.sortBy,
+                    preferences.sortDir == bridge.SortDir.asc
+                        ? bridge.SortDir.desc
+                        : bridge.SortDir.asc,
+                  ),
+                  icon: Icon(
+                    preferences.sortDir == bridge.SortDir.asc
+                        ? Icons.arrow_upward
+                        : Icons.arrow_downward,
+                  ),
+                ),
               ),
             ],
           ),
         ),
         sourceStatus.when(
           data: (status) {
-            if (!status.configured || status.error == null) {
+            if (status.configured && status.error == null) {
               return const SizedBox.shrink();
             }
+            final message = status.configured
+                ? status.error!
+                : 'No library source configured';
             return Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  status.error!,
+                  message,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
@@ -161,8 +238,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               ),
               _ComicList(
                 comics: comics,
+                displayMode: preferences.displayMode,
+                bookmarkedPaths: bookmarkedPaths,
                 controller: _libraryScroll,
                 emptyLabel: text.emptyLibrary,
+                onToggleBookmark: _toggleComicBookmark,
+                onCopyTitle: _copyComicTitle,
+                onCopyPath: _copyComicPath,
+                onOpenFolder: _openContainingFolder,
               ),
               _BookmarkList(
                 bookmarks: bookmarks,
@@ -175,18 +258,83 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
       ],
     );
   }
+
+  Future<void> _setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) async {
+    ref.read(libraryPreferencesProvider.notifier).setSort(sortBy, sortDir);
+    final api = ref.read(comicRdApiProvider);
+    await api.setSetting('library_sort_by', jsonEncode(encodeSortBy(sortBy)));
+    await api.setSetting(
+      'library_sort_dir',
+      jsonEncode(encodeSortDir(sortDir)),
+    );
+  }
+
+  Future<void> _setViewMode(LibraryViewMode viewMode) async {
+    ref.read(libraryPreferencesProvider.notifier).setViewMode(viewMode);
+    await ref
+        .read(comicRdApiProvider)
+        .setSetting('library_view_mode', jsonEncode(encodeViewMode(viewMode)));
+  }
+
+  Future<void> _setDisplayMode(LibraryDisplayMode displayMode) async {
+    ref.read(libraryPreferencesProvider.notifier).setDisplayMode(displayMode);
+    await ref
+        .read(comicRdApiProvider)
+        .setSetting(
+          'library_display_mode',
+          jsonEncode(encodeDisplayMode(displayMode)),
+        );
+  }
+
+  Future<void> _toggleComicBookmark(
+    bridge.RawComic comic,
+    bool bookmarked,
+  ) async {
+    final api = ref.read(comicRdApiProvider);
+    if (bookmarked) {
+      await api.removeComicBookmark(comic.sourcePath);
+    } else {
+      await api.addComicBookmark(comic.sourcePath);
+    }
+    ref.invalidate(allBookmarksProvider);
+  }
+
+  Future<void> _copyComicTitle(bridge.RawComic comic) async {
+    await Clipboard.setData(ClipboardData(text: comic.title));
+  }
+
+  Future<void> _copyComicPath(bridge.RawComic comic) async {
+    await Clipboard.setData(ClipboardData(text: comic.sourcePath));
+  }
+
+  Future<void> _openContainingFolder(bridge.RawComic comic) async {
+    await ref.read(comicRdApiProvider).openContainingFolder(comic.sourcePath);
+  }
 }
 
 class _ComicList extends StatelessWidget {
   const _ComicList({
     required this.comics,
+    required this.displayMode,
+    required this.bookmarkedPaths,
     required this.controller,
     required this.emptyLabel,
+    required this.onToggleBookmark,
+    required this.onCopyTitle,
+    required this.onCopyPath,
+    required this.onOpenFolder,
   });
 
   final AsyncValue<List<bridge.RawComic>> comics;
+  final LibraryDisplayMode displayMode;
+  final Set<String> bookmarkedPaths;
   final ScrollController controller;
   final String emptyLabel;
+  final Future<void> Function(bridge.RawComic comic, bool bookmarked)
+  onToggleBookmark;
+  final Future<void> Function(bridge.RawComic comic) onCopyTitle;
+  final Future<void> Function(bridge.RawComic comic) onCopyPath;
+  final Future<void> Function(bridge.RawComic comic) onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -195,6 +343,33 @@ class _ComicList extends StatelessWidget {
         if (items.isEmpty) {
           return _EmptyState(label: emptyLabel);
         }
+        if (displayMode == LibraryDisplayMode.grid) {
+          return GridView.builder(
+            controller: controller,
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 220,
+              mainAxisExtent: 164,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final comic = items[index];
+              final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
+              return _ComicGridTile(
+                comic: comic,
+                bookmarked: bookmarked,
+                onOpen: () =>
+                    context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
+                onToggleBookmark: () => onToggleBookmark(comic, bookmarked),
+                onCopyTitle: () => onCopyTitle(comic),
+                onCopyPath: () => onCopyPath(comic),
+                onOpenFolder: () => onOpenFolder(comic),
+              );
+            },
+          );
+        }
         return ListView.separated(
           controller: controller,
           padding: const EdgeInsets.all(16),
@@ -202,17 +377,41 @@ class _ComicList extends StatelessWidget {
           separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (context, index) {
             final comic = items[index];
+            final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
             return ListTile(
-              leading: const Icon(Icons.menu_book_outlined),
+              leading: Icon(
+                bookmarked ? Icons.bookmark_outlined : Icons.menu_book_outlined,
+              ),
               title: Text(comic.title),
               subtitle: Text(
                 comic.sourcePath,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              trailing: Text(comic.sourceType.toUpperCase()),
               onTap: () =>
                   context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
+              onLongPress: () => onToggleBookmark(comic, bookmarked),
+              contentPadding: const EdgeInsets.only(left: 16, right: 4),
+              minLeadingWidth: 24,
+              horizontalTitleGap: 12,
+              mouseCursor: SystemMouseCursors.click,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              hoverColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(comic.sourceType.toUpperCase()),
+                  _ComicActionsButton(
+                    bookmarked: bookmarked,
+                    onToggleBookmark: () => onToggleBookmark(comic, bookmarked),
+                    onCopyTitle: () => onCopyTitle(comic),
+                    onCopyPath: () => onCopyPath(comic),
+                    onOpenFolder: () => onOpenFolder(comic),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -222,6 +421,129 @@ class _ComicList extends StatelessWidget {
     );
   }
 }
+
+class _ComicGridTile extends StatelessWidget {
+  const _ComicGridTile({
+    required this.comic,
+    required this.bookmarked,
+    required this.onOpen,
+    required this.onToggleBookmark,
+    required this.onCopyTitle,
+    required this.onCopyPath,
+    required this.onOpenFolder,
+  });
+
+  final bridge.RawComic comic;
+  final bool bookmarked;
+  final VoidCallback onOpen;
+  final Future<void> Function() onToggleBookmark;
+  final Future<void> Function() onCopyTitle;
+  final Future<void> Function() onCopyPath;
+  final Future<void> Function() onOpenFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    bookmarked
+                        ? Icons.bookmark_outlined
+                        : Icons.menu_book_outlined,
+                  ),
+                  const Spacer(),
+                  _ComicActionsButton(
+                    bookmarked: bookmarked,
+                    onToggleBookmark: onToggleBookmark,
+                    onCopyTitle: onCopyTitle,
+                    onCopyPath: onCopyPath,
+                    onOpenFolder: onOpenFolder,
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                comic.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                comic.sourceType.toUpperCase(),
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ComicActionsButton extends StatelessWidget {
+  const _ComicActionsButton({
+    required this.bookmarked,
+    required this.onToggleBookmark,
+    required this.onCopyTitle,
+    required this.onCopyPath,
+    required this.onOpenFolder,
+  });
+
+  final bool bookmarked;
+  final Future<void> Function() onToggleBookmark;
+  final Future<void> Function() onCopyTitle;
+  final Future<void> Function() onCopyPath;
+  final Future<void> Function() onOpenFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_ComicAction>(
+      tooltip: 'Comic actions',
+      icon: const Icon(Icons.more_vert),
+      onSelected: (action) async {
+        switch (action) {
+          case _ComicAction.toggleBookmark:
+            await onToggleBookmark();
+          case _ComicAction.copyTitle:
+            await onCopyTitle();
+          case _ComicAction.copyPath:
+            await onCopyPath();
+          case _ComicAction.openFolder:
+            await onOpenFolder();
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: _ComicAction.toggleBookmark,
+          child: Text(bookmarked ? 'Remove bookmark' : 'Add bookmark'),
+        ),
+        const PopupMenuItem(
+          value: _ComicAction.openFolder,
+          child: Text('Open folder'),
+        ),
+        const PopupMenuItem(
+          value: _ComicAction.copyTitle,
+          child: Text('Copy title'),
+        ),
+        const PopupMenuItem(
+          value: _ComicAction.copyPath,
+          child: Text('Copy path'),
+        ),
+      ],
+    );
+  }
+}
+
+enum _ComicAction { toggleBookmark, openFolder, copyTitle, copyPath }
 
 class _HistoryList extends StatelessWidget {
   const _HistoryList({

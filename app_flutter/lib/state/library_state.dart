@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -19,26 +21,39 @@ final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
 ) async {
   final api = ref.watch(comicRdApiProvider);
   final preferences = ref.watch(libraryPreferencesProvider);
+  final progressPaths = (await ref.watch(
+    comicsWithProgressProvider.future,
+  )).toSet();
   final comics = await api.listLibraryComicsRaw(
     sortBy: preferences.sortBy,
     sortDir: preferences.sortDir,
   );
   final query = preferences.query.trim().toLowerCase();
-  if (query.isEmpty) {
-    return comics;
-  }
   return comics
       .where(
         (comic) =>
+            query.isEmpty ||
             comic.title.toLowerCase().contains(query) ||
             comic.sourcePath.toLowerCase().contains(query),
       )
+      .where((comic) {
+        return switch (preferences.viewMode) {
+          LibraryViewMode.all => true,
+          LibraryViewMode.unread => !progressPaths.contains(comic.sourcePath),
+          LibraryViewMode.reading => progressPaths.contains(comic.sourcePath),
+        };
+      })
       .toList();
 });
 
 final readingHistoryProvider = FutureProvider<List<bridge.ReadingHistoryEntry>>(
-  (ref) {
-    return ref.watch(comicRdApiProvider).listReadingHistory();
+  (ref) async {
+    final entries = await ref.watch(comicRdApiProvider).listReadingHistory();
+    final seen = <String>{};
+    return [
+      for (final entry in entries)
+        if (seen.add(entry.comicSourcePath)) entry,
+    ];
   },
 );
 
@@ -85,8 +100,23 @@ class LibraryPreferences {
 }
 
 class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
+  bool _hydrated = false;
+
   @override
   LibraryPreferences build() => const LibraryPreferences();
+
+  void hydrateFromSettings(Map<String, String> values) {
+    if (_hydrated) {
+      return;
+    }
+    _hydrated = true;
+    state = state.copyWith(
+      sortBy: _decodeSortBy(values['library_sort_by']),
+      sortDir: _decodeSortDir(values['library_sort_dir']),
+      viewMode: _decodeViewMode(values['library_view_mode']),
+      displayMode: _decodeDisplayMode(values['library_display_mode']),
+    );
+  }
 
   void setQuery(String query) {
     state = state.copyWith(query: query);
@@ -103,4 +133,70 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
   void setDisplayMode(LibraryDisplayMode displayMode) {
     state = state.copyWith(displayMode: displayMode);
   }
+}
+
+bridge.SortBy _decodeSortBy(String? raw) {
+  return switch (_decodeString(raw, 'name')) {
+    'folder_date' => bridge.SortBy.folderDate,
+    _ => bridge.SortBy.name,
+  };
+}
+
+bridge.SortDir _decodeSortDir(String? raw) {
+  return switch (_decodeString(raw, 'asc')) {
+    'desc' => bridge.SortDir.desc,
+    _ => bridge.SortDir.asc,
+  };
+}
+
+LibraryViewMode _decodeViewMode(String? raw) {
+  return switch (_decodeString(raw, 'all')) {
+    'unread' => LibraryViewMode.unread,
+    'reading' => LibraryViewMode.reading,
+    _ => LibraryViewMode.all,
+  };
+}
+
+LibraryDisplayMode _decodeDisplayMode(String? raw) {
+  return switch (_decodeString(raw, 'grid')) {
+    'list' => LibraryDisplayMode.list,
+    _ => LibraryDisplayMode.grid,
+  };
+}
+
+String encodeSortBy(bridge.SortBy value) {
+  return switch (value) {
+    bridge.SortBy.folderDate => 'folder_date',
+    bridge.SortBy.name => 'name',
+  };
+}
+
+String encodeSortDir(bridge.SortDir value) {
+  return switch (value) {
+    bridge.SortDir.desc => 'desc',
+    bridge.SortDir.asc => 'asc',
+  };
+}
+
+String encodeViewMode(LibraryViewMode value) {
+  return switch (value) {
+    LibraryViewMode.unread => 'unread',
+    LibraryViewMode.reading => 'reading',
+    LibraryViewMode.all => 'all',
+  };
+}
+
+String encodeDisplayMode(LibraryDisplayMode value) {
+  return switch (value) {
+    LibraryDisplayMode.list => 'list',
+    LibraryDisplayMode.grid => 'grid',
+  };
+}
+
+String _decodeString(String? raw, String fallback) {
+  if (raw == null) {
+    return fallback;
+  }
+  final decoded = jsonDecode(raw);
+  return decoded is String ? decoded : fallback;
 }

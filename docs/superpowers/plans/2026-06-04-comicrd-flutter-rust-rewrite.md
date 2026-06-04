@@ -218,15 +218,15 @@ Important data types:
 
 ### Task 5: Library Page
 
-- [ ] Build the library page with three tabs: history, library, bookmarks.
-- [ ] Load preferences from Rust settings on startup.
-- [ ] Implement search, read/unread filter, sort, and grid/list display mode.
-- [ ] Use raw filesystem comic listing from `listLibraryComicsRaw`, not full eager DB scan.
-- [ ] Show source status warning when the library path is unconfigured, missing, not a directory, or unreadable.
-- [ ] Implement comic bookmarks and context actions.
-- [ ] Implement history tab using `listReadingHistory`, deduped by comic source path.
-- [ ] Implement bookmarks tab using `listAllBookmarks`.
-- [ ] Preserve scroll position per tab.
+- [x] Build the library page with three tabs: history, library, bookmarks.
+- [x] Load preferences from Rust settings on startup.
+- [x] Implement search, read/unread filter, sort, and grid/list display mode.
+- [x] Use raw filesystem comic listing from `listLibraryComicsRaw`, not full eager DB scan.
+- [x] Show source status warning when the library path is unconfigured, missing, not a directory, or unreadable.
+- [x] Implement comic bookmarks and context actions.
+- [x] Implement history tab using `listReadingHistory`, deduped by comic source path.
+- [x] Implement bookmarks tab using `listAllBookmarks`.
+- [x] Preserve scroll position per tab.
 
 ### Task 6: Comic Page
 
