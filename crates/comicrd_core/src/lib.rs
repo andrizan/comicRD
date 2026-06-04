@@ -108,6 +108,7 @@ pub struct RawChapter {
     pub chapter_index: i64,
     pub source_path: String,
     pub source_type: String,
+    pub date_modified: i64,
     pub page_count: i64,
     pub is_read: bool,
     pub last_page: i64,

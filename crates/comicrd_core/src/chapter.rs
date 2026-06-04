@@ -410,7 +410,8 @@ pub(crate) fn list_comic_chapters_raw_conn(
         SELECT c.page_count,
                COALESCE(r.is_read, 0),
                COALESCE(r.last_page, 0),
-               COALESCE(r.total_pages, c.page_count)
+               COALESCE(r.total_pages, c.page_count),
+               c.date_modified
         FROM chapters c
         LEFT JOIN reading_progress r ON r.chapter_id = c.id
         WHERE c.history_key = ?1
@@ -423,17 +424,21 @@ pub(crate) fn list_comic_chapters_raw_conn(
                         row.get::<_, i64>(1)? == 1,
                         row.get::<_, i64>(2)?,
                         row.get::<_, i64>(3)?,
+                        row.get::<_, i64>(4)?,
                     ))
                 },
             )
             .ok();
-        let (page_count, is_read, last_page, total_pages) = progress.unwrap_or((0, false, 0, 0));
+        let modified_at = file_modified_ts(Path::new(&chapter_path));
+        let (page_count, is_read, last_page, total_pages, date_modified) =
+            progress.unwrap_or((0, false, 0, 0, modified_at));
         out.push(RawChapter {
             key: chapter_path.clone(),
             title: chapter_title,
             chapter_index,
             source_path: chapter_path.clone(),
             source_type: source_type_for_path(Path::new(&chapter_path)),
+            date_modified,
             page_count,
             is_read,
             last_page,

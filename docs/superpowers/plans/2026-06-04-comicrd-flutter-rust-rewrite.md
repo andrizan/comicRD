@@ -230,17 +230,17 @@ Important data types:
 
 ### Task 6: Comic Page
 
-- [ ] Decode comic path from route param and derive fallback title from path.
-- [ ] Load chapters via `listComicChaptersRaw`.
-- [ ] Implement search, sort, grid/list display, favorites-only filter, and chapter favorites.
-- [ ] Display read/reading/unread status from chapter progress data.
-- [ ] Persist last opened chapter in session memory.
-- [ ] On chapter open:
+- [x] Decode comic path from route param and derive fallback title from path.
+- [x] Load chapters via `listComicChaptersRaw`.
+- [x] Implement search, sort, grid/list display, favorites-only filter, and chapter favorites.
+- [x] Display read/reading/unread status from chapter progress data.
+- [x] Persist last opened chapter in session memory.
+- [x] On chapter open:
   - call `openChapterForReading`
   - prefetch from last read page through the next few pages
   - navigate to `/reader/:chapterId`
-- [ ] Preserve Escape behavior back to the library route.
-- [ ] Preserve scroll restoration and scroll-to-last-chapter behavior.
+- [x] Preserve Escape behavior back to the library route.
+- [x] Preserve scroll restoration and scroll-to-last-chapter behavior.
 
 ### Task 7: Reader Page And Image Rendering
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -15,6 +17,176 @@ final chapterFavoritesProvider = FutureProvider.family<List<String>, String>((
   return ref.watch(comicRdApiProvider).listChapterFavorites(comicPath);
 });
 
+final filteredComicChaptersProvider =
+    FutureProvider.family<List<bridge.RawChapter>, String>((
+      ref,
+      comicPath,
+    ) async {
+      final preferences = ref.watch(
+        comicPreferencesProvider.select(
+          (state) => state[comicPath] ?? const ComicPreferences(),
+        ),
+      );
+      final chapters = await ref.watch(comicChaptersProvider(comicPath).future);
+      final favorites = (await ref.watch(
+        chapterFavoritesProvider(comicPath).future,
+      )).toSet();
+      final query = preferences.query.trim().toLowerCase();
+      final filtered = chapters.where((chapter) {
+        final matchesQuery =
+            query.isEmpty ||
+            chapter.title.toLowerCase().contains(query) ||
+            chapter.sourcePath.toLowerCase().contains(query);
+        final matchesFavorite =
+            !preferences.favoritesOnly ||
+            favorites.contains(chapter.sourcePath);
+        return matchesQuery && matchesFavorite;
+      }).toList();
+      filtered.sort((a, b) {
+        final order = switch (preferences.sortBy) {
+          ChapterSortBy.name => a.title.toLowerCase().compareTo(
+            b.title.toLowerCase(),
+          ),
+          ChapterSortBy.folderDate => a.dateModified.compareTo(b.dateModified),
+          ChapterSortBy.chapterIndex => a.chapterIndex.compareTo(
+            b.chapterIndex,
+          ),
+        };
+        return preferences.sortDir == bridge.SortDir.asc ? order : -order;
+      });
+      return filtered;
+    });
+
 final comicScrollKeyProvider = Provider.family<String, String>(
   (ref, comicPath) => 'comic:$comicPath',
 );
+
+final comicPreferencesProvider =
+    NotifierProvider<ComicPreferencesNotifier, Map<String, ComicPreferences>>(
+      ComicPreferencesNotifier.new,
+    );
+
+final lastOpenedChapterProvider =
+    NotifierProvider<LastOpenedChapterNotifier, Map<String, String>>(
+      LastOpenedChapterNotifier.new,
+    );
+
+enum ChapterSortBy { chapterIndex, name, folderDate }
+
+enum ChapterDisplayMode { grid, list }
+
+class ComicPreferences {
+  const ComicPreferences({
+    this.query = '',
+    this.sortBy = ChapterSortBy.chapterIndex,
+    this.sortDir = bridge.SortDir.asc,
+    this.displayMode = ChapterDisplayMode.list,
+    this.favoritesOnly = false,
+  });
+
+  final String query;
+  final ChapterSortBy sortBy;
+  final bridge.SortDir sortDir;
+  final ChapterDisplayMode displayMode;
+  final bool favoritesOnly;
+
+  ComicPreferences copyWith({
+    String? query,
+    ChapterSortBy? sortBy,
+    bridge.SortDir? sortDir,
+    ChapterDisplayMode? displayMode,
+    bool? favoritesOnly,
+  }) => ComicPreferences(
+    query: query ?? this.query,
+    sortBy: sortBy ?? this.sortBy,
+    sortDir: sortDir ?? this.sortDir,
+    displayMode: displayMode ?? this.displayMode,
+    favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+  );
+}
+
+class ComicPreferencesNotifier extends Notifier<Map<String, ComicPreferences>> {
+  final _hydratedComics = <String>{};
+
+  @override
+  Map<String, ComicPreferences> build() => const {};
+
+  ComicPreferences preferencesFor(String comicPath) =>
+      state[comicPath] ?? const ComicPreferences();
+
+  void hydrateFromSettings(String comicPath, Map<String, String> values) {
+    if (!_hydratedComics.add(comicPath)) {
+      return;
+    }
+    update(
+      comicPath,
+      preferencesFor(comicPath).copyWith(
+        sortBy: _decodeChapterSortBy(values['chapter_sort_by']),
+        sortDir: _decodeSortDir(values['chapter_sort_dir']),
+      ),
+    );
+  }
+
+  void update(String comicPath, ComicPreferences preferences) {
+    state = {...state, comicPath: preferences};
+  }
+
+  void setQuery(String comicPath, String query) {
+    update(comicPath, preferencesFor(comicPath).copyWith(query: query));
+  }
+
+  void setSort(String comicPath, ChapterSortBy sortBy, bridge.SortDir sortDir) {
+    update(
+      comicPath,
+      preferencesFor(comicPath).copyWith(sortBy: sortBy, sortDir: sortDir),
+    );
+  }
+
+  void setDisplayMode(String comicPath, ChapterDisplayMode displayMode) {
+    update(
+      comicPath,
+      preferencesFor(comicPath).copyWith(displayMode: displayMode),
+    );
+  }
+
+  void setFavoritesOnly(String comicPath, bool favoritesOnly) {
+    update(
+      comicPath,
+      preferencesFor(comicPath).copyWith(favoritesOnly: favoritesOnly),
+    );
+  }
+}
+
+ChapterSortBy _decodeChapterSortBy(String? raw) {
+  return switch (_decodeString(raw, 'chapter_index')) {
+    'name' => ChapterSortBy.name,
+    'folder_date' => ChapterSortBy.folderDate,
+    _ => ChapterSortBy.chapterIndex,
+  };
+}
+
+bridge.SortDir _decodeSortDir(String? raw) {
+  return switch (_decodeString(raw, 'asc')) {
+    'desc' => bridge.SortDir.desc,
+    _ => bridge.SortDir.asc,
+  };
+}
+
+String _decodeString(String? raw, String fallback) {
+  if (raw == null) {
+    return fallback;
+  }
+  final decoded = jsonDecode(raw);
+  return decoded is String ? decoded : fallback;
+}
+
+class LastOpenedChapterNotifier extends Notifier<Map<String, String>> {
+  @override
+  Map<String, String> build() => const {};
+
+  String? sourcePathFor(String comicPath) => state[comicPath];
+
+  void remember(String comicPath, String chapterSourcePath) {
+    state = {...state, comicPath: chapterSourcePath};
+  }
+}

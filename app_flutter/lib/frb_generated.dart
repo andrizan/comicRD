@@ -1689,18 +1689,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RawChapter dco_decode_raw_chapter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return RawChapter(
       key: dco_decode_String(arr[0]),
       title: dco_decode_String(arr[1]),
       chapterIndex: dco_decode_i_64(arr[2]),
       sourcePath: dco_decode_String(arr[3]),
       sourceType: dco_decode_String(arr[4]),
-      pageCount: dco_decode_i_64(arr[5]),
-      isRead: dco_decode_bool(arr[6]),
-      lastPage: dco_decode_i_64(arr[7]),
-      totalPages: dco_decode_i_64(arr[8]),
+      dateModified: dco_decode_i_64(arr[5]),
+      pageCount: dco_decode_i_64(arr[6]),
+      isRead: dco_decode_bool(arr[7]),
+      lastPage: dco_decode_i_64(arr[8]),
+      totalPages: dco_decode_i_64(arr[9]),
     );
   }
 
@@ -2393,6 +2394,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_chapterIndex = sse_decode_i_64(deserializer);
     var var_sourcePath = sse_decode_String(deserializer);
     var var_sourceType = sse_decode_String(deserializer);
+    var var_dateModified = sse_decode_i_64(deserializer);
     var var_pageCount = sse_decode_i_64(deserializer);
     var var_isRead = sse_decode_bool(deserializer);
     var var_lastPage = sse_decode_i_64(deserializer);
@@ -2403,6 +2405,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       chapterIndex: var_chapterIndex,
       sourcePath: var_sourcePath,
       sourceType: var_sourceType,
+      dateModified: var_dateModified,
       pageCount: var_pageCount,
       isRead: var_isRead,
       lastPage: var_lastPage,
@@ -3051,6 +3054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.chapterIndex, serializer);
     sse_encode_String(self.sourcePath, serializer);
     sse_encode_String(self.sourceType, serializer);
+    sse_encode_i_64(self.dateModified, serializer);
     sse_encode_i_64(self.pageCount, serializer);
     sse_encode_bool(self.isRead, serializer);
     sse_encode_i_64(self.lastPage, serializer);

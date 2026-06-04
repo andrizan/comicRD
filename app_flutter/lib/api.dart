@@ -529,6 +529,7 @@ class RawChapter {
   final PlatformInt64 chapterIndex;
   final String sourcePath;
   final String sourceType;
+  final PlatformInt64 dateModified;
   final PlatformInt64 pageCount;
   final bool isRead;
   final PlatformInt64 lastPage;
@@ -540,6 +541,7 @@ class RawChapter {
     required this.chapterIndex,
     required this.sourcePath,
     required this.sourceType,
+    required this.dateModified,
     required this.pageCount,
     required this.isRead,
     required this.lastPage,
@@ -553,6 +555,7 @@ class RawChapter {
       chapterIndex.hashCode ^
       sourcePath.hashCode ^
       sourceType.hashCode ^
+      dateModified.hashCode ^
       pageCount.hashCode ^
       isRead.hashCode ^
       lastPage.hashCode ^
@@ -568,6 +571,7 @@ class RawChapter {
           chapterIndex == other.chapterIndex &&
           sourcePath == other.sourcePath &&
           sourceType == other.sourceType &&
+          dateModified == other.dateModified &&
           pageCount == other.pageCount &&
           isRead == other.isRead &&
           lastPage == other.lastPage &&

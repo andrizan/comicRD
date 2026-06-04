@@ -34,6 +34,19 @@ void main() {
     expect(find.text('Pustaka'), findsOneWidget);
     expect(find.text('Bookmark'), findsOneWidget);
   });
+
+  testWidgets('opens comic page and renders chapters', (tester) async {
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Library'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Demo Comic'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chapter 1'), findsOneWidget);
+    expect(find.text('Unread - 12 pages'), findsOneWidget);
+  });
 }
 
 Widget _testApp() {
@@ -112,6 +125,31 @@ class _FakeComicRdApi extends ComicRdApi {
 
   @override
   Future<List<bridge.ComicBookmark>> listAllBookmarks() async {
+    return const [];
+  }
+
+  @override
+  Future<List<bridge.RawChapter>> listComicChaptersRaw(
+    String comicSourcePath,
+  ) async {
+    return const [
+      bridge.RawChapter(
+        key: '/library/Demo Comic/Chapter 1',
+        title: 'Chapter 1',
+        chapterIndex: 1,
+        sourcePath: '/library/Demo Comic/Chapter 1',
+        sourceType: 'folder',
+        dateModified: 0,
+        pageCount: 12,
+        isRead: false,
+        lastPage: 0,
+        totalPages: 12,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<String>> listChapterFavorites(String comicSourcePath) async {
     return const [];
   }
 }
