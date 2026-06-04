@@ -408,6 +408,12 @@ class _ComicList extends StatelessWidget {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _ReadStatusBadge(
+                    readCount: comic.readChapterCount,
+                    totalCount: comic.chapterCount,
+                    inProgressCount: comic.inProgressChapterCount,
+                  ),
+                  const SizedBox(width: 8),
                   Text(comic.sourceType.toUpperCase()),
                   _ComicActionsButton(
                     text: text,
@@ -469,6 +475,11 @@ class _ComicGridTile extends StatelessWidget {
                         : Icons.menu_book_outlined,
                   ),
                   const Spacer(),
+                  _ReadStatusBadge(
+                    readCount: comic.readChapterCount,
+                    totalCount: comic.chapterCount,
+                    inProgressCount: comic.inProgressChapterCount,
+                  ),
                   _ComicActionsButton(
                     text: text,
                     bookmarked: bookmarked,
@@ -493,6 +504,75 @@ class _ComicGridTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadStatusBadge extends StatelessWidget {
+  const _ReadStatusBadge({
+    required this.readCount,
+    required this.totalCount,
+    required this.inProgressCount,
+  });
+
+  final int readCount;
+  final int totalCount;
+  final int inProgressCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (totalCount == 0) {
+      return const SizedBox.shrink();
+    }
+    if (readCount >= totalCount) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          'Read',
+          style: TextStyle(
+            color: colorScheme.onPrimaryContainer,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+    if (inProgressCount > 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: colorScheme.tertiaryContainer,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          'Reading $readCount/$totalCount',
+          style: TextStyle(
+            color: colorScheme.onTertiaryContainer,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'Unread',
+        style: TextStyle(
+          color: colorScheme.onSurfaceVariant,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

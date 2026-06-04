@@ -210,6 +210,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                     emptyLabel: text.emptyLibrary,
                     onOpen: _openChapter,
                     onToggleFavorite: _toggleFavorite,
+                    onOpenFolder: _openChapterFolder,
                   );
                 },
                 error: (error, _) => Center(
@@ -294,6 +295,10 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     }
   }
 
+  Future<void> _openChapterFolder(bridge.RawChapter chapter) async {
+    await ref.read(comicRdApiProvider).openContainingFolder(chapter.sourcePath);
+  }
+
   void _scrollToLastOpened(
     List<bridge.RawChapter> chapters,
     ChapterDisplayMode displayMode,
@@ -348,6 +353,7 @@ class _ChapterList extends StatelessWidget {
     required this.emptyLabel,
     required this.onOpen,
     required this.onToggleFavorite,
+    required this.onOpenFolder,
   });
 
   final AppStrings text;
@@ -359,6 +365,7 @@ class _ChapterList extends StatelessWidget {
   final Future<void> Function(bridge.RawChapter chapter) onOpen;
   final Future<void> Function(bridge.RawChapter chapter, bool favorite)
   onToggleFavorite;
+  final Future<void> Function(bridge.RawChapter chapter) onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -390,6 +397,9 @@ class _ChapterList extends StatelessWidget {
             onToggleFavorite: () {
               onToggleFavorite(chapter, favorite);
             },
+            onOpenFolder: () {
+              onOpenFolder(chapter);
+            },
           );
         },
       );
@@ -412,9 +422,19 @@ class _ChapterList extends StatelessWidget {
           ),
           title: Text(chapter.title),
           subtitle: Text(_chapterStatus(chapter, text)),
-          trailing: chapter.isRead
-              ? const Icon(Icons.done_all_outlined)
-              : const Icon(Icons.chevron_right),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: text.openFolder,
+                onPressed: () => onOpenFolder(chapter),
+                icon: const Icon(Icons.folder_open_outlined, size: 20),
+              ),
+              chapter.isRead
+                  ? const Icon(Icons.done_all_outlined)
+                  : const Icon(Icons.chevron_right),
+            ],
+          ),
           onTap: () => onOpen(chapter),
         );
       },
@@ -429,6 +449,7 @@ class _ChapterGridTile extends StatelessWidget {
     required this.favorite,
     required this.onOpen,
     required this.onToggleFavorite,
+    required this.onOpenFolder,
   });
 
   final AppStrings text;
@@ -436,6 +457,7 @@ class _ChapterGridTile extends StatelessWidget {
   final bool favorite;
   final VoidCallback onOpen;
   final VoidCallback onToggleFavorite;
+  final VoidCallback onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -456,6 +478,11 @@ class _ChapterGridTile extends StatelessWidget {
                         : Icons.article_outlined,
                   ),
                   const Spacer(),
+                  IconButton(
+                    tooltip: text.openFolder,
+                    onPressed: onOpenFolder,
+                    icon: const Icon(Icons.folder_open_outlined, size: 20),
+                  ),
                   IconButton(
                     tooltip: favorite ? text.removeFavorite : text.addFavorite,
                     onPressed: onToggleFavorite,
