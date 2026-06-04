@@ -271,14 +271,18 @@ Important data types:
 
 ### Task 8: Packaging And Desktop Integration
 
-- [ ] Set app name to `ComicRD`.
-- [ ] Set desktop bundle/application identifier to `com.andrizan.comicrd`.
-- [ ] Replace default Flutter icons with existing ComicRD icons where format permits.
-- [ ] Wire platform-specific `openContainingFolder` implementation from Rust.
+- [x] Set app name to `ComicRD`.
+- [x] Set desktop bundle/application identifier to `com.andrizan.comicrd`.
+- [x] Replace default Flutter icons with existing ComicRD icons where format permits.
+- [x] Wire platform-specific `openContainingFolder` implementation from Rust.
 - [ ] Verify Linux desktop run.
 - [ ] Verify Windows build no longer starts WebView2 or `msedgewebview2.exe`.
 - [ ] Verify macOS bundle uses the correct name, icon, and support directory.
-- [ ] Document build commands for Windows, Linux, and macOS in the README.
+- [x] Document build commands for Windows, Linux, and macOS in the README.
+
+Notes:
+
+- Linux build smoke was attempted on 2026-06-04 but this environment has no `cmake`; install CMake before marking Linux desktop run/build verified.
 
 ## Test Plan
 

@@ -23,15 +23,12 @@ Implemented so far:
 - `comicrd_core` with database migrations, library/chapter discovery, reader state, image rendering, cache, scan state, bookmarks, favorites, history, and backup/import tests
 - `comicrd_bridge` with `flutter_rust_bridge` generated bindings
 - Dart bridge entrypoint and `ComicRdApi` facade
-- Initial Flutter shell with routing, theme, locale state, and placeholder library/comic/reader pages
+- Flutter shell with routing, theme, locale state, library page, comic detail page, settings panel, and reader image rendering
 
 Still in progress:
 
-- Full library page behavior
-- Comic detail page behavior
-- Reader page image loading and navigation
-- Settings panel and legacy database migration
 - Packaging and release workflow
+- Manual desktop smoke testing on Windows and macOS
 
 See the implementation plan at:
 
@@ -106,6 +103,26 @@ flutter pub get
 flutter analyze
 flutter test
 flutter run -d linux
+```
+
+Desktop build commands:
+
+```bash
+# Linux
+flutter build linux --release
+
+# Windows, from a Windows host with Visual Studio desktop build tools
+flutter build windows --release
+
+# macOS, from a macOS host with Xcode
+flutter build macos --release
+```
+
+Desktop app metadata is configured as:
+
+```text
+App name: ComicRD
+Bundle/application ID: com.andrizan.comicrd
 ```
 
 In this Codex workspace, shell commands are expected to be prefixed with `rtk`. For example:
