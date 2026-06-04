@@ -38,13 +38,14 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsMapProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
-    final text = stringsFor(_locale);
+    final appSettings = ref.watch(appSettingsProvider);
+    final text = stringsFor(appSettings.localeCode);
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 680, maxHeight: 760),
         child: settings.when(
           data: (values) {
-            _initialize(values);
+            _initialize(values, appSettings);
             return Column(
               children: [
                 Padding(
@@ -194,9 +195,18 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                                   child: Text(text.themeSystem),
                                 ),
                               ],
-                              onChanged: (value) {
+                              onChanged: (value) async {
                                 if (value != null) {
                                   setState(() => _themeMode = value);
+                                  ref
+                                      .read(appSettingsProvider.notifier)
+                                      .setThemeMode(value);
+                                  await ref
+                                      .read(comicRdApiProvider)
+                                      .setSetting(
+                                        'app_theme',
+                                        jsonEncode(themeModeToSetting(value)),
+                                      );
                                 }
                               },
                             ),
@@ -219,9 +229,18 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                                   child: Text(text.indonesian),
                                 ),
                               ],
-                              onChanged: (value) {
+                              onChanged: (value) async {
                                 if (value != null) {
                                   setState(() => _locale = value);
+                                  ref
+                                      .read(appSettingsProvider.notifier)
+                                      .setLocale(value);
+                                  await ref
+                                      .read(comicRdApiProvider)
+                                      .setSetting(
+                                        'app_locale',
+                                        jsonEncode(value),
+                                      );
                                 }
                               },
                             ),
@@ -287,7 +306,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     );
   }
 
-  void _initialize(Map<String, String> values) {
+  void _initialize(Map<String, String> values, AppSettings appSettings) {
     if (_initialized) {
       return;
     }
@@ -295,10 +314,8 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     _defaultZoom.text = _decodeNumber(values['default_zoom'], '1');
     _pageGap.text = _decodeNumber(values['page_gap'], '10');
     _profile = _decodeString(values['image_pipeline_profile'], 'balanced');
-    _themeMode = themeModeFromSetting(
-      _decodeString(values['app_theme'], 'light'),
-    );
-    _locale = _decodeString(values['app_locale'], 'en');
+    _themeMode = appSettings.themeMode;
+    _locale = appSettings.localeCode;
     _initialized = true;
   }
 

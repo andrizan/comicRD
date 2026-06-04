@@ -233,6 +233,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             children: [
               _HistoryList(
                 history: history,
+                displayMode: preferences.displayMode,
                 controller: _historyScroll,
                 emptyLabel: text.emptyLibrary,
               ),
@@ -250,6 +251,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               ),
               _BookmarkList(
                 bookmarks: bookmarks,
+                displayMode: preferences.displayMode,
                 controller: _bookmarksScroll,
                 emptyLabel: text.emptyLibrary,
               ),
@@ -558,11 +560,13 @@ enum _ComicAction { toggleBookmark, openFolder, copyTitle, copyPath }
 class _HistoryList extends StatelessWidget {
   const _HistoryList({
     required this.history,
+    required this.displayMode,
     required this.controller,
     required this.emptyLabel,
   });
 
   final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
+  final LibraryDisplayMode displayMode;
   final ScrollController controller;
   final String emptyLabel;
 
@@ -572,6 +576,52 @@ class _HistoryList extends StatelessWidget {
       data: (items) {
         if (items.isEmpty) {
           return _EmptyState(label: emptyLabel);
+        }
+        if (displayMode == LibraryDisplayMode.grid) {
+          return GridView.builder(
+            controller: controller,
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 220,
+              mainAxisExtent: 100,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => context
+                      .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.history_outlined, size: 20),
+                        const Spacer(),
+                        Text(
+                          item.comicTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.chapterTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
         }
         return ListView.separated(
           controller: controller,
@@ -599,11 +649,13 @@ class _HistoryList extends StatelessWidget {
 class _BookmarkList extends StatelessWidget {
   const _BookmarkList({
     required this.bookmarks,
+    required this.displayMode,
     required this.controller,
     required this.emptyLabel,
   });
 
   final AsyncValue<List<bridge.ComicBookmark>> bookmarks;
+  final LibraryDisplayMode displayMode;
   final ScrollController controller;
   final String emptyLabel;
 
@@ -613,6 +665,45 @@ class _BookmarkList extends StatelessWidget {
       data: (items) {
         if (items.isEmpty) {
           return _EmptyState(label: emptyLabel);
+        }
+        if (displayMode == LibraryDisplayMode.grid) {
+          return GridView.builder(
+            controller: controller,
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 220,
+              mainAxisExtent: 100,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => context
+                      .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.bookmark_border_outlined, size: 20),
+                        const Spacer(),
+                        Text(
+                          item.comicTitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
         }
         return ListView.separated(
           controller: controller,
