@@ -67,6 +67,9 @@ AppStrings stringsFor(String localeCode) =>
 
 class AppStrings {
   const AppStrings({
+    // App identity
+    required this.appName,
+    // Navigation
     required this.home,
     required this.theme,
     required this.themeSystem,
@@ -81,8 +84,73 @@ class AppStrings {
     required this.emptyLibrary,
     required this.comic,
     required this.reader,
+    // Language names
+    required this.english,
+    required this.indonesian,
+    // Reader
+    required this.noPages,
+    required this.close,
+    required this.previousChapter,
+    required this.previousPage,
+    required this.nextPage,
+    required this.nextChapter,
+    required this.readerControls,
+    required this.gap,
+    required this.zoom,
+    required this.fullscreen,
+    // Chapter status
+    required this.read,
+    required this.reading,
+    required this.unread,
+    required this.page,
+    required this.pages,
+    // Sort/filter
+    required this.favorites,
+    required this.chapter,
+    required this.name,
+    required this.folderDate,
+    required this.ascending,
+    required this.descending,
+    // Library view modes
+    required this.all,
+    required this.progress,
+    // Comic actions
+    required this.comicActions,
+    required this.addBookmark,
+    required this.removeBookmark,
+    required this.addFavorite,
+    required this.removeFavorite,
+    required this.openFolder,
+    required this.copyTitle,
+    required this.copyPath,
+    required this.noLibrarySource,
+    // Settings panel
+    required this.librarySection,
+    required this.librarySource,
+    required this.browseDirectory,
+    required this.refreshSourceStatus,
+    required this.readerSection,
+    required this.defaultZoom,
+    required this.pageGap,
+    required this.imagePipelineProfile,
+    required this.performance,
+    required this.balanced,
+    required this.quality,
+    required this.applicationSection,
+    required this.backupSection,
+    required this.exportBackup,
+    required this.importBackup,
+    required this.cancel,
+    required this.save,
+    required this.settingsSaved,
+    required this.backupExported,
+    required this.backupImported,
+    required this.sqliteDatabase,
   });
 
+  // App identity
+  final String appName;
+  // Navigation
   final String home;
   final String theme;
   final String themeSystem;
@@ -97,8 +165,71 @@ class AppStrings {
   final String emptyLibrary;
   final String comic;
   final String reader;
+  // Language names
+  final String english;
+  final String indonesian;
+  // Reader
+  final String noPages;
+  final String close;
+  final String previousChapter;
+  final String previousPage;
+  final String nextPage;
+  final String nextChapter;
+  final String readerControls;
+  final String gap;
+  final String zoom;
+  final String fullscreen;
+  // Chapter status
+  final String read;
+  final String reading;
+  final String unread;
+  final String page;
+  final String pages;
+  // Sort/filter
+  final String favorites;
+  final String chapter;
+  final String name;
+  final String folderDate;
+  final String ascending;
+  final String descending;
+  // Library view modes
+  final String all;
+  final String progress;
+  // Comic actions
+  final String comicActions;
+  final String addBookmark;
+  final String removeBookmark;
+  final String addFavorite;
+  final String removeFavorite;
+  final String openFolder;
+  final String copyTitle;
+  final String copyPath;
+  final String noLibrarySource;
+  // Settings panel
+  final String librarySection;
+  final String librarySource;
+  final String browseDirectory;
+  final String refreshSourceStatus;
+  final String readerSection;
+  final String defaultZoom;
+  final String pageGap;
+  final String imagePipelineProfile;
+  final String performance;
+  final String balanced;
+  final String quality;
+  final String applicationSection;
+  final String backupSection;
+  final String exportBackup;
+  final String importBackup;
+  final String cancel;
+  final String save;
+  final String settingsSaved;
+  final String backupExported;
+  final String backupImported;
+  final String sqliteDatabase;
 
   static const en = AppStrings(
+    appName: 'ComicRD',
     home: 'Home',
     theme: 'Theme',
     themeSystem: 'System',
@@ -113,9 +244,65 @@ class AppStrings {
     emptyLibrary: 'No comics found',
     comic: 'Comic',
     reader: 'Reader',
+    english: 'English',
+    indonesian: 'Indonesian',
+    noPages: 'No pages',
+    close: 'Close',
+    previousChapter: 'Previous chapter',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    nextChapter: 'Next chapter',
+    readerControls: 'Reader controls',
+    gap: 'Gap',
+    zoom: 'Zoom',
+    fullscreen: 'Fullscreen',
+    read: 'Read',
+    reading: 'Reading',
+    unread: 'Unread',
+    page: 'page',
+    pages: 'pages',
+    favorites: 'Favorites',
+    chapter: 'Chapter',
+    name: 'Name',
+    folderDate: 'Folder date',
+    ascending: 'Ascending',
+    descending: 'Descending',
+    all: 'All',
+    progress: 'Progress',
+    comicActions: 'Comic actions',
+    addBookmark: 'Add bookmark',
+    removeBookmark: 'Remove bookmark',
+    addFavorite: 'Add favorite',
+    removeFavorite: 'Remove favorite',
+    openFolder: 'Open folder',
+    copyTitle: 'Copy title',
+    copyPath: 'Copy path',
+    noLibrarySource: 'No library source configured',
+    librarySection: 'Library',
+    librarySource: 'Library source',
+    browseDirectory: 'Browse directory',
+    refreshSourceStatus: 'Refresh source status',
+    readerSection: 'Reader',
+    defaultZoom: 'Default zoom',
+    pageGap: 'Page gap',
+    imagePipelineProfile: 'Image pipeline profile',
+    performance: 'Performance',
+    balanced: 'Balanced',
+    quality: 'Quality',
+    applicationSection: 'Application',
+    backupSection: 'Backup',
+    exportBackup: 'Export backup',
+    importBackup: 'Import backup',
+    cancel: 'Cancel',
+    save: 'Save',
+    settingsSaved: 'Settings saved',
+    backupExported: 'Backup exported',
+    backupImported: 'Backup imported',
+    sqliteDatabase: 'SQLite database',
   );
 
   static const id = AppStrings(
+    appName: 'ComicRD',
     home: 'Beranda',
     theme: 'Tema',
     themeSystem: 'Sistem',
@@ -130,5 +317,60 @@ class AppStrings {
     emptyLibrary: 'Komik tidak ditemukan',
     comic: 'Komik',
     reader: 'Reader',
+    english: 'Inggris',
+    indonesian: 'Indonesia',
+    noPages: 'Tidak ada halaman',
+    close: 'Tutup',
+    previousChapter: 'Chapter sebelumnya',
+    previousPage: 'Halaman sebelumnya',
+    nextPage: 'Halaman berikutnya',
+    nextChapter: 'Chapter berikutnya',
+    readerControls: 'Kontrol reader',
+    gap: 'Jarak',
+    zoom: 'Perbesar',
+    fullscreen: 'Layar penuh',
+    read: 'Dibaca',
+    reading: 'Sedang dibaca',
+    unread: 'Belum dibaca',
+    page: 'halaman',
+    pages: 'halaman',
+    favorites: 'Favorit',
+    chapter: 'Chapter',
+    name: 'Nama',
+    folderDate: 'Tanggal folder',
+    ascending: 'Menaik',
+    descending: 'Menurun',
+    all: 'Semua',
+    progress: 'Progres',
+    comicActions: 'Aksi komik',
+    addBookmark: 'Tambah bookmark',
+    removeBookmark: 'Hapus bookmark',
+    addFavorite: 'Tambah favorit',
+    removeFavorite: 'Hapus favorit',
+    openFolder: 'Buka folder',
+    copyTitle: 'Salin judul',
+    copyPath: 'Salin path',
+    noLibrarySource: 'Sumber pustaka belum dikonfigurasi',
+    librarySection: 'Pustaka',
+    librarySource: 'Sumber pustaka',
+    browseDirectory: 'Pilih direktori',
+    refreshSourceStatus: 'Perbarui status sumber',
+    readerSection: 'Reader',
+    defaultZoom: 'Zoom default',
+    pageGap: 'Jarak halaman',
+    imagePipelineProfile: 'Profil pipeline gambar',
+    performance: 'Performa',
+    balanced: 'Seimbang',
+    quality: 'Kualitas',
+    applicationSection: 'Aplikasi',
+    backupSection: 'Cadangan',
+    exportBackup: 'Ekspor cadangan',
+    importBackup: 'Impor cadangan',
+    cancel: 'Batal',
+    save: 'Simpan',
+    settingsSaved: 'Pengaturan disimpan',
+    backupExported: 'Cadangan diekspor',
+    backupImported: 'Cadangan diimpor',
+    sqliteDatabase: 'Database SQLite',
   );
 }

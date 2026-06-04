@@ -38,6 +38,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsMapProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
+    final text = stringsFor(_locale);
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 680, maxHeight: 760),
@@ -51,7 +52,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                   child: Row(
                     children: [
                       Text(
-                        stringsFor(_locale).settings,
+                        text.settings,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const Spacer(),
@@ -66,28 +67,28 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                     children: [
-                      _SectionTitle(label: 'Library'),
+                      _SectionTitle(label: text.librarySection),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _librarySource,
-                              decoration: const InputDecoration(
-                                labelText: 'Library source',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: text.librarySource,
+                                border: const OutlineInputBorder(),
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
                           IconButton.filledTonal(
-                            tooltip: 'Browse directory',
+                            tooltip: text.browseDirectory,
                             onPressed: _pickLibrarySource,
                             icon: const Icon(Icons.folder_open_outlined),
                           ),
                           const SizedBox(width: 8),
                           IconButton.filledTonal(
-                            tooltip: 'Refresh source status',
+                            tooltip: text.refreshSourceStatus,
                             onPressed: () =>
                                 ref.invalidate(librarySourceStatusProvider),
                             icon: const Icon(Icons.refresh_outlined),
@@ -99,7 +100,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         data: (status) => Text(
                           status.configured
                               ? status.error ?? status.path
-                              : 'No library source configured',
+                              : text.noLibrarySource,
                           style: TextStyle(
                             color: status.error == null
                                 ? Theme.of(context).colorScheme.onSurfaceVariant
@@ -115,16 +116,16 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         loading: () => const LinearProgressIndicator(),
                       ),
                       const SizedBox(height: 20),
-                      _SectionTitle(label: 'Reader'),
+                      _SectionTitle(label: text.readerSection),
                       Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _defaultZoom,
                               keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Default zoom',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: text.defaultZoom,
+                                border: const OutlineInputBorder(),
                               ),
                             ),
                           ),
@@ -133,9 +134,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                             child: TextField(
                               controller: _pageGap,
                               keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Page gap',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: text.pageGap,
+                                border: const OutlineInputBorder(),
                               ),
                             ),
                           ),
@@ -144,22 +145,22 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         initialValue: _profile,
-                        decoration: const InputDecoration(
-                          labelText: 'Image pipeline profile',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: text.imagePipelineProfile,
+                          border: const OutlineInputBorder(),
                         ),
-                        items: const [
+                        items: [
                           DropdownMenuItem(
                             value: 'performance',
-                            child: Text('Performance'),
+                            child: Text(text.performance),
                           ),
                           DropdownMenuItem(
                             value: 'balanced',
-                            child: Text('Balanced'),
+                            child: Text(text.balanced),
                           ),
                           DropdownMenuItem(
                             value: 'quality',
-                            child: Text('Quality'),
+                            child: Text(text.quality),
                           ),
                         ],
                         onChanged: (value) {
@@ -169,28 +170,28 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         },
                       ),
                       const SizedBox(height: 20),
-                      _SectionTitle(label: 'Application'),
+                      _SectionTitle(label: text.applicationSection),
                       Row(
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<ThemeMode>(
                               initialValue: _themeMode,
-                              decoration: const InputDecoration(
-                                labelText: 'Theme',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: text.theme,
+                                border: const OutlineInputBorder(),
                               ),
-                              items: const [
+                              items: [
                                 DropdownMenuItem(
                                   value: ThemeMode.light,
-                                  child: Text('Light'),
+                                  child: Text(text.themeLight),
                                 ),
                                 DropdownMenuItem(
                                   value: ThemeMode.dark,
-                                  child: Text('Dark'),
+                                  child: Text(text.themeDark),
                                 ),
                                 DropdownMenuItem(
                                   value: ThemeMode.system,
-                                  child: Text('System'),
+                                  child: Text(text.themeSystem),
                                 ),
                               ],
                               onChanged: (value) {
@@ -204,18 +205,18 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                           Expanded(
                             child: DropdownButtonFormField<String>(
                               initialValue: _locale,
-                              decoration: const InputDecoration(
-                                labelText: 'Language',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: text.locale,
+                                border: const OutlineInputBorder(),
                               ),
-                              items: const [
+                              items: [
                                 DropdownMenuItem(
                                   value: 'en',
-                                  child: Text('English'),
+                                  child: Text(text.english),
                                 ),
                                 DropdownMenuItem(
                                   value: 'id',
-                                  child: Text('Indonesian'),
+                                  child: Text(text.indonesian),
                                 ),
                               ],
                               onChanged: (value) {
@@ -228,7 +229,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      _SectionTitle(label: 'Backup'),
+                      _SectionTitle(label: text.backupSection),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -236,12 +237,12 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                           FilledButton.icon(
                             onPressed: _exportBackup,
                             icon: const Icon(Icons.download_outlined),
-                            label: const Text('Export backup'),
+                            label: Text(text.exportBackup),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: _importBackup,
                             icon: const Icon(Icons.upload_outlined),
-                            label: const Text('Import backup'),
+                            label: Text(text.importBackup),
                           ),
                         ],
                       ),
@@ -259,13 +260,13 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
+                        child: Text(text.cancel),
                       ),
                       const SizedBox(width: 8),
                       FilledButton.icon(
                         onPressed: _save,
                         icon: const Icon(Icons.save_outlined),
-                        label: const Text('Save'),
+                        label: Text(text.save),
                       ),
                     ],
                   ),
@@ -345,15 +346,16 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     ref.invalidate(librarySourceStatusProvider);
     ref.invalidate(libraryComicsProvider);
     if (mounted) {
-      setState(() => _message = 'Settings saved');
+      setState(() => _message = stringsFor(_locale).settingsSaved);
     }
   }
 
   Future<void> _exportBackup() async {
+    final text = stringsFor(_locale);
     final location = await getSaveLocation(
       suggestedName: 'comicrd-backup.db',
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'SQLite database', extensions: ['db']),
+      acceptedTypeGroups: [
+        XTypeGroup(label: text.sqliteDatabase, extensions: ['db']),
       ],
     );
     if (location == null) {
@@ -361,14 +363,15 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     }
     await ref.read(comicRdApiProvider).exportDatabaseBackup(location.path);
     if (mounted) {
-      setState(() => _message = 'Backup exported');
+      setState(() => _message = text.backupExported);
     }
   }
 
   Future<void> _importBackup() async {
+    final text = stringsFor(_locale);
     final file = await openFile(
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'SQLite database', extensions: ['db']),
+      acceptedTypeGroups: [
+        XTypeGroup(label: text.sqliteDatabase, extensions: ['db']),
       ],
     );
     if (file == null) {
@@ -379,7 +382,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     ref.invalidate(librarySourceStatusProvider);
     ref.invalidate(libraryComicsProvider);
     if (mounted) {
-      setState(() => _message = 'Backup imported');
+      setState(() => _message = text.backupImported);
     }
   }
 }

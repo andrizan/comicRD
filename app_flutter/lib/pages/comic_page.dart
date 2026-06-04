@@ -150,7 +150,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 FilterChip(
                   selected: preferences.favoritesOnly,
                   avatar: const Icon(Icons.star_outline, size: 18),
-                  label: const Text('Favorites'),
+                  label: Text(text.favorites),
                   onSelected: (value) => ref
                       .read(comicPreferencesProvider.notifier)
                       .setFavoritesOnly(widget.comicPath, value),
@@ -158,18 +158,18 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 const SizedBox(width: 12),
                 DropdownButton<ChapterSortBy>(
                   value: preferences.sortBy,
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: ChapterSortBy.chapterIndex,
-                      child: Text('Chapter'),
+                      child: Text(text.chapter),
                     ),
                     DropdownMenuItem(
                       value: ChapterSortBy.name,
-                      child: Text('Name'),
+                      child: Text(text.name),
                     ),
                     DropdownMenuItem(
                       value: ChapterSortBy.folderDate,
-                      child: Text('Folder date'),
+                      child: Text(text.folderDate),
                     ),
                   ],
                   onChanged: (value) {
@@ -180,8 +180,8 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 ),
                 IconButton(
                   tooltip: preferences.sortDir == bridge.SortDir.asc
-                      ? 'Ascending'
-                      : 'Descending',
+                      ? text.ascending
+                      : text.descending,
                   onPressed: () => _setSort(
                     preferences.sortBy,
                     preferences.sortDir == bridge.SortDir.asc
@@ -202,6 +202,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 data: (items) {
                   _scrollToLastOpened(items, preferences.displayMode);
                   return _ChapterList(
+                    text: text,
                     chapters: items,
                     favorites: favoritePaths,
                     displayMode: preferences.displayMode,
@@ -339,6 +340,7 @@ String _encodeChapterSortBy(ChapterSortBy sortBy) {
 
 class _ChapterList extends StatelessWidget {
   const _ChapterList({
+    required this.text,
     required this.chapters,
     required this.favorites,
     required this.displayMode,
@@ -348,6 +350,7 @@ class _ChapterList extends StatelessWidget {
     required this.onToggleFavorite,
   });
 
+  final AppStrings text;
   final List<bridge.RawChapter> chapters;
   final Set<String> favorites;
   final ChapterDisplayMode displayMode;
@@ -378,6 +381,7 @@ class _ChapterList extends StatelessWidget {
           final chapter = chapters[index];
           final favorite = favorites.contains(chapter.sourcePath);
           return _ChapterGridTile(
+            text: text,
             chapter: chapter,
             favorite: favorite,
             onOpen: () {
@@ -399,7 +403,7 @@ class _ChapterList extends StatelessWidget {
         final favorite = favorites.contains(chapter.sourcePath);
         return ListTile(
           leading: IconButton(
-            tooltip: favorite ? 'Remove favorite' : 'Add favorite',
+            tooltip: favorite ? text.removeFavorite : text.addFavorite,
             onPressed: () => onToggleFavorite(chapter, favorite),
             icon: Icon(
               favorite ? Icons.star : Icons.star_border,
@@ -407,7 +411,7 @@ class _ChapterList extends StatelessWidget {
             ),
           ),
           title: Text(chapter.title),
-          subtitle: Text(_chapterStatus(chapter)),
+          subtitle: Text(_chapterStatus(chapter, text)),
           trailing: chapter.isRead
               ? const Icon(Icons.done_all_outlined)
               : const Icon(Icons.chevron_right),
@@ -420,12 +424,14 @@ class _ChapterList extends StatelessWidget {
 
 class _ChapterGridTile extends StatelessWidget {
   const _ChapterGridTile({
+    required this.text,
     required this.chapter,
     required this.favorite,
     required this.onOpen,
     required this.onToggleFavorite,
   });
 
+  final AppStrings text;
   final bridge.RawChapter chapter;
   final bool favorite;
   final VoidCallback onOpen;
@@ -451,7 +457,7 @@ class _ChapterGridTile extends StatelessWidget {
                   ),
                   const Spacer(),
                   IconButton(
-                    tooltip: favorite ? 'Remove favorite' : 'Add favorite',
+                    tooltip: favorite ? text.removeFavorite : text.addFavorite,
                     onPressed: onToggleFavorite,
                     icon: Icon(
                       favorite ? Icons.star : Icons.star_border,
@@ -471,7 +477,7 @@ class _ChapterGridTile extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                _chapterStatus(chapter),
+                _chapterStatus(chapter, text),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -483,16 +489,16 @@ class _ChapterGridTile extends StatelessWidget {
   }
 }
 
-String _chapterStatus(bridge.RawChapter chapter) {
+String _chapterStatus(bridge.RawChapter chapter, AppStrings text) {
   if (chapter.isRead) {
-    return 'Read';
+    return text.read;
   }
   if (chapter.lastPage > 0) {
     final total = chapter.totalPages > 0
         ? chapter.totalPages
         : chapter.pageCount;
-    return 'Reading ${chapter.lastPage + 1}/$total';
+    return '${text.reading} ${chapter.lastPage + 1}/$total';
   }
-  final pages = chapter.pageCount == 1 ? 'page' : 'pages';
-  return 'Unread - ${chapter.pageCount} $pages';
+  final unit = chapter.pageCount == 1 ? text.page : text.pages;
+  return '${text.unread} - ${chapter.pageCount} $unit';
 }

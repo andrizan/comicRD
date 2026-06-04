@@ -44,7 +44,7 @@ class ComicRdApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsProvider);
     return MaterialApp.router(
-      title: 'ComicRD',
+      title: stringsFor(settings.localeCode).appName,
       debugShowCheckedModeBanner: false,
       locale: const Locale('en'),
       supportedLocales: const [Locale('en')],
@@ -108,7 +108,7 @@ class ComicRdShell extends ConsumerWidget {
     final text = stringsFor(settings.localeCode);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ComicRD'),
+        title: Text(text.appName),
         actions: [
           Tooltip(
             message: text.home,
@@ -206,7 +206,7 @@ class ComicRdShell extends ConsumerWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'English',
+                        text.english,
                         style: TextStyle(
                           color: settings.localeCode == 'en'
                               ? Theme.of(context).colorScheme.primary
@@ -226,7 +226,7 @@ class ComicRdShell extends ConsumerWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Indonesian',
+                        text.indonesian,
                         style: TextStyle(
                           color: settings.localeCode == 'id'
                               ? Theme.of(context).colorScheme.primary

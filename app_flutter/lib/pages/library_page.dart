@@ -129,15 +129,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
           child: Row(
             children: [
               SegmentedButton<LibraryViewMode>(
-                segments: const [
-                  ButtonSegment(value: LibraryViewMode.all, label: Text('All')),
+                segments: [
+                  ButtonSegment(value: LibraryViewMode.all, label: Text(text.all)),
                   ButtonSegment(
                     value: LibraryViewMode.unread,
-                    label: Text('Unread'),
+                    label: Text(text.unread),
                   ),
                   ButtonSegment(
                     value: LibraryViewMode.reading,
-                    label: Text('Progress'),
+                    label: Text(text.progress),
                   ),
                 ],
                 selected: {preferences.viewMode},
@@ -147,14 +147,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               const SizedBox(width: 12),
               DropdownButton<bridge.SortBy>(
                 value: preferences.sortBy,
-                items: const [
+                items: [
                   DropdownMenuItem(
                     value: bridge.SortBy.name,
-                    child: Text('Name'),
+                    child: Text(text.name),
                   ),
                   DropdownMenuItem(
                     value: bridge.SortBy.folderDate,
-                    child: Text('Folder date'),
+                    child: Text(text.folderDate),
                   ),
                 ],
                 onChanged: (value) {
@@ -166,8 +166,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               const SizedBox(width: 4),
               Tooltip(
                 message: preferences.sortDir == bridge.SortDir.asc
-                    ? 'Ascending'
-                    : 'Descending',
+                    ? text.ascending
+                    : text.descending,
                 child: IconButton(
                   onPressed: () => _setSort(
                     preferences.sortBy,
@@ -192,7 +192,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             }
             final message = status.configured
                 ? status.error!
-                : 'No library source configured';
+                : text.noLibrarySource;
             return Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
               child: Align(
@@ -237,6 +237,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                 emptyLabel: text.emptyLibrary,
               ),
               _ComicList(
+                text: text,
                 comics: comics,
                 displayMode: preferences.displayMode,
                 bookmarkedPaths: bookmarkedPaths,
@@ -314,6 +315,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
 
 class _ComicList extends StatelessWidget {
   const _ComicList({
+    required this.text,
     required this.comics,
     required this.displayMode,
     required this.bookmarkedPaths,
@@ -325,6 +327,7 @@ class _ComicList extends StatelessWidget {
     required this.onOpenFolder,
   });
 
+  final AppStrings text;
   final AsyncValue<List<bridge.RawComic>> comics;
   final LibraryDisplayMode displayMode;
   final Set<String> bookmarkedPaths;
@@ -358,6 +361,7 @@ class _ComicList extends StatelessWidget {
               final comic = items[index];
               final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
               return _ComicGridTile(
+                text: text,
                 comic: comic,
                 bookmarked: bookmarked,
                 onOpen: () =>
@@ -404,6 +408,7 @@ class _ComicList extends StatelessWidget {
                 children: [
                   Text(comic.sourceType.toUpperCase()),
                   _ComicActionsButton(
+                    text: text,
                     bookmarked: bookmarked,
                     onToggleBookmark: () => onToggleBookmark(comic, bookmarked),
                     onCopyTitle: () => onCopyTitle(comic),
@@ -424,6 +429,7 @@ class _ComicList extends StatelessWidget {
 
 class _ComicGridTile extends StatelessWidget {
   const _ComicGridTile({
+    required this.text,
     required this.comic,
     required this.bookmarked,
     required this.onOpen,
@@ -433,6 +439,7 @@ class _ComicGridTile extends StatelessWidget {
     required this.onOpenFolder,
   });
 
+  final AppStrings text;
   final bridge.RawComic comic;
   final bool bookmarked;
   final VoidCallback onOpen;
@@ -461,6 +468,7 @@ class _ComicGridTile extends StatelessWidget {
                   ),
                   const Spacer(),
                   _ComicActionsButton(
+                    text: text,
                     bookmarked: bookmarked,
                     onToggleBookmark: onToggleBookmark,
                     onCopyTitle: onCopyTitle,
@@ -491,6 +499,7 @@ class _ComicGridTile extends StatelessWidget {
 
 class _ComicActionsButton extends StatelessWidget {
   const _ComicActionsButton({
+    required this.text,
     required this.bookmarked,
     required this.onToggleBookmark,
     required this.onCopyTitle,
@@ -498,6 +507,7 @@ class _ComicActionsButton extends StatelessWidget {
     required this.onOpenFolder,
   });
 
+  final AppStrings text;
   final bool bookmarked;
   final Future<void> Function() onToggleBookmark;
   final Future<void> Function() onCopyTitle;
@@ -507,7 +517,7 @@ class _ComicActionsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<_ComicAction>(
-      tooltip: 'Comic actions',
+      tooltip: text.comicActions,
       icon: const Icon(Icons.more_vert),
       onSelected: (action) async {
         switch (action) {
@@ -524,19 +534,19 @@ class _ComicActionsButton extends StatelessWidget {
       itemBuilder: (context) => [
         PopupMenuItem(
           value: _ComicAction.toggleBookmark,
-          child: Text(bookmarked ? 'Remove bookmark' : 'Add bookmark'),
+          child: Text(bookmarked ? text.removeBookmark : text.addBookmark),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _ComicAction.openFolder,
-          child: Text('Open folder'),
+          child: Text(text.openFolder),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _ComicAction.copyTitle,
-          child: Text('Copy title'),
+          child: Text(text.copyTitle),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: _ComicAction.copyPath,
-          child: Text('Copy path'),
+          child: Text(text.copyPath),
         ),
       ],
     );

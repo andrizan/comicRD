@@ -14,6 +14,7 @@ import '../routes/path_codec.dart';
 import '../state/api_state.dart';
 import '../state/reader_state.dart';
 import '../state/settings_data_state.dart';
+import '../state/settings_state.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({super.key, required this.chapterId});
@@ -77,6 +78,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
       next.whenData(_applySettings);
     });
+    final settings = ref.watch(appSettingsProvider);
+    final text = stringsFor(settings.localeCode);
     final reader = ref.watch(readerDataProvider(widget.chapterId));
     return Scaffold(
       backgroundColor: Colors.black,
@@ -94,12 +97,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               _restoreProgress(data);
               return Stack(
                 children: [
-                  Positioned.fill(child: _readerScrollView(data: data)),
+                  Positioned.fill(child: _readerScrollView(data: data, text: text)),
                   Positioned(
                     top: 0,
                     left: 0,
                     right: 0,
                     child: _ReaderToolbar(
+                      text: text,
                       data: data,
                       currentPage: _currentPage,
                       pageGap: _pageGap,
@@ -145,10 +149,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  Widget _readerScrollView({required ReaderData data}) {
+  Widget _readerScrollView({required ReaderData data, required AppStrings text}) {
     if (data.pages.isEmpty) {
-      return const Center(
-        child: Text('No pages', style: TextStyle(color: Colors.white70)),
+      return Center(
+        child: Text(text.noPages, style: const TextStyle(color: Colors.white70)),
       );
     }
     return ListView.builder(
@@ -532,6 +536,7 @@ class _PagePlaceholder extends StatelessWidget {
 
 class _ReaderToolbar extends StatelessWidget {
   const _ReaderToolbar({
+    required this.text,
     required this.data,
     required this.currentPage,
     required this.pageGap,
@@ -547,6 +552,7 @@ class _ReaderToolbar extends StatelessWidget {
     required this.onToggleFullscreen,
   });
 
+  final AppStrings text;
   final ReaderData data;
   final int currentPage;
   final double pageGap;
@@ -574,7 +580,7 @@ class _ReaderToolbar extends StatelessWidget {
             child: Row(
               children: [
                 IconButton(
-                  tooltip: 'Close',
+                  tooltip: text.close,
                   onPressed: onClose,
                   icon: const Icon(Icons.close, color: Colors.white),
                 ),
@@ -585,13 +591,13 @@ class _ReaderToolbar extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        contextData?.comicTitle ?? 'ComicRD',
+                        contextData?.comicTitle ?? text.appName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white),
                       ),
                       Text(
-                        '${contextData?.title ?? 'Chapter'} - '
+                        '${contextData?.title ?? text.chapter} - '
                         '${currentPage + 1}/${data.pages.length}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -604,12 +610,12 @@ class _ReaderToolbar extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Previous chapter',
+                  tooltip: text.previousChapter,
                   onPressed: onPreviousChapter,
                   icon: const Icon(Icons.skip_previous, color: Colors.white),
                 ),
                 IconButton(
-                  tooltip: 'Previous page',
+                  tooltip: text.previousPage,
                   onPressed: onPreviousPage,
                   icon: const Icon(
                     Icons.keyboard_arrow_up,
@@ -617,7 +623,7 @@ class _ReaderToolbar extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Next page',
+                  tooltip: text.nextPage,
                   onPressed: onNextPage,
                   icon: const Icon(
                     Icons.keyboard_arrow_down,
@@ -625,26 +631,26 @@ class _ReaderToolbar extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Next chapter',
+                  tooltip: text.nextChapter,
                   onPressed: onNextChapter,
                   icon: const Icon(Icons.skip_next, color: Colors.white),
                 ),
                 if (compact)
                   IconButton(
-                    tooltip: 'Reader controls',
+                    tooltip: text.readerControls,
                     onPressed: () => _showReaderControls(context),
                     icon: const Icon(Icons.tune, color: Colors.white),
                   )
                 else ...[
                   _ValueButton(
-                    tooltip: 'Gap −',
+                    tooltip: text.gap,
                     icon: Icons.vertical_align_center,
                     label: '${pageGap.round()}',
                     onDecrease: () => onGapChanged((pageGap - 5).clamp(0, 80)),
                     onIncrease: () => onGapChanged((pageGap + 5).clamp(0, 80)),
                   ),
                   _ValueButton(
-                    tooltip: 'Zoom',
+                    tooltip: text.zoom,
                     icon: Icons.zoom_in,
                     label: '${zoom.toStringAsFixed(1)}×',
                     onDecrease: () => onZoomChanged((zoom - 0.1).clamp(0.5, 3)),
@@ -652,7 +658,7 @@ class _ReaderToolbar extends StatelessWidget {
                   ),
                 ],
                 IconButton(
-                  tooltip: 'Fullscreen',
+                  tooltip: text.fullscreen,
                   onPressed: onToggleFullscreen,
                   icon: Icon(
                     fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
@@ -683,7 +689,7 @@ class _ReaderToolbar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _SheetValueControl(
-                      label: 'Gap',
+                      label: text.gap,
                       value: sheetGap,
                       decimals: 0,
                       unit: '',
@@ -699,7 +705,7 @@ class _ReaderToolbar extends StatelessWidget {
                       },
                     ),
                     _SheetValueControl(
-                      label: 'Zoom',
+                      label: text.zoom,
                       value: sheetZoom,
                       decimals: 1,
                       unit: '×',
