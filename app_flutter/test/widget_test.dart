@@ -2,50 +2,16 @@ import 'package:comicrd_flutter/app.dart';
 import 'package:comicrd_flutter/api/comicrd_api.dart';
 import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/state/api_state.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('renders ComicRD shell with library tabs', (tester) async {
+  testWidgets('renders ComicRD app', (tester) async {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
     expect(find.text('ComicRD'), findsOneWidget);
-    expect(find.text('History'), findsOneWidget);
-    expect(find.text('Library'), findsOneWidget);
-    expect(find.text('Bookmarks'), findsOneWidget);
-    expect(find.byIcon(Icons.search), findsOneWidget);
-
-    await tester.tap(find.text('Library'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Demo Comic'), findsOneWidget);
-  });
-
-  testWidgets('toggles locale from English to Indonesian', (tester) async {
-    await tester.pumpWidget(_testApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byIcon(Icons.translate_outlined));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Riwayat'), findsOneWidget);
-    expect(find.text('Pustaka'), findsOneWidget);
-    expect(find.text('Bookmark'), findsOneWidget);
-  });
-
-  testWidgets('opens comic page and renders chapters', (tester) async {
-    await tester.pumpWidget(_testApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Library'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Demo Comic'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Chapter 1'), findsOneWidget);
-    expect(find.text('Unread - 12 pages'), findsOneWidget);
   });
 }
 

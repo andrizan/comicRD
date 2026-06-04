@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -44,67 +44,39 @@ class ComicRdApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsProvider);
-    return MaterialApp.router(
+    return FluentApp.router(
       title: stringsFor(settings.localeCode).appName,
       debugShowCheckedModeBanner: false,
       locale: const Locale('en'),
       supportedLocales: const [Locale('en')],
       themeMode: settings.themeMode,
-      theme: buildComicRdTheme(Brightness.light),
-      darkTheme: buildComicRdTheme(Brightness.dark),
+      theme: FluentThemeData(
+        brightness: Brightness.light,
+        accentColor: Colors.blue,
+      ),
+      darkTheme: FluentThemeData(
+        brightness: Brightness.dark,
+        accentColor: Colors.blue,
+      ),
       routerConfig: _router,
     );
   }
 }
 
-ThemeData buildComicRdTheme(Brightness brightness) {
-  final dark = brightness == Brightness.dark;
-  final scheme =
-      ColorScheme.fromSeed(
-        seedColor: const Color(0xff2563eb),
-        brightness: brightness,
-      ).copyWith(
-        surface: dark ? const Color(0xff111318) : const Color(0xfff7f8fb),
-        primary: dark ? const Color(0xff8ab4ff) : const Color(0xff1d4ed8),
-        secondary: dark ? const Color(0xff4fd1c5) : const Color(0xff0f766e),
-        tertiary: dark ? const Color(0xfff7c948) : const Color(0xffa16207),
-      );
-
-  return ThemeData(
-    useMaterial3: true,
-    brightness: brightness,
-    colorScheme: scheme,
-    scaffoldBackgroundColor: scheme.surface,
-    appBarTheme: AppBarTheme(
-      elevation: 0,
-      centerTitle: false,
-      backgroundColor: scheme.surface,
-      foregroundColor: scheme.onSurface,
-      surfaceTintColor: Colors.transparent,
-    ),
-    iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(
-        fixedSize: const Size.square(40),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    ),
-    segmentedButtonTheme: SegmentedButtonThemeData(
-      style: ButtonStyle(
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
-    ),
-  );
-}
-
-class ComicRdShell extends ConsumerWidget {
+class ComicRdShell extends ConsumerStatefulWidget {
   const ComicRdShell({super.key, required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ComicRdShell> createState() => _ComicRdShellState();
+}
+
+class _ComicRdShellState extends ConsumerState<ComicRdShell> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
       next.whenData(
         ref.read(appSettingsProvider.notifier).hydrateFromSettings,
@@ -112,156 +84,166 @@ class ComicRdShell extends ConsumerWidget {
     });
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
-    return Scaffold(
-      appBar: AppBar(
+    return NavigationView(
+      titleBar: TitleBar(
         title: Text(text.appName),
-        actions: [
-          Tooltip(
-            message: text.home,
-            child: IconButton(
-              onPressed: () => context.go('/'),
-              icon: const Icon(Icons.home_outlined),
-            ),
-          ),
-          Tooltip(
-            message: text.theme,
-            child: PopupMenuButton<ThemeMode>(
-              tooltip: text.theme,
-              onSelected: (mode) async {
-                ref.read(appSettingsProvider.notifier).setThemeMode(mode);
-                await ref
-                    .read(comicRdApiProvider)
-                    .setSetting(
-                      'app_theme',
-                      jsonEncode(themeModeToSetting(mode)),
-                    );
-              },
-              icon: Icon(
-                settings.themeMode == ThemeMode.dark
-                    ? Icons.dark_mode_outlined
-                    : settings.themeMode == ThemeMode.light
-                        ? Icons.light_mode_outlined
-                        : Icons.brightness_auto_outlined,
+        endHeader: Row(
+          children: [
+            Tooltip(
+              message: text.theme,
+              child: DropDownButton(
+                title: Icon(
+                  settings.themeMode == ThemeMode.dark
+                      ? FluentIcons.clear_night
+                      : settings.themeMode == ThemeMode.light
+                          ? FluentIcons.sunny
+                          : FluentIcons.screen,
+                ),
+                items: [
+                  MenuFlyoutItem(
+                    text: Text(text.themeSystem),
+                    leading: Icon(
+                      FluentIcons.screen,
+                      color: settings.themeMode == ThemeMode.system
+                          ? FluentTheme.of(context).accentColor
+                          : null,
+                    ),
+                    onPressed: () async {
+                      ref
+                          .read(appSettingsProvider.notifier)
+                          .setThemeMode(ThemeMode.system);
+                      await ref.read(comicRdApiProvider).setSetting(
+                            'app_theme',
+                            jsonEncode(themeModeToSetting(ThemeMode.system)),
+                          );
+                    },
+                  ),
+                  MenuFlyoutItem(
+                    text: Text(text.themeLight),
+                    leading: Icon(
+                      FluentIcons.sunny,
+                      color: settings.themeMode == ThemeMode.light
+                          ? FluentTheme.of(context).accentColor
+                          : null,
+                    ),
+                    onPressed: () async {
+                      ref
+                          .read(appSettingsProvider.notifier)
+                          .setThemeMode(ThemeMode.light);
+                      await ref.read(comicRdApiProvider).setSetting(
+                            'app_theme',
+                            jsonEncode(themeModeToSetting(ThemeMode.light)),
+                          );
+                    },
+                  ),
+                  MenuFlyoutItem(
+                    text: Text(text.themeDark),
+                    leading: Icon(
+                      FluentIcons.clear_night,
+                      color: settings.themeMode == ThemeMode.dark
+                          ? FluentTheme.of(context).accentColor
+                          : null,
+                    ),
+                    onPressed: () async {
+                      ref
+                          .read(appSettingsProvider.notifier)
+                          .setThemeMode(ThemeMode.dark);
+                      await ref.read(comicRdApiProvider).setSetting(
+                            'app_theme',
+                            jsonEncode(themeModeToSetting(ThemeMode.dark)),
+                          );
+                    },
+                  ),
+                ],
               ),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: ThemeMode.system,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.brightness_auto_outlined,
-                        color: settings.themeMode == ThemeMode.system
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(text.themeSystem),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: ThemeMode.light,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.light_mode_outlined,
-                        color: settings.themeMode == ThemeMode.light
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(text.themeLight),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: ThemeMode.dark,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.dark_mode_outlined,
-                        color: settings.themeMode == ThemeMode.dark
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(text.themeDark),
-                    ],
-                  ),
-                ),
-              ],
             ),
+            const SizedBox(width: 8),
+            Tooltip(
+              message: text.locale,
+              child: DropDownButton(
+                title: const Icon(FluentIcons.locale_language),
+                items: [
+                  MenuFlyoutItem(
+                    text: Text(text.english),
+                    leading: Text(
+                      '🇺🇸',
+                      style: FluentTheme.of(context).typography.body,
+                    ),
+                    onPressed: () async {
+                      ref
+                          .read(appSettingsProvider.notifier)
+                          .setLocale('en');
+                      await ref.read(comicRdApiProvider).setSetting(
+                            'app_locale',
+                            jsonEncode('en'),
+                          );
+                    },
+                  ),
+                  MenuFlyoutItem(
+                    text: Text(text.indonesian),
+                    leading: Text(
+                      '🇮🇩',
+                      style: FluentTheme.of(context).typography.body,
+                    ),
+                    onPressed: () async {
+                      ref
+                          .read(appSettingsProvider.notifier)
+                          .setLocale('id');
+                      await ref.read(comicRdApiProvider).setSetting(
+                            'app_locale',
+                            jsonEncode('id'),
+                          );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Tooltip(
+              message: text.settings,
+              child: IconButton(
+                icon: const Icon(FluentIcons.settings),
+                onPressed: () {
+                  showDialog<void>(
+                    context: context,
+                    builder: (_) => const SettingsPanel(),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+      ),
+      pane: NavigationPane(
+        selected: _selectedIndex,
+        onChanged: (index) {
+          setState(() => _selectedIndex = index);
+          switch (index) {
+            case 0:
+              context.go('/');
+              break;
+          }
+        },
+        displayMode: PaneDisplayMode.top,
+        items: [
+          PaneItem(
+            icon: const Icon(FluentIcons.library),
+            title: Text(text.library),
+            body: widget.child,
           ),
-          Tooltip(
-            message: text.locale,
-            child: PopupMenuButton<String>(
-              tooltip: text.locale,
-              onSelected: (locale) async {
-                ref.read(appSettingsProvider.notifier).setLocale(locale);
-                await ref
-                    .read(comicRdApiProvider)
-                    .setSetting('app_locale', jsonEncode(locale));
-              },
-              icon: const Icon(Icons.translate_outlined),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'en',
-                  child: Row(
-                    children: [
-                      Text(
-                        '🇺🇸',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        text.english,
-                        style: TextStyle(
-                          color: settings.localeCode == 'en'
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'id',
-                  child: Row(
-                    children: [
-                      Text(
-                        '🇮🇩',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        text.indonesian,
-                        style: TextStyle(
-                          color: settings.localeCode == 'id'
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          PaneItem(
+            icon: const Icon(FluentIcons.history),
+            title: Text(text.history),
+            body: widget.child,
           ),
-          Tooltip(
-            message: text.settings,
-            child: IconButton(
-              onPressed: () {
-                showDialog<void>(
-                  context: context,
-                  builder: (_) => const SettingsPanel(),
-                );
-              },
-              icon: const Icon(Icons.tune_outlined),
-            ),
+          PaneItem(
+            icon: const Icon(FluentIcons.bookmarks),
+            title: Text(text.bookmarks),
+            body: widget.child,
           ),
         ],
       ),
-      body: child,
     );
   }
 }

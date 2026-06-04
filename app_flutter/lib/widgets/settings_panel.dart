@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/api_state.dart';
@@ -40,276 +40,292 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     final sourceStatus = ref.watch(librarySourceStatusProvider);
     final appSettings = ref.watch(appSettingsProvider);
     final text = stringsFor(appSettings.localeCode);
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680, maxHeight: 760),
-        child: settings.when(
-          data: (values) {
-            _initialize(values, appSettings);
-            return Column(
+    return ContentDialog(
+      title: Text(text.settings),
+      content: settings.when(
+        data: (values) {
+          _initialize(values, appSettings);
+          return ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: ListView(
+              shrinkWrap: true,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        text.settings,
-                        style: Theme.of(context).textTheme.titleLarge,
+                _sectionHeader(text.librarySection),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextBox(
+                        controller: _librarySource,
+                        placeholder: text.librarySource,
                       ),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
+                    ),
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: text.browseDirectory,
+                      child: IconButton(
+                        onPressed: _pickLibrarySource,
+                        icon: const Icon(FluentIcons.folder_open),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: text.refreshSourceStatus,
+                      child: IconButton(
+                        onPressed: () =>
+                            ref.invalidate(librarySourceStatusProvider),
+                        icon: const Icon(FluentIcons.refresh),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                sourceStatus.when(
+                  data: (status) => Text(
+                    status.configured
+                        ? status.error ?? status.path
+                        : text.noLibrarySource,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: status.error == null
+                          ? FluentTheme.of(context)
+                              .resources
+                              .textFillColorSecondary
+                          : Colors.red,
+                    ),
+                  ),
+                  error: (error, _) => Text(
+                    error.toString(),
+                    style: TextStyle(fontSize: 12, color: Colors.red),
+                  ),
+                  loading: () => const ProgressRing(),
+                ),
+                const SizedBox(height: 16),
+                _sectionHeader(text.readerSection),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextBox(
+                        controller: _defaultZoom,
+                        keyboardType: TextInputType.number,
+                        placeholder: text.defaultZoom,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextBox(
+                        controller: _pageGap,
+                        keyboardType: TextInputType.number,
+                        placeholder: text.pageGap,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _labeledField(
+                  text.imagePipelineProfile,
+                  ComboBox<String>(
+                    value: _profile,
+                    isExpanded: true,
+                    items: [
+                      ComboBoxItem(
+                        value: 'performance',
+                        child: Text(text.performance),
+                      ),
+                      ComboBoxItem(
+                        value: 'balanced',
+                        child: Text(text.balanced),
+                      ),
+                      ComboBoxItem(
+                        value: 'quality',
+                        child: Text(text.quality),
                       ),
                     ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => _profile = value);
+                    },
                   ),
                 ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                    children: [
-                      _SectionTitle(label: text.librarySection),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _librarySource,
-                              decoration: InputDecoration(
-                                labelText: text.librarySource,
-                                border: const OutlineInputBorder(),
-                              ),
+                const SizedBox(height: 16),
+                _sectionHeader(text.applicationSection),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _labeledField(
+                        text.theme,
+                        ComboBox<ThemeMode>(
+                          value: _themeMode,
+                          isExpanded: true,
+                          items: [
+                            ComboBoxItem(
+                              value: ThemeMode.light,
+                              child: Row(children: [
+                                const Icon(FluentIcons.sunny, size: 16),
+                                const SizedBox(width: 8),
+                                Text(text.themeLight),
+                              ]),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton.filledTonal(
-                            tooltip: text.browseDirectory,
-                            onPressed: _pickLibrarySource,
-                            icon: const Icon(Icons.folder_open_outlined),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton.filledTonal(
-                            tooltip: text.refreshSourceStatus,
-                            onPressed: () =>
-                                ref.invalidate(librarySourceStatusProvider),
-                            icon: const Icon(Icons.refresh_outlined),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      sourceStatus.when(
-                        data: (status) => Text(
-                          status.configured
-                              ? status.error ?? status.path
-                              : text.noLibrarySource,
-                          style: TextStyle(
-                            color: status.error == null
-                                ? Theme.of(context).colorScheme.onSurfaceVariant
-                                : Theme.of(context).colorScheme.error,
-                          ),
+                            ComboBoxItem(
+                              value: ThemeMode.dark,
+                              child: Row(children: [
+                                const Icon(FluentIcons.clear_night, size: 16),
+                                const SizedBox(width: 8),
+                                Text(text.themeDark),
+                              ]),
+                            ),
+                            ComboBoxItem(
+                              value: ThemeMode.system,
+                              child: Row(children: [
+                                const Icon(FluentIcons.screen, size: 16),
+                                const SizedBox(width: 8),
+                                Text(text.themeSystem),
+                              ]),
+                            ),
+                          ],
+                          onChanged: (value) async {
+                            if (value != null) {
+                              setState(() => _themeMode = value);
+                              ref
+                                  .read(appSettingsProvider.notifier)
+                                  .setThemeMode(value);
+                              await ref.read(comicRdApiProvider).setSetting(
+                                    'app_theme',
+                                    jsonEncode(themeModeToSetting(value)),
+                                  );
+                            }
+                          },
                         ),
-                        error: (error, _) => Text(
-                          error.toString(),
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _labeledField(
+                        text.locale,
+                        ComboBox<String>(
+                          value: _locale,
+                          isExpanded: true,
+                          items: [
+                            ComboBoxItem(
+                              value: 'en',
+                              child: Row(children: [
+                                const Text('🇺🇸'),
+                                const SizedBox(width: 8),
+                                Text(text.english),
+                              ]),
+                            ),
+                            ComboBoxItem(
+                              value: 'id',
+                              child: Row(children: [
+                                const Text('🇮🇩'),
+                                const SizedBox(width: 8),
+                                Text(text.indonesian),
+                              ]),
+                            ),
+                          ],
+                          onChanged: (value) async {
+                            if (value != null) {
+                              setState(() => _locale = value);
+                              ref
+                                  .read(appSettingsProvider.notifier)
+                                  .setLocale(value);
+                              await ref.read(comicRdApiProvider).setSetting(
+                                    'app_locale',
+                                    jsonEncode(value),
+                                  );
+                            }
+                          },
                         ),
-                        loading: () => const LinearProgressIndicator(),
                       ),
-                      const SizedBox(height: 20),
-                      _SectionTitle(label: text.readerSection),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _defaultZoom,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: text.defaultZoom,
-                                border: const OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _pageGap,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: text.pageGap,
-                                border: const OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: _profile,
-                        decoration: InputDecoration(
-                          labelText: text.imagePipelineProfile,
-                          border: const OutlineInputBorder(),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: 'performance',
-                            child: Text(text.performance),
-                          ),
-                          DropdownMenuItem(
-                            value: 'balanced',
-                            child: Text(text.balanced),
-                          ),
-                          DropdownMenuItem(
-                            value: 'quality',
-                            child: Text(text.quality),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _profile = value);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 20),
-                      _SectionTitle(label: text.applicationSection),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<ThemeMode>(
-                              initialValue: _themeMode,
-                              decoration: InputDecoration(
-                                labelText: text.theme,
-                                border: const OutlineInputBorder(),
-                              ),
-                              items: [
-                                DropdownMenuItem(
-                                  value: ThemeMode.light,
-                                  child: Text(text.themeLight),
-                                ),
-                                DropdownMenuItem(
-                                  value: ThemeMode.dark,
-                                  child: Text(text.themeDark),
-                                ),
-                                DropdownMenuItem(
-                                  value: ThemeMode.system,
-                                  child: Text(text.themeSystem),
-                                ),
-                              ],
-                              onChanged: (value) async {
-                                if (value != null) {
-                                  setState(() => _themeMode = value);
-                                  ref
-                                      .read(appSettingsProvider.notifier)
-                                      .setThemeMode(value);
-                                  await ref
-                                      .read(comicRdApiProvider)
-                                      .setSetting(
-                                        'app_theme',
-                                        jsonEncode(themeModeToSetting(value)),
-                                      );
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _locale,
-                              decoration: InputDecoration(
-                                labelText: text.locale,
-                                border: const OutlineInputBorder(),
-                              ),
-                              items: [
-                                DropdownMenuItem(
-                                  value: 'en',
-                                  child: Text(text.english),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'id',
-                                  child: Text(text.indonesian),
-                                ),
-                              ],
-                              onChanged: (value) async {
-                                if (value != null) {
-                                  setState(() => _locale = value);
-                                  ref
-                                      .read(appSettingsProvider.notifier)
-                                      .setLocale(value);
-                                  await ref
-                                      .read(comicRdApiProvider)
-                                      .setSetting(
-                                        'app_locale',
-                                        jsonEncode(value),
-                                      );
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      _SectionTitle(label: text.backupSection),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: _exportBackup,
-                            icon: const Icon(Icons.download_outlined),
-                            label: Text(text.exportBackup),
-                          ),
-                          FilledButton.tonalIcon(
-                            onPressed: _importBackup,
-                            icon: const Icon(Icons.upload_outlined),
-                            label: Text(text.importBackup),
-                          ),
-                        ],
-                      ),
-                      if (_message != null) ...[
-                        const SizedBox(height: 16),
-                        Text(_message!),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(text.cancel),
+                const SizedBox(height: 16),
+                _sectionHeader(text.backupSection),
+                Row(
+                  children: [
+                    FilledButton(
+                      onPressed: _exportBackup,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(FluentIcons.download, size: 16),
+                          const SizedBox(width: 6),
+                          Text(text.exportBackup),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: _save,
-                        icon: const Icon(Icons.save_outlined),
-                        label: Text(text.save),
+                    ),
+                    const SizedBox(width: 8),
+                    Button(
+                      onPressed: _importBackup,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(FluentIcons.upload, size: 16),
+                          const SizedBox(width: 6),
+                          Text(text.importBackup),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+                if (_message != null) ...[
+                  const SizedBox(height: 12),
+                  InfoBar(
+                    title: Text(_message!),
+                    severity: InfoBarSeverity.success,
+                    isLong: true,
+                  ),
+                ],
               ],
-            );
-          },
-          error: (error, _) => Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(error.toString()),
-          ),
-          loading: () => const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        },
+        error: (error, _) => Text(error.toString()),
+        loading: () => const Center(child: ProgressRing()),
+      ),
+      actions: [
+        Button(
+          child: Text(text.cancel),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(FluentIcons.save, size: 16),
+              const SizedBox(width: 6),
+              Text(text.save),
+            ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _sectionHeader(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label,
+        style: FluentTheme.of(context).typography.subtitle,
       ),
     );
   }
 
+  Widget _labeledField(String label, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: FluentTheme.of(context).typography.caption),
+        const SizedBox(height: 4),
+        child,
+      ],
+    );
+  }
+
   void _initialize(Map<String, String> values, AppSettings appSettings) {
-    if (_initialized) {
-      return;
-    }
+    if (_initialized) return;
     _librarySource.text = _decodeString(values['library_source_input'], '');
     _defaultZoom.text = _decodeNumber(values['default_zoom'], '1');
     _pageGap.text = _decodeNumber(values['page_gap'], '10');
@@ -320,26 +336,20 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   }
 
   String _decodeString(String? raw, String fallback) {
-    if (raw == null) {
-      return fallback;
-    }
+    if (raw == null) return fallback;
     final decoded = jsonDecode(raw);
     return decoded is String ? decoded : fallback;
   }
 
   String _decodeNumber(String? raw, String fallback) {
-    if (raw == null) {
-      return fallback;
-    }
+    if (raw == null) return fallback;
     final decoded = jsonDecode(raw);
     return decoded?.toString() ?? fallback;
   }
 
   Future<void> _pickLibrarySource() async {
     final path = await getDirectoryPath();
-    if (path == null) {
-      return;
-    }
+    if (path == null) return;
     setState(() => _librarySource.text = path);
   }
 
@@ -375,9 +385,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
         XTypeGroup(label: text.sqliteDatabase, extensions: ['db']),
       ],
     );
-    if (location == null) {
-      return;
-    }
+    if (location == null) return;
     await ref.read(comicRdApiProvider).exportDatabaseBackup(location.path);
     if (mounted) {
       setState(() => _message = text.backupExported);
@@ -391,9 +399,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
         XTypeGroup(label: text.sqliteDatabase, extensions: ['db']),
       ],
     );
-    if (file == null) {
-      return;
-    }
+    if (file == null) return;
     await ref.read(comicRdApiProvider).importDatabaseBackup(file.path);
     ref.invalidate(settingsEntriesProvider);
     ref.invalidate(librarySourceStatusProvider);
@@ -401,19 +407,5 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     if (mounted) {
       setState(() => _message = text.backupImported);
     }
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(label, style: Theme.of(context).textTheme.titleMedium),
-    );
   }
 }

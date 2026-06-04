@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -95,10 +95,12 @@ class _ComicPageState extends ConsumerState<ComicPage> {
           children: [
             Row(
               children: [
-                IconButton(
-                  tooltip: text.home,
-                  onPressed: () => context.go('/'),
-                  icon: const Icon(Icons.arrow_back),
+                Tooltip(
+                  message: text.home,
+                  child: IconButton(
+                    onPressed: () => context.go('/'),
+                    icon: const Icon(FluentIcons.back),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -106,7 +108,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                     title.isEmpty ? text.comic : title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    style: FluentTheme.of(context).typography.title,
                   ),
                 ),
               ],
@@ -115,59 +117,78 @@ class _ComicPageState extends ConsumerState<ComicPage> {
             Row(
               children: [
                 Expanded(
-                  child: SearchBar(
+                  child: TextBox(
                     controller: _search,
-                    leading: const Icon(Icons.search),
-                    hintText: text.search,
-                    constraints: const BoxConstraints(minHeight: 44),
+                    prefix: const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: Icon(FluentIcons.search, size: 16),
+                    ),
+                    placeholder: text.search,
                     onChanged: (value) => ref
                         .read(comicPreferencesProvider.notifier)
                         .setQuery(widget.comicPath, value),
                   ),
                 ),
                 const SizedBox(width: 12),
-                SegmentedButton<ChapterDisplayMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ChapterDisplayMode.grid,
-                      icon: Icon(Icons.grid_view_outlined),
-                    ),
-                    ButtonSegment(
-                      value: ChapterDisplayMode.list,
-                      icon: Icon(Icons.view_list_outlined),
-                    ),
-                  ],
-                  selected: {preferences.displayMode},
-                  onSelectionChanged: (selection) => ref
+                ToggleButton(
+                  checked:
+                      preferences.displayMode == ChapterDisplayMode.grid,
+                  onChanged: (value) => ref
                       .read(comicPreferencesProvider.notifier)
-                      .setDisplayMode(widget.comicPath, selection.single),
+                      .setDisplayMode(
+                        widget.comicPath,
+                        value
+                            ? ChapterDisplayMode.grid
+                            : ChapterDisplayMode.list,
+                      ),
+                  child: const Icon(FluentIcons.grid_view_medium),
+                ),
+                const SizedBox(width: 4),
+                ToggleButton(
+                  checked:
+                      preferences.displayMode == ChapterDisplayMode.list,
+                  onChanged: (value) => ref
+                      .read(comicPreferencesProvider.notifier)
+                      .setDisplayMode(
+                        widget.comicPath,
+                        value
+                            ? ChapterDisplayMode.list
+                            : ChapterDisplayMode.grid,
+                      ),
+                  child: const Icon(FluentIcons.list),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                FilterChip(
-                  selected: preferences.favoritesOnly,
-                  avatar: const Icon(Icons.star_outline, size: 18),
-                  label: Text(text.favorites),
-                  onSelected: (value) => ref
+                ToggleButton(
+                  checked: preferences.favoritesOnly,
+                  onChanged: (value) => ref
                       .read(comicPreferencesProvider.notifier)
                       .setFavoritesOnly(widget.comicPath, value),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.favorite_star, size: 18),
+                      const SizedBox(width: 4),
+                      Text(text.favorites),
+                    ],
+                  ),
                 ),
                 const SizedBox(width: 12),
-                DropdownButton<ChapterSortBy>(
+                ComboBox<ChapterSortBy>(
                   value: preferences.sortBy,
                   items: [
-                    DropdownMenuItem(
+                    ComboBoxItem(
                       value: ChapterSortBy.chapterIndex,
                       child: Text(text.chapter),
                     ),
-                    DropdownMenuItem(
+                    ComboBoxItem(
                       value: ChapterSortBy.name,
                       child: Text(text.name),
                     ),
-                    DropdownMenuItem(
+                    ComboBoxItem(
                       value: ChapterSortBy.folderDate,
                       child: Text(text.folderDate),
                     ),
@@ -178,20 +199,22 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                     }
                   },
                 ),
-                IconButton(
-                  tooltip: preferences.sortDir == bridge.SortDir.asc
+                Tooltip(
+                  message: preferences.sortDir == bridge.SortDir.asc
                       ? text.ascending
                       : text.descending,
-                  onPressed: () => _setSort(
-                    preferences.sortBy,
-                    preferences.sortDir == bridge.SortDir.asc
-                        ? bridge.SortDir.desc
-                        : bridge.SortDir.asc,
-                  ),
-                  icon: Icon(
-                    preferences.sortDir == bridge.SortDir.asc
-                        ? Icons.arrow_upward
-                        : Icons.arrow_downward,
+                  child: IconButton(
+                    onPressed: () => _setSort(
+                      preferences.sortBy,
+                      preferences.sortDir == bridge.SortDir.asc
+                          ? bridge.SortDir.desc
+                          : bridge.SortDir.asc,
+                    ),
+                    icon: Icon(
+                      preferences.sortDir == bridge.SortDir.asc
+                          ? FluentIcons.sort_up
+                          : FluentIcons.sort_down,
+                    ),
                   ),
                 ),
               ],
@@ -213,15 +236,19 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                     onOpenFolder: _openChapterFolder,
                   );
                 },
-                error: (error, _) => Center(
+                error: (error, _) => Align(
+                  alignment: Alignment.center,
                   child: Text(
                     error.toString(),
                     style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                      color: FluentTheme.of(context).accentColor,
                     ),
                   ),
                 ),
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const Align(
+                  alignment: Alignment.center,
+                  child: ProgressRing(),
+                ),
               ),
             ),
           ],
@@ -370,8 +397,12 @@ class _ChapterList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (chapters.isEmpty) {
-      return Center(
-        child: Text(emptyLabel, style: Theme.of(context).textTheme.titleMedium),
+      return Align(
+        alignment: Alignment.center,
+        child: Text(
+          emptyLabel,
+          style: FluentTheme.of(context).typography.bodyStrong,
+        ),
       );
     }
     if (displayMode == ChapterDisplayMode.grid) {
@@ -407,35 +438,70 @@ class _ChapterList extends StatelessWidget {
     return ListView.separated(
       controller: controller,
       itemCount: chapters.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const Divider(),
       itemBuilder: (context, index) {
         final chapter = chapters[index];
         final favorite = favorites.contains(chapter.sourcePath);
-        return ListTile(
-          leading: IconButton(
-            tooltip: favorite ? text.removeFavorite : text.addFavorite,
-            onPressed: () => onToggleFavorite(chapter, favorite),
-            icon: Icon(
-              favorite ? Icons.star : Icons.star_border,
-              color: favorite ? Theme.of(context).colorScheme.tertiary : null,
-            ),
-          ),
-          title: Text(chapter.title),
-          subtitle: Text(_chapterStatus(chapter, text)),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: text.openFolder,
-                onPressed: () => onOpenFolder(chapter),
-                icon: const Icon(Icons.folder_open_outlined, size: 20),
+        return HoverButton(
+          onPressed: () => onOpen(chapter),
+          builder: (context, states) {
+            return Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
               ),
-              chapter.isRead
-                  ? const Icon(Icons.done_all_outlined)
-                  : const Icon(Icons.chevron_right),
-            ],
-          ),
-          onTap: () => onOpen(chapter),
+              decoration: BoxDecoration(
+                color: states.isHovered
+                    ? FluentTheme.of(context)
+                        .resources
+                        .cardBackgroundFillColorSecondary
+                    : null,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      favorite
+                          ? FluentIcons.favorite_star_fill
+                          : FluentIcons.favorite_star,
+                      color: favorite
+                          ? FluentTheme.of(context).accentColor
+                          : null,
+                    ),
+                    onPressed: () => onToggleFavorite(chapter, favorite),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(chapter.title),
+                        Text(
+                          _chapterStatus(chapter, text),
+                          style: FluentTheme.of(context).typography.caption,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(FluentIcons.folder_open, size: 20),
+                        onPressed: () => onOpenFolder(chapter),
+                      ),
+                      Icon(
+                        chapter.isRead
+                            ? FluentIcons.check_mark
+                            : FluentIcons.chevron_right,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -462,55 +528,65 @@ class _ChapterGridTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    chapter.isRead
-                        ? Icons.done_all_outlined
-                        : Icons.article_outlined,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: text.openFolder,
-                    onPressed: onOpenFolder,
-                    icon: const Icon(Icons.folder_open_outlined, size: 20),
-                  ),
-                  IconButton(
-                    tooltip: favorite ? text.removeFavorite : text.addFavorite,
-                    onPressed: onToggleFavorite,
-                    icon: Icon(
-                      favorite ? Icons.star : Icons.star_border,
-                      color: favorite
-                          ? Theme.of(context).colorScheme.tertiary
-                          : null,
+      child: HoverButton(
+        onPressed: onOpen,
+        builder: (context, states) {
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: states.isHovered
+                  ? FluentTheme.of(context)
+                      .resources
+                      .cardBackgroundFillColorSecondary
+                  : null,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      chapter.isRead
+                          ? FluentIcons.check_mark
+                          : FluentIcons.reading_mode,
                     ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                chapter.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _chapterStatus(chapter, text),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(FluentIcons.folder_open, size: 20),
+                      onPressed: onOpenFolder,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        favorite
+                            ? FluentIcons.favorite_star_fill
+                            : FluentIcons.favorite_star,
+                        color: favorite
+                            ? FluentTheme.of(context).accentColor
+                            : null,
+                      ),
+                      onPressed: onToggleFavorite,
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  chapter.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: FluentTheme.of(context).typography.bodyStrong,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _chapterStatus(chapter, text),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -81,9 +81,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
     final reader = ref.watch(readerDataProvider(widget.chapterId));
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: KeyboardListener(
+    return ScaffoldPage(
+      content: KeyboardListener(
         autofocus: true,
         focusNode: _focusNode,
         onKeyEvent: (event) {
@@ -136,13 +135,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 ],
               );
             },
-            error: (error, _) => Center(
+            error: (error, _) => Align(
+              alignment: Alignment.center,
               child: Text(
                 error.toString(),
-                style: const TextStyle(color: Colors.white70),
+                style: const TextStyle(color: Colors.white),
               ),
             ),
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const Align(
+              alignment: Alignment.center,
+              child: ProgressRing(),
+            ),
           ),
         ),
       ),
@@ -151,8 +154,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Widget _readerScrollView({required ReaderData data, required AppStrings text}) {
     if (data.pages.isEmpty) {
-      return Center(
-        child: Text(text.noPages, style: const TextStyle(color: Colors.white70)),
+      return Align(
+        alignment: Alignment.center,
+        child: Text(text.noPages, style: const TextStyle(color: Colors.white)),
       );
     }
     return ListView.builder(
@@ -511,20 +515,22 @@ class _PagePlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Align(
+      alignment: Alignment.center,
       child: AspectRatio(
         aspectRatio: aspectRatio,
         child: ColoredBox(
           color: const Color(0xff141414),
-          child: Center(
+          child: Align(
+            alignment: Alignment.center,
             child: label == null
-                ? const CircularProgressIndicator()
+                ? const ProgressRing()
                 : Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
                       label!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white70),
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
           ),
@@ -579,10 +585,12 @@ class _ReaderToolbar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               children: [
-                IconButton(
-                  tooltip: text.close,
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close, color: Colors.white),
+                Tooltip(
+                  message: text.close,
+                  child: IconButton(
+                    onPressed: onClose,
+                    icon: const Icon(FluentIcons.cancel, color: Colors.white),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -602,67 +610,84 @@ class _ReaderToolbar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: Colors.white,
                           fontSize: 12,
                         ),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: text.previousChapter,
-                  onPressed: onPreviousChapter,
-                  icon: const Icon(Icons.skip_previous, color: Colors.white),
-                ),
-                IconButton(
-                  tooltip: text.previousPage,
-                  onPressed: onPreviousPage,
-                  icon: const Icon(
-                    Icons.keyboard_arrow_up,
-                    color: Colors.white,
+                Tooltip(
+                  message: text.previousChapter,
+                  child: IconButton(
+                    onPressed: onPreviousChapter,
+                    icon: const Icon(
+                      FluentIcons.previous,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                IconButton(
-                  tooltip: text.nextPage,
-                  onPressed: onNextPage,
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Colors.white,
+                Tooltip(
+                  message: text.previousPage,
+                  child: IconButton(
+                    onPressed: onPreviousPage,
+                    icon: const Icon(
+                      FluentIcons.up,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                IconButton(
-                  tooltip: text.nextChapter,
-                  onPressed: onNextChapter,
-                  icon: const Icon(Icons.skip_next, color: Colors.white),
+                Tooltip(
+                  message: text.nextPage,
+                  child: IconButton(
+                    onPressed: onNextPage,
+                    icon: const Icon(
+                      FluentIcons.down,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                Tooltip(
+                  message: text.nextChapter,
+                  child: IconButton(
+                    onPressed: onNextChapter,
+                    icon: const Icon(FluentIcons.next, color: Colors.white),
+                  ),
                 ),
                 if (compact)
-                  IconButton(
-                    tooltip: text.readerControls,
-                    onPressed: () => _showReaderControls(context),
-                    icon: const Icon(Icons.tune, color: Colors.white),
+                  Tooltip(
+                    message: text.readerControls,
+                    child: IconButton(
+                      onPressed: () => _showReaderControls(context),
+                      icon: const Icon(FluentIcons.settings, color: Colors.white),
+                    ),
                   )
                 else ...[
                   _ValueButton(
                     tooltip: text.gap,
-                    icon: Icons.vertical_align_center,
+                    icon: FluentIcons.align_vertical_center,
                     label: '${pageGap.round()}',
                     onDecrease: () => onGapChanged((pageGap - 5).clamp(0, 80)),
                     onIncrease: () => onGapChanged((pageGap + 5).clamp(0, 80)),
                   ),
                   _ValueButton(
                     tooltip: text.zoom,
-                    icon: Icons.zoom_in,
+                    icon: FluentIcons.search,
                     label: '${zoom.toStringAsFixed(1)}×',
                     onDecrease: () => onZoomChanged((zoom - 0.1).clamp(0.5, 3)),
                     onIncrease: () => onZoomChanged((zoom + 0.1).clamp(0.5, 3)),
                   ),
                 ],
-                IconButton(
-                  tooltip: text.fullscreen,
-                  onPressed: onToggleFullscreen,
-                  icon: Icon(
-                    fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                    color: Colors.white,
+                Tooltip(
+                  message: text.fullscreen,
+                  child: IconButton(
+                    onPressed: onToggleFullscreen,
+                    icon: Icon(
+                      fullscreen
+                          ? FluentIcons.back_to_window
+                          : FluentIcons.full_screen,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
@@ -676,55 +701,58 @@ class _ReaderToolbar extends StatelessWidget {
   Future<void> _showReaderControls(BuildContext context) {
     var sheetGap = pageGap;
     var sheetZoom = zoom;
-    return showModalBottomSheet<void>(
+    return showDialog<void>(
       context: context,
-      backgroundColor: const Color(0xff171717),
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _SheetValueControl(
-                      label: text.gap,
-                      value: sheetGap,
-                      decimals: 0,
-                      unit: '',
-                      onDecrease: () {
-                        final v = (sheetGap - 5).clamp(0, 80).toDouble();
-                        setSheetState(() => sheetGap = v);
-                        onGapChanged(v);
-                      },
-                      onIncrease: () {
-                        final v = (sheetGap + 5).clamp(0, 80).toDouble();
-                        setSheetState(() => sheetGap = v);
-                        onGapChanged(v);
-                      },
-                    ),
-                    _SheetValueControl(
-                      label: text.zoom,
-                      value: sheetZoom,
-                      decimals: 1,
-                      unit: '×',
-                      onDecrease: () {
-                        final v = (sheetZoom - 0.1).clamp(0.5, 3).toDouble();
-                        setSheetState(() => sheetZoom = v);
-                        onZoomChanged(v);
-                      },
-                      onIncrease: () {
-                        final v = (sheetZoom + 0.1).clamp(0.5, 3).toDouble();
-                        setSheetState(() => sheetZoom = v);
-                        onZoomChanged(v);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+        return ContentDialog(
+          title: Text(text.readerControls),
+          content: StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SheetValueControl(
+                    label: text.gap,
+                    value: sheetGap,
+                    decimals: 0,
+                    unit: '',
+                    onDecrease: () {
+                      final v = (sheetGap - 5).clamp(0, 80).toDouble();
+                      setSheetState(() => sheetGap = v);
+                      onGapChanged(v);
+                    },
+                    onIncrease: () {
+                      final v = (sheetGap + 5).clamp(0, 80).toDouble();
+                      setSheetState(() => sheetGap = v);
+                      onGapChanged(v);
+                    },
+                  ),
+                  _SheetValueControl(
+                    label: text.zoom,
+                    value: sheetZoom,
+                    decimals: 1,
+                    unit: '×',
+                    onDecrease: () {
+                      final v = (sheetZoom - 0.1).clamp(0.5, 3).toDouble();
+                      setSheetState(() => sheetZoom = v);
+                      onZoomChanged(v);
+                    },
+                    onIncrease: () {
+                      final v = (sheetZoom + 0.1).clamp(0.5, 3).toDouble();
+                      setSheetState(() => sheetZoom = v);
+                      onZoomChanged(v);
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            Button(
+              child: Text(text.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
         );
       },
     );
@@ -751,9 +779,9 @@ class _ValueButton extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: Colors.white70, size: 16),
+        Icon(icon, color: Colors.white, size: 16),
         const SizedBox(width: 2),
-        _iconBtn(Icons.remove, onDecrease),
+        _iconBtn(FluentIcons.remove, onDecrease),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text(
@@ -761,7 +789,7 @@ class _ValueButton extends StatelessWidget {
             style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
         ),
-        _iconBtn(Icons.add, onIncrease),
+        _iconBtn(FluentIcons.add, onIncrease),
       ],
     );
   }
@@ -771,8 +799,6 @@ class _ValueButton extends StatelessWidget {
       width: 28,
       height: 28,
       child: IconButton(
-        padding: EdgeInsets.zero,
-        iconSize: 16,
         icon: Icon(icon, color: Colors.white),
         onPressed: onPressed,
       ),
@@ -803,10 +829,10 @@ class _SheetValueControl extends StatelessWidget {
       children: [
         SizedBox(
           width: 56,
-          child: Text(label, style: const TextStyle(color: Colors.white70)),
+          child: Text(label, style: const TextStyle(color: Colors.white)),
         ),
         IconButton(
-          icon: const Icon(Icons.remove, color: Colors.white),
+          icon: const Icon(FluentIcons.remove, color: Colors.white),
           onPressed: onDecrease,
         ),
         SizedBox(
@@ -818,7 +844,7 @@ class _SheetValueControl extends StatelessWidget {
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.add, color: Colors.white),
+          icon: const Icon(FluentIcons.add, color: Colors.white),
           onPressed: onIncrease,
         ),
       ],
@@ -850,10 +876,10 @@ class _PageIndicator extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(width: 6),
           itemBuilder: (context, index) {
             final selected = index == currentPage;
-            return ChoiceChip(
-              selected: selected,
-              label: Text('${index + 1}'),
-              onSelected: (_) => onSelected(index),
+            return ToggleButton(
+              checked: selected,
+              onChanged: (_) => onSelected(index),
+              child: Text('${index + 1}'),
             );
           },
         ),

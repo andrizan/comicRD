@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -20,9 +20,8 @@ class LibraryPage extends ConsumerStatefulWidget {
   ConsumerState<LibraryPage> createState() => _LibraryPageState();
 }
 
-class _LibraryPageState extends ConsumerState<LibraryPage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+class _LibraryPageState extends ConsumerState<LibraryPage> {
+  int _currentIndex = 0;
   late final ScrollController _historyScroll;
   late final ScrollController _libraryScroll;
   late final ScrollController _bookmarksScroll;
@@ -31,7 +30,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
     _historyScroll = _restoredScrollController('library:history');
     _libraryScroll = _restoredScrollController('library:library');
     _bookmarksScroll = _restoredScrollController('library:bookmarks');
@@ -48,7 +46,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
     _historyScroll.dispose();
     _libraryScroll.dispose();
     _bookmarksScroll.dispose();
-    _tabs.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -88,71 +85,75 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
             .map((bookmark) => bookmark.comicSourcePath)
             .toSet() ??
         const <String>{};
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: SearchBar(
-                  controller: _search,
-                  leading: const Icon(Icons.search),
-                  hintText: text.search,
-                  constraints: const BoxConstraints(minHeight: 44),
-                  onChanged: (value) => ref
-                      .read(libraryPreferencesProvider.notifier)
-                      .setQuery(value),
+    return ScaffoldPage(
+      content: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextBox(
+                    controller: _search,
+                    prefix: const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: Icon(FluentIcons.search, size: 16),
+                    ),
+                    placeholder: text.search,
+                    onChanged: (value) => ref
+                        .read(libraryPreferencesProvider.notifier)
+                        .setQuery(value),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              SegmentedButton<LibraryDisplayMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: LibraryDisplayMode.grid,
-                    icon: Icon(Icons.grid_view_outlined),
+                const SizedBox(width: 12),
+                ToggleButton(
+                  checked: preferences.displayMode == LibraryDisplayMode.grid,
+                  onChanged: (value) => _setDisplayMode(
+                    value ? LibraryDisplayMode.grid : LibraryDisplayMode.list,
                   ),
-                  ButtonSegment(
-                    value: LibraryDisplayMode.list,
-                    icon: Icon(Icons.view_list_outlined),
+                  child: const Icon(FluentIcons.grid_view_medium),
+                ),
+                const SizedBox(width: 4),
+                ToggleButton(
+                  checked: preferences.displayMode == LibraryDisplayMode.list,
+                  onChanged: (value) => _setDisplayMode(
+                    value ? LibraryDisplayMode.list : LibraryDisplayMode.grid,
                   ),
-                ],
-                selected: {preferences.displayMode},
-                onSelectionChanged: (selection) =>
-                    _setDisplayMode(selection.single),
-              ),
-            ],
+                  child: const Icon(FluentIcons.list),
+                ),
+              ],
+            ),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
           child: Row(
             children: [
-              SegmentedButton<LibraryViewMode>(
-                segments: [
-                  ButtonSegment(value: LibraryViewMode.all, label: Text(text.all)),
-                  ButtonSegment(
-                    value: LibraryViewMode.unread,
-                    label: Text(text.unread),
-                  ),
-                  ButtonSegment(
-                    value: LibraryViewMode.reading,
-                    label: Text(text.progress),
-                  ),
-                ],
-                selected: {preferences.viewMode},
-                onSelectionChanged: (selection) =>
-                    _setViewMode(selection.single),
+              ToggleButton(
+                checked: preferences.viewMode == LibraryViewMode.all,
+                onChanged: (value) => _setViewMode(LibraryViewMode.all),
+                child: Text(text.all),
+              ),
+              const SizedBox(width: 4),
+              ToggleButton(
+                checked: preferences.viewMode == LibraryViewMode.unread,
+                onChanged: (value) => _setViewMode(LibraryViewMode.unread),
+                child: Text(text.unread),
+              ),
+              const SizedBox(width: 4),
+              ToggleButton(
+                checked: preferences.viewMode == LibraryViewMode.reading,
+                onChanged: (value) => _setViewMode(LibraryViewMode.reading),
+                child: Text(text.progress),
               ),
               const SizedBox(width: 12),
-              DropdownButton<bridge.SortBy>(
+              ComboBox<bridge.SortBy>(
                 value: preferences.sortBy,
                 items: [
-                  DropdownMenuItem(
+                  ComboBoxItem(
                     value: bridge.SortBy.name,
                     child: Text(text.name),
                   ),
-                  DropdownMenuItem(
+                  ComboBoxItem(
                     value: bridge.SortBy.folderDate,
                     child: Text(text.folderDate),
                   ),
@@ -177,8 +178,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                   ),
                   icon: Icon(
                     preferences.sortDir == bridge.SortDir.asc
-                        ? Icons.arrow_upward
-                        : Icons.arrow_downward,
+                        ? FluentIcons.sort_up
+                        : FluentIcons.sort_down,
                   ),
                 ),
               ),
@@ -199,7 +200,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
                 alignment: Alignment.centerLeft,
                 child: Text(
                   message,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(
+                    color: FluentTheme.of(context).accentColor,
+                  ),
                 ),
               ),
             );
@@ -210,26 +213,30 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
               alignment: Alignment.centerLeft,
               child: Text(
                 error.toString(),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(
+                  color: FluentTheme.of(context).accentColor,
+                ),
               ),
             ),
           ),
           loading: () => const SizedBox.shrink(),
         ),
-        TabBar(
-          controller: _tabs,
-          tabs: [
-            Tab(text: text.history, icon: const Icon(Icons.history_outlined)),
-            Tab(text: text.library, icon: const Icon(Icons.book_outlined)),
-            Tab(
-              text: text.bookmarks,
-              icon: const Icon(Icons.bookmark_border_outlined),
-            ),
-          ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              _buildTab(text.history, FluentIcons.history, 0),
+              const SizedBox(width: 4),
+              _buildTab(text.library, FluentIcons.library, 1),
+              const SizedBox(width: 4),
+              _buildTab(text.bookmarks, FluentIcons.bookmarks, 2),
+            ],
+          ),
         ),
+        const SizedBox(height: 8),
         Expanded(
-          child: TabBarView(
-            controller: _tabs,
+          child: IndexedStack(
+            index: _currentIndex,
             children: [
               _HistoryList(
                 history: history,
@@ -259,6 +266,53 @@ class _LibraryPageState extends ConsumerState<LibraryPage>
           ),
         ),
       ],
+    ),
+    );
+  }
+
+  Widget _buildTab(String label, IconData icon, int index) {
+    final isActive = _currentIndex == index;
+    final theme = FluentTheme.of(context);
+    return Expanded(
+      child: HoverButton(
+        onPressed: () => setState(() => _currentIndex = index),
+        builder: (context, states) {
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? theme.accentColor.withValues(alpha: 0.1)
+                  : states.isHovered
+                      ? theme.resources.cardBackgroundFillColorSecondary
+                      : Colors.transparent,
+              border: Border(
+                bottom: BorderSide(
+                  color: isActive ? theme.accentColor : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: isActive ? theme.accentColor : null,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isActive ? theme.accentColor : null,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -380,57 +434,78 @@ class _ComicList extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.all(16),
           itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(),
           itemBuilder: (context, index) {
             final comic = items[index];
             final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
-            return ListTile(
-              leading: Icon(
-                bookmarked ? Icons.bookmark_outlined : Icons.menu_book_outlined,
-              ),
-              title: Text(comic.title),
-              subtitle: Text(
-                comic.sourcePath,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              onTap: () =>
+            return HoverButton(
+              onPressed: () =>
                   context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
-              onLongPress: () => onToggleBookmark(comic, bookmarked),
-              contentPadding: const EdgeInsets.only(left: 16, right: 4),
-              minLeadingWidth: 24,
-              horizontalTitleGap: 12,
-              mouseCursor: SystemMouseCursors.click,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              hoverColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ReadStatusBadge(
-                    readCount: comic.readChapterCount,
-                    totalCount: comic.chapterCount,
-                    inProgressCount: comic.inProgressChapterCount,
+              builder: (context, states) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
-                  const SizedBox(width: 8),
-                  Text(comic.sourceType.toUpperCase()),
-                  _ComicActionsButton(
-                    text: text,
-                    bookmarked: bookmarked,
-                    onToggleBookmark: () => onToggleBookmark(comic, bookmarked),
-                    onCopyTitle: () => onCopyTitle(comic),
-                    onCopyPath: () => onCopyPath(comic),
-                    onOpenFolder: () => onOpenFolder(comic),
+                  decoration: BoxDecoration(
+                    color: states.isHovered
+                        ? FluentTheme.of(context)
+                            .resources
+                            .cardBackgroundFillColorSecondary
+                        : null,
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        bookmarked
+                            ? FluentIcons.bookmarks
+                            : FluentIcons.reading_mode,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(comic.title),
+                            Text(
+                              comic.sourcePath,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: FluentTheme.of(context)
+                                  .typography
+                                  .caption,
+                            ),
+                          ],
+                        ),
+                      ),
+                      _ReadStatusBadge(
+                        readCount: comic.readChapterCount,
+                        totalCount: comic.chapterCount,
+                        inProgressCount: comic.inProgressChapterCount,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(comic.sourceType.toUpperCase()),
+                      _ComicActionsButton(
+                        text: text,
+                        bookmarked: bookmarked,
+                        onToggleBookmark: () =>
+                            onToggleBookmark(comic, bookmarked),
+                        onCopyTitle: () => onCopyTitle(comic),
+                        onCopyPath: () => onCopyPath(comic),
+                        onOpenFolder: () => onOpenFolder(comic),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
           },
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Align(alignment: Alignment.center, child: ProgressRing()),
     );
   }
 }
@@ -459,52 +534,62 @@ class _ComicGridTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    bookmarked
-                        ? Icons.bookmark_outlined
-                        : Icons.menu_book_outlined,
-                  ),
-                  const Spacer(),
-                  _ReadStatusBadge(
-                    readCount: comic.readChapterCount,
-                    totalCount: comic.chapterCount,
-                    inProgressCount: comic.inProgressChapterCount,
-                  ),
-                  _ComicActionsButton(
-                    text: text,
-                    bookmarked: bookmarked,
-                    onToggleBookmark: onToggleBookmark,
-                    onCopyTitle: onCopyTitle,
-                    onCopyPath: onCopyPath,
-                    onOpenFolder: onOpenFolder,
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                comic.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                comic.sourceType.toUpperCase(),
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ],
-          ),
-        ),
+      child: HoverButton(
+        onPressed: onOpen,
+        builder: (context, states) {
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: states.isHovered
+                  ? FluentTheme.of(context)
+                      .resources
+                      .cardBackgroundFillColorSecondary
+                  : null,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      bookmarked
+                          ? FluentIcons.bookmarks
+                          : FluentIcons.reading_mode,
+                      size: 20,
+                    ),
+                    const Spacer(),
+                    _ReadStatusBadge(
+                      readCount: comic.readChapterCount,
+                      totalCount: comic.chapterCount,
+                      inProgressCount: comic.inProgressChapterCount,
+                    ),
+                    _ComicActionsButton(
+                      text: text,
+                      bookmarked: bookmarked,
+                      onToggleBookmark: onToggleBookmark,
+                      onCopyTitle: onCopyTitle,
+                      onCopyPath: onCopyPath,
+                      onOpenFolder: onOpenFolder,
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  comic.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: FluentTheme.of(context).typography.bodyStrong,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  comic.sourceType.toUpperCase(),
+                  style: FluentTheme.of(context).typography.caption,
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -523,7 +608,7 @@ class _ReadStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = FluentTheme.of(context);
     if (totalCount == 0) {
       return const SizedBox.shrink();
     }
@@ -531,13 +616,13 @@ class _ReadStatusBadge extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: colorScheme.primaryContainer,
+          color: theme.accentColor.withAlpha(40),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           'Read',
           style: TextStyle(
-            color: colorScheme.onPrimaryContainer,
+            color: theme.accentColor,
             fontSize: 11,
             fontWeight: FontWeight.w500,
           ),
@@ -548,13 +633,13 @@ class _ReadStatusBadge extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: colorScheme.tertiaryContainer,
+          color: theme.accentColor.withAlpha(30),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           'Reading $readCount/$totalCount',
           style: TextStyle(
-            color: colorScheme.onTertiaryContainer,
+            color: theme.accentColor,
             fontSize: 11,
             fontWeight: FontWeight.w500,
           ),
@@ -564,13 +649,13 @@ class _ReadStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
+        color: theme.resources.cardBackgroundFillColorSecondary,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         'Unread',
         style: TextStyle(
-          color: colorScheme.onSurfaceVariant,
+          color: theme.resources.textFillColorSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w500,
         ),
@@ -598,44 +683,29 @@ class _ComicActionsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<_ComicAction>(
-      tooltip: text.comicActions,
-      icon: const Icon(Icons.more_vert),
-      onSelected: (action) async {
-        switch (action) {
-          case _ComicAction.toggleBookmark:
-            await onToggleBookmark();
-          case _ComicAction.copyTitle:
-            await onCopyTitle();
-          case _ComicAction.copyPath:
-            await onCopyPath();
-          case _ComicAction.openFolder:
-            await onOpenFolder();
-        }
-      },
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: _ComicAction.toggleBookmark,
-          child: Text(bookmarked ? text.removeBookmark : text.addBookmark),
+    return DropDownButton(
+      title: const Icon(FluentIcons.more),
+      items: [
+        MenuFlyoutItem(
+          text: Text(bookmarked ? text.removeBookmark : text.addBookmark),
+          onPressed: () async => await onToggleBookmark(),
         ),
-        PopupMenuItem(
-          value: _ComicAction.openFolder,
-          child: Text(text.openFolder),
+        MenuFlyoutItem(
+          text: Text(text.openFolder),
+          onPressed: () async => await onOpenFolder(),
         ),
-        PopupMenuItem(
-          value: _ComicAction.copyTitle,
-          child: Text(text.copyTitle),
+        MenuFlyoutItem(
+          text: Text(text.copyTitle),
+          onPressed: () async => await onCopyTitle(),
         ),
-        PopupMenuItem(
-          value: _ComicAction.copyPath,
-          child: Text(text.copyPath),
+        MenuFlyoutItem(
+          text: Text(text.copyPath),
+          onPressed: () async => await onCopyPath(),
         ),
       ],
     );
   }
 }
-
-enum _ComicAction { toggleBookmark, openFolder, copyTitle, copyPath }
 
 class _HistoryList extends StatelessWidget {
   const _HistoryList({
@@ -671,33 +741,43 @@ class _HistoryList extends StatelessWidget {
             itemBuilder: (context, index) {
               final item = items[index];
               return Card(
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => context
+                child: HoverButton(
+                  onPressed: () => context
                       .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.history_outlined, size: 20),
-                        const Spacer(),
-                        Text(
-                          item.comicTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.chapterTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
+                  builder: (context, states) {
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: states.isHovered
+                            ? FluentTheme.of(context)
+                                .resources
+                                .cardBackgroundFillColorSecondary
+                            : null,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(FluentIcons.history, size: 20),
+                          const Spacer(),
+                          Text(
+                            item.comicTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                FluentTheme.of(context).typography.bodyStrong,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.chapterTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: FluentTheme.of(context).typography.caption,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               );
             },
@@ -707,21 +787,53 @@ class _HistoryList extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.all(16),
           itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(),
           itemBuilder: (context, index) {
             final item = items[index];
-            return ListTile(
-              leading: const Icon(Icons.history_outlined),
-              title: Text(item.comicTitle),
-              subtitle: Text(item.chapterTitle),
-              onTap: () =>
-                  context.go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+            return HoverButton(
+              onPressed: () => context
+                  .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+              builder: (context, states) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: states.isHovered
+                        ? FluentTheme.of(context)
+                            .resources
+                            .cardBackgroundFillColorSecondary
+                        : null,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(FluentIcons.history, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.comicTitle),
+                            Text(
+                              item.chapterTitle,
+                              style:
+                                  FluentTheme.of(context).typography.caption,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
           },
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Align(alignment: Alignment.center, child: ProgressRing()),
     );
   }
 }
@@ -760,26 +872,36 @@ class _BookmarkList extends StatelessWidget {
             itemBuilder: (context, index) {
               final item = items[index];
               return Card(
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => context
+                child: HoverButton(
+                  onPressed: () => context
                       .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.bookmark_border_outlined, size: 20),
-                        const Spacer(),
-                        Text(
-                          item.comicTitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ],
-                    ),
-                  ),
+                  builder: (context, states) {
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: states.isHovered
+                            ? FluentTheme.of(context)
+                                .resources
+                                .cardBackgroundFillColorSecondary
+                            : null,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(FluentIcons.bookmarks, size: 20),
+                          const Spacer(),
+                          Text(
+                            item.comicTitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                FluentTheme.of(context).typography.bodyStrong,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               );
             },
@@ -789,25 +911,58 @@ class _BookmarkList extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.all(16),
           itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(),
           itemBuilder: (context, index) {
             final item = items[index];
-            return ListTile(
-              leading: const Icon(Icons.bookmark_border_outlined),
-              title: Text(item.comicTitle),
-              subtitle: Text(
-                item.comicSourcePath,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              onTap: () =>
-                  context.go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+            return HoverButton(
+              onPressed: () => context
+                  .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+              builder: (context, states) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: states.isHovered
+                        ? FluentTheme.of(context)
+                            .resources
+                            .cardBackgroundFillColorSecondary
+                        : null,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(FluentIcons.bookmarks, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.comicTitle),
+                            Text(
+                              item.comicSourcePath,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  FluentTheme.of(context).typography.caption,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
           },
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Align(
+        alignment: Alignment.center,
+        child: ProgressRing(),
+      ),
     );
   }
 }
@@ -820,7 +975,10 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+      child: Text(
+        label,
+        style: FluentTheme.of(context).typography.bodyStrong,
+      ),
     );
   }
 }
@@ -835,7 +993,7 @@ class _ErrorState extends StatelessWidget {
     return Center(
       child: Text(
         message,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
+        style: TextStyle(color: FluentTheme.of(context).accentColor),
       ),
     );
   }
