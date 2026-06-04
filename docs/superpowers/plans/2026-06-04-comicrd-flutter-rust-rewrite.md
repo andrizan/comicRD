@@ -14,7 +14,8 @@
 
 - Target platform for v1 rewrite: Windows, Linux, macOS desktop only.
 - Source app reference: `/home/andrizan/CODE/PRIVATE/comicRD`.
-- Target Flutter app: `/home/andrizan/CODE/PRIVATE/comicrd_flutter`.
+- Target workspace: `/home/andrizan/CODE/PRIVATE/comicrd_flutter`.
+- Flutter app path: `/home/andrizan/CODE/PRIVATE/comicrd_flutter/app_flutter`.
 - Target behavior: full parity with current ComicRD, not a small reader-only MVP.
 - Data ownership: Rust owns SQLite, cache, business logic, and heavy IO; Flutter owns UI state and presentation.
 - Migration safety: keep the existing Tauri app untouched until the Flutter version reaches parity.
@@ -131,7 +132,7 @@ Important data types:
 
 ### Task 1: Rust Workspace And Core Extraction
 
-- [x] Create a Cargo workspace under the Flutter repo with `crates/comicrd_core` and `crates/comicrd_bridge`.
+- [x] Create a Cargo workspace at repo root with `app_flutter`, `crates/comicrd_core`, and `crates/comicrd_bridge`.
 - [ ] Move reusable Rust logic from `/home/andrizan/CODE/PRIVATE/comicRD/src-tauri/src/lib.rs` into `comicrd_core`.
 - [x] Remove all Tauri dependencies from the core crate.
 - [x] Replace `AppHandle`-based database path resolution with `ComicRdCore::open(app_data_dir: PathBuf)`.
