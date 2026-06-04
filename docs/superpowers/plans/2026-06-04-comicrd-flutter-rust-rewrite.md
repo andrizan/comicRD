@@ -152,6 +152,8 @@ Important data types:
   - no GIF resize
   - performance/balanced/quality profile quality and filter behavior
 - [ ] Add Rust tests for migrations, scan, progress, bookmarks, chapter context, image variants, and backup/import.
+  - Covered so far: migrations/defaults, raw library listing, chapter discovery, reader progress/context, page variants, bookmarks/favorites/history, backup/import.
+  - Still missing: full `scan_libraries` parity and cache/dedupe behavior.
 
 ### Task 2: Flutter Rust Bridge Integration
 

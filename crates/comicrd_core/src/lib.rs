@@ -86,6 +86,36 @@ pub struct ReadingProgress {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Bookmark {
+    pub id: i64,
+    pub chapter_id: i64,
+    pub page: i64,
+    pub created_at: i64,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ComicBookmark {
+    pub id: i64,
+    pub comic_source_path: String,
+    pub comic_title: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReadingHistoryEntry {
+    pub comic_source_path: String,
+    pub comic_title: String,
+    pub chapter_title: String,
+    pub chapter_source_path: String,
+    pub chapter_id: i64,
+    pub last_page: i64,
+    pub total_pages: i64,
+    pub is_read: bool,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OpenChapterPayload {
     pub comic_source_path: String,
     pub chapter_source_path: String,
@@ -98,6 +128,13 @@ pub struct SaveProgressPayload {
     pub total_pages: i64,
     pub mode: String,
     pub is_read: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SaveBookmarkPayload {
+    pub chapter_id: i64,
+    pub page: i64,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -305,6 +342,182 @@ impl ComicRdCore {
             .map_err(|_| "db lock poisoned".to_string())?;
         render_page_variant_conn(&conn, payload)
     }
+
+    pub fn add_bookmark(&self, payload: SaveBookmarkPayload) -> Result<i64, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        add_bookmark_conn(&conn, payload)
+    }
+
+    pub fn remove_bookmark(&self, bookmark_id: i64) -> Result<(), String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        remove_bookmark_conn(&conn, bookmark_id)
+    }
+
+    pub fn list_bookmarks(&self, chapter_id: i64) -> Result<Vec<Bookmark>, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        list_bookmarks_conn(&conn, chapter_id)
+    }
+
+    pub fn list_all_bookmarks(&self) -> Result<Vec<ComicBookmark>, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        list_all_bookmarks_conn(&conn)
+    }
+
+    pub fn add_comic_bookmark(&self, comic_source_path: &str) -> Result<i64, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        add_comic_bookmark_conn(&conn, comic_source_path)
+    }
+
+    pub fn remove_comic_bookmark(&self, comic_source_path: &str) -> Result<(), String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        remove_comic_bookmark_conn(&conn, comic_source_path)
+    }
+
+    pub fn is_comic_bookmarked(&self, comic_source_path: &str) -> Result<bool, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        is_comic_bookmarked_conn(&conn, comic_source_path)
+    }
+
+    pub fn add_chapter_favorite(
+        &self,
+        chapter_source_path: &str,
+        comic_source_path: &str,
+    ) -> Result<i64, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        add_chapter_favorite_conn(&conn, chapter_source_path, comic_source_path)
+    }
+
+    pub fn remove_chapter_favorite(&self, chapter_source_path: &str) -> Result<(), String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        remove_chapter_favorite_conn(&conn, chapter_source_path)
+    }
+
+    pub fn list_chapter_favorites(&self, comic_source_path: &str) -> Result<Vec<String>, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        list_chapter_favorites_conn(&conn, comic_source_path)
+    }
+
+    pub fn list_reading_history(&self) -> Result<Vec<ReadingHistoryEntry>, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        list_reading_history_conn(&conn)
+    }
+
+    pub fn list_comics_with_progress(&self) -> Result<Vec<String>, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        list_comics_with_progress_conn(&conn)
+    }
+
+    pub fn export_database_backup(&self, output_path: impl AsRef<Path>) -> Result<(), String> {
+        let output_path = output_path.as_ref();
+        if output_path.as_os_str().is_empty() {
+            return Err("output path kosong".to_string());
+        }
+
+        {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            let _ = conn.execute_batch("PRAGMA wal_checkpoint(FULL);");
+        }
+
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("failed creating backup directory: {e}"))?;
+        }
+        if output_path.exists() {
+            fs::remove_file(output_path)
+                .map_err(|e| format!("failed replacing existing backup file: {e}"))?;
+        }
+        fs::copy(&self.db_path, output_path)
+            .map_err(|e| format!("failed exporting database backup: {e}"))?;
+        Ok(())
+    }
+
+    pub fn import_database_backup(&self, input_path: impl AsRef<Path>) -> Result<(), String> {
+        let input_path = input_path.as_ref();
+        if input_path.as_os_str().is_empty() {
+            return Err("input path kosong".to_string());
+        }
+        if !input_path.exists() || !input_path.is_file() {
+            return Err("file backup tidak ditemukan".to_string());
+        }
+
+        let mut conn_guard = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        let backup_path = self
+            .db_path
+            .with_extension(format!("db.pre-import-{}", now_ts()));
+        if self.db_path.exists() {
+            let _ = conn_guard.execute_batch("PRAGMA wal_checkpoint(FULL);");
+            fs::copy(&self.db_path, &backup_path)
+                .map_err(|e| format!("failed creating pre-import backup: {e}"))?;
+        }
+
+        let replacement_conn = Connection::open_in_memory()
+            .map_err(|e| format!("failed opening temporary db: {e}"))?;
+        let old_conn = std::mem::replace(&mut *conn_guard, replacement_conn);
+        drop(old_conn);
+
+        if self.db_path.exists() {
+            fs::remove_file(&self.db_path)
+                .map_err(|e| format!("failed replacing database file: {e}"))?;
+        }
+        let wal_path = PathBuf::from(format!("{}-wal", self.db_path.to_string_lossy()));
+        let shm_path = PathBuf::from(format!("{}-shm", self.db_path.to_string_lossy()));
+        if wal_path.exists() {
+            let _ = fs::remove_file(wal_path);
+        }
+        if shm_path.exists() {
+            let _ = fs::remove_file(shm_path);
+        }
+
+        fs::copy(input_path, &self.db_path)
+            .map_err(|e| format!("failed importing backup file: {e}"))?;
+        let imported_conn = open_database_file(&self.db_path)
+            .map_err(|e| format!("failed opening imported db: {e}"))?;
+        run_migrations(&imported_conn)?;
+        *conn_guard = imported_conn;
+        Ok(())
+    }
 }
 
 fn now_ts() -> i64 {
@@ -312,6 +525,15 @@ fn now_ts() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+fn open_database_file(path: &Path) -> Result<Connection, String> {
+    let conn = Connection::open(path).map_err(|e| format!("failed opening db: {e}"))?;
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;",
+    )
+    .map_err(|e| format!("failed enabling pragmas: {e}"))?;
+    Ok(conn)
 }
 
 fn file_modified_ts(path: &Path) -> i64 {
@@ -1486,4 +1708,196 @@ fn get_progress_conn(
         }));
     }
     Ok(None)
+}
+
+fn add_bookmark_conn(conn: &Connection, payload: SaveBookmarkPayload) -> Result<i64, String> {
+    conn.execute(
+        "INSERT INTO bookmarks (chapter_id, page, created_at, note) VALUES (?1, ?2, ?3, ?4)",
+        params![
+            payload.chapter_id,
+            payload.page,
+            now_ts(),
+            payload.note.unwrap_or_default()
+        ],
+    )
+    .map_err(|e| format!("failed creating bookmark: {e}"))?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn remove_bookmark_conn(conn: &Connection, bookmark_id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM bookmarks WHERE id = ?1", params![bookmark_id])
+        .map_err(|e| format!("failed deleting bookmark: {e}"))?;
+    Ok(())
+}
+
+fn list_bookmarks_conn(conn: &Connection, chapter_id: i64) -> Result<Vec<Bookmark>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, chapter_id, page, created_at, note FROM bookmarks WHERE chapter_id = ?1 ORDER BY page ASC, created_at DESC",
+        )
+        .map_err(|e| format!("failed preparing bookmarks query: {e}"))?;
+    let rows = stmt
+        .query_map(params![chapter_id], |row| {
+            Ok(Bookmark {
+                id: row.get(0)?,
+                chapter_id: row.get(1)?,
+                page: row.get(2)?,
+                created_at: row.get(3)?,
+                note: row.get(4)?,
+            })
+        })
+        .map_err(|e| format!("failed querying bookmarks: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting bookmarks: {e}"))
+}
+
+fn list_all_bookmarks_conn(conn: &Connection) -> Result<Vec<ComicBookmark>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+      SELECT cb.id, cb.comic_source_path, COALESCE(c.title, ''), cb.created_at
+      FROM comic_bookmarks cb
+      LEFT JOIN comics c ON c.source_path = cb.comic_source_path
+      ORDER BY cb.created_at DESC
+      "#,
+        )
+        .map_err(|e| format!("failed preparing comic bookmarks query: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ComicBookmark {
+                id: row.get(0)?,
+                comic_source_path: row.get(1)?,
+                comic_title: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })
+        .map_err(|e| format!("failed querying comic bookmarks: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting comic bookmarks: {e}"))
+}
+
+fn add_comic_bookmark_conn(conn: &Connection, comic_source_path: &str) -> Result<i64, String> {
+    conn.execute(
+        "INSERT OR IGNORE INTO comic_bookmarks (comic_source_path, created_at) VALUES (?1, ?2)",
+        params![comic_source_path, now_ts()],
+    )
+    .map_err(|e| format!("failed adding comic bookmark: {e}"))?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn remove_comic_bookmark_conn(conn: &Connection, comic_source_path: &str) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM comic_bookmarks WHERE comic_source_path = ?1",
+        params![comic_source_path],
+    )
+    .map_err(|e| format!("failed removing comic bookmark: {e}"))?;
+    Ok(())
+}
+
+fn is_comic_bookmarked_conn(conn: &Connection, comic_source_path: &str) -> Result<bool, String> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM comic_bookmarks WHERE comic_source_path = ?1)",
+        params![comic_source_path],
+        |row| row.get(0),
+    )
+    .map_err(|e| format!("failed checking comic bookmark: {e}"))
+}
+
+fn add_chapter_favorite_conn(
+    conn: &Connection,
+    chapter_source_path: &str,
+    comic_source_path: &str,
+) -> Result<i64, String> {
+    conn.execute(
+        "INSERT OR IGNORE INTO chapter_favorites (chapter_source_path, comic_source_path, created_at) VALUES (?1, ?2, ?3)",
+        params![chapter_source_path, comic_source_path, now_ts()],
+    )
+    .map_err(|e| format!("failed adding chapter favorite: {e}"))?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn remove_chapter_favorite_conn(
+    conn: &Connection,
+    chapter_source_path: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM chapter_favorites WHERE chapter_source_path = ?1",
+        params![chapter_source_path],
+    )
+    .map_err(|e| format!("failed removing chapter favorite: {e}"))?;
+    Ok(())
+}
+
+fn list_chapter_favorites_conn(
+    conn: &Connection,
+    comic_source_path: &str,
+) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT chapter_source_path FROM chapter_favorites WHERE comic_source_path = ?1 ORDER BY created_at DESC",
+        )
+        .map_err(|e| format!("failed preparing list chapter favorites: {e}"))?;
+    let rows = stmt
+        .query_map(params![comic_source_path], |row| row.get(0))
+        .map_err(|e| format!("failed listing chapter favorites: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed reading chapter favorite row: {e}"))
+}
+
+fn list_reading_history_conn(conn: &Connection) -> Result<Vec<ReadingHistoryEntry>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+          SELECT
+            c.source_path,
+            c.title,
+            ch.title,
+            ch.source_path,
+            ch.id,
+            r.last_page,
+            r.total_pages,
+            r.is_read,
+            r.updated_at
+          FROM reading_progress r
+          INNER JOIN chapters ch ON ch.id = r.chapter_id
+          INNER JOIN comics c ON c.id = ch.comic_id
+          ORDER BY r.updated_at DESC
+          "#,
+        )
+        .map_err(|e| format!("failed preparing reading history query: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ReadingHistoryEntry {
+                comic_source_path: row.get(0)?,
+                comic_title: row.get(1)?,
+                chapter_title: row.get(2)?,
+                chapter_source_path: row.get(3)?,
+                chapter_id: row.get(4)?,
+                last_page: row.get(5)?,
+                total_pages: row.get(6)?,
+                is_read: row.get::<_, i64>(7)? == 1,
+                updated_at: row.get(8)?,
+            })
+        })
+        .map_err(|e| format!("failed querying reading history: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting reading history: {e}"))
+}
+
+fn list_comics_with_progress_conn(conn: &Connection) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT DISTINCT c.source_path
+            FROM reading_progress r
+            INNER JOIN chapters ch ON ch.id = r.chapter_id
+            INNER JOIN comics c ON c.id = ch.comic_id
+            "#,
+        )
+        .map_err(|e| format!("failed preparing comics-with-progress query: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("failed querying comics with progress: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting comics with progress: {e}"))
 }
