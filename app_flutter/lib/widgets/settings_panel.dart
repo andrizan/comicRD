@@ -105,18 +105,24 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextBox(
-                        controller: _defaultZoom,
-                        keyboardType: TextInputType.number,
-                        placeholder: text.defaultZoom,
+                      child: _labeledField(
+                        text.defaultZoom,
+                        TextBox(
+                          controller: _defaultZoom,
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          placeholder: text.defaultZoom,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: TextBox(
-                        controller: _pageGap,
-                        keyboardType: TextInputType.number,
-                        placeholder: text.pageGap,
+                      child: _labeledField(
+                        text.pageGap,
+                        TextBox(
+                          controller: _pageGap,
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          placeholder: text.pageGap,
+                        ),
                       ),
                     ),
                   ],
