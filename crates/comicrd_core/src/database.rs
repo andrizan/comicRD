@@ -1,5 +1,6 @@
+use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection};
@@ -20,6 +21,97 @@ pub(crate) fn open_database_file(path: &Path) -> Result<Connection, String> {
     )
     .map_err(|e| format!("failed enabling pragmas: {e}"))?;
     Ok(conn)
+}
+
+pub(crate) fn copy_legacy_database_if_missing(
+    app_data_dir: &Path,
+    db_path: &Path,
+) -> Result<(), String> {
+    if db_path.exists() {
+        return Ok(());
+    }
+
+    let Some(legacy_db) = legacy_database_candidates(app_data_dir)
+        .into_iter()
+        .find(|path| path.exists() && path.is_file())
+    else {
+        return Ok(());
+    };
+
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("failed creating migrated database directory: {e}"))?;
+    }
+    remove_sqlite_sidecars(db_path);
+    fs::copy(&legacy_db, db_path).map_err(|e| {
+        format!(
+            "failed copying legacy database from {}: {e}",
+            legacy_db.display()
+        )
+    })?;
+    Ok(())
+}
+
+fn legacy_database_candidates(app_data_dir: &Path) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if !is_flutter_app_data_dir(app_data_dir) {
+        return candidates;
+    }
+    if let Some(parent) = app_data_dir.parent() {
+        candidates.push(parent.join("com.andrizan.comicrd").join("comicrd.db"));
+        candidates.push(parent.join("com.andrizan.ComicRD").join("comicrd.db"));
+    }
+    if let Ok(home) = env::var("HOME") {
+        let home = PathBuf::from(home);
+        candidates.push(
+            home.join(".local")
+                .join("share")
+                .join("com.andrizan.comicrd")
+                .join("comicrd.db"),
+        );
+        candidates.push(
+            home.join("Library")
+                .join("Application Support")
+                .join("com.andrizan.comicrd")
+                .join("comicrd.db"),
+        );
+    }
+    if let Ok(app_data) = env::var("APPDATA") {
+        candidates.push(
+            PathBuf::from(app_data)
+                .join("com.andrizan.comicrd")
+                .join("comicrd.db"),
+        );
+    }
+
+    let mut deduped = Vec::new();
+    for candidate in candidates {
+        if !deduped.iter().any(|existing| existing == &candidate) {
+            deduped.push(candidate);
+        }
+    }
+    deduped
+}
+
+fn is_flutter_app_data_dir(app_data_dir: &Path) -> bool {
+    let Some(name) = app_data_dir.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    matches!(
+        name.to_lowercase().as_str(),
+        "comicrd_flutter" | "comicrd" | "comicrd-flutter"
+    )
+}
+
+pub(crate) fn remove_sqlite_sidecars(db_path: &Path) {
+    let wal_path = PathBuf::from(format!("{}-wal", db_path.to_string_lossy()));
+    let shm_path = PathBuf::from(format!("{}-shm", db_path.to_string_lossy()));
+    if wal_path.exists() {
+        let _ = fs::remove_file(wal_path);
+    }
+    if shm_path.exists() {
+        let _ = fs::remove_file(shm_path);
+    }
 }
 
 pub(crate) fn file_modified_ts(path: &Path) -> i64 {
@@ -134,6 +226,11 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         ("library_sort_by", "\"name\""),
         ("library_sort_dir", "\"asc\""),
         ("library_view_mode", "\"library\""),
+        ("library_display_mode", "\"grid\""),
+        ("chapter_sort_by", "\"chapter_index\""),
+        ("chapter_sort_dir", "\"asc\""),
+        ("image_pipeline_profile", "\"balanced\""),
+        ("library_source_input", "\"\""),
         ("app_theme", "\"light\""),
         ("app_locale", "\"en\""),
     ];

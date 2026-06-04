@@ -25,6 +25,14 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
   @override
   AppSettings build() => const AppSettings();
 
+  void setThemeMode(ThemeMode themeMode) {
+    state = state.copyWith(themeMode: themeMode);
+  }
+
+  void setLocale(String localeCode) {
+    state = state.copyWith(localeCode: localeCode);
+  }
+
   void toggleTheme() {
     state = state.copyWith(
       themeMode: state.themeMode == ThemeMode.dark
@@ -36,6 +44,22 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
   void toggleLocale() {
     state = state.copyWith(localeCode: state.localeCode == 'en' ? 'id' : 'en');
   }
+}
+
+ThemeMode themeModeFromSetting(String value) {
+  return switch (value) {
+    'dark' => ThemeMode.dark,
+    'system' => ThemeMode.system,
+    _ => ThemeMode.light,
+  };
+}
+
+String themeModeToSetting(ThemeMode value) {
+  return switch (value) {
+    ThemeMode.dark => 'dark',
+    ThemeMode.system => 'system',
+    ThemeMode.light => 'light',
+  };
 }
 
 AppStrings stringsFor(String localeCode) =>

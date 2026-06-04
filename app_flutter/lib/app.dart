@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +8,9 @@ import 'pages/comic_page.dart';
 import 'pages/library_page.dart';
 import 'pages/reader_page.dart';
 import 'routes/path_codec.dart';
+import 'state/api_state.dart';
 import 'state/settings_state.dart';
+import 'widgets/settings_panel.dart';
 
 final _router = GoRouter(
   routes: [
@@ -116,8 +120,18 @@ class ComicRdShell extends ConsumerWidget {
           Tooltip(
             message: text.theme,
             child: IconButton(
-              onPressed: () =>
-                  ref.read(appSettingsProvider.notifier).toggleTheme(),
+              onPressed: () async {
+                final nextMode = settings.themeMode == ThemeMode.dark
+                    ? ThemeMode.light
+                    : ThemeMode.dark;
+                ref.read(appSettingsProvider.notifier).setThemeMode(nextMode);
+                await ref
+                    .read(comicRdApiProvider)
+                    .setSetting(
+                      'app_theme',
+                      jsonEncode(themeModeToSetting(nextMode)),
+                    );
+              },
               icon: Icon(
                 settings.themeMode == ThemeMode.dark
                     ? Icons.dark_mode_outlined
@@ -128,15 +142,25 @@ class ComicRdShell extends ConsumerWidget {
           Tooltip(
             message: text.locale,
             child: IconButton(
-              onPressed: () =>
-                  ref.read(appSettingsProvider.notifier).toggleLocale(),
+              onPressed: () async {
+                final nextLocale = settings.localeCode == 'en' ? 'id' : 'en';
+                ref.read(appSettingsProvider.notifier).setLocale(nextLocale);
+                await ref
+                    .read(comicRdApiProvider)
+                    .setSetting('app_locale', jsonEncode(nextLocale));
+              },
               icon: const Icon(Icons.translate_outlined),
             ),
           ),
           Tooltip(
             message: text.settings,
             child: IconButton(
-              onPressed: () {},
+              onPressed: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (_) => const SettingsPanel(),
+                );
+              },
               icon: const Icon(Icons.tune_outlined),
             ),
           ),

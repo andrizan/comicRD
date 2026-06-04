@@ -184,7 +184,7 @@ Important data types:
 
 ### Task 4: Settings And Data Migration
 
-- [ ] Implement settings drawer/panel with:
+- [x] Implement settings drawer/panel with:
   - library source text field
   - browse directory button using `file_selector`
   - source status refresh
@@ -194,8 +194,8 @@ Important data types:
   - theme
   - locale
   - backup export/import
-- [ ] Persist settings through Rust `setSetting`.
-- [ ] Keep setting keys compatible with the Tauri app:
+- [x] Persist settings through Rust `setSetting`.
+- [x] Keep setting keys compatible with the Tauri app:
   - `default_mode`
   - `arrow_navigation_enabled`
   - `default_zoom`
@@ -210,11 +210,11 @@ Important data types:
   - `library_display_mode`
   - `chapter_sort_by`
   - `chapter_sort_dir`
-- [ ] Implement first-run legacy database copy:
+- [x] Implement first-run legacy database copy:
   - use Flutter support dir for the new database
   - if `comicrd.db` is absent, search likely legacy Tauri app data locations for `com.andrizan.comicrd/comicrd.db`
   - copy the DB once, remove stale WAL/SHM from the target, then run migrations
-- [ ] Keep manual import/export as fallback for any failed automatic migration.
+- [x] Keep manual import/export as fallback for any failed automatic migration.
 
 ### Task 5: Library Page
 

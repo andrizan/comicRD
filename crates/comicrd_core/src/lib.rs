@@ -296,11 +296,8 @@ impl ComicRdCore {
         fs::create_dir_all(app_data_dir)
             .map_err(|e| format!("failed creating app data dir: {e}"))?;
         let db_path = app_data_dir.join("comicrd.db");
-        let conn = Connection::open(&db_path).map_err(|e| format!("failed opening db: {e}"))?;
-        conn.execute_batch(
-            "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;",
-        )
-        .map_err(|e| format!("failed enabling pragmas: {e}"))?;
+        copy_legacy_database_if_missing(app_data_dir, &db_path)?;
+        let conn = open_database_file(&db_path)?;
         run_migrations(&conn)?;
 
         Ok(Self {
@@ -714,14 +711,7 @@ impl ComicRdCore {
             fs::remove_file(&self.db_path)
                 .map_err(|e| format!("failed replacing database file: {e}"))?;
         }
-        let wal_path = PathBuf::from(format!("{}-wal", self.db_path.to_string_lossy()));
-        let shm_path = PathBuf::from(format!("{}-shm", self.db_path.to_string_lossy()));
-        if wal_path.exists() {
-            let _ = fs::remove_file(wal_path);
-        }
-        if shm_path.exists() {
-            let _ = fs::remove_file(shm_path);
-        }
+        remove_sqlite_sidecars(&self.db_path);
 
         fs::copy(input_path, &self.db_path)
             .map_err(|e| format!("failed importing backup file: {e}"))?;

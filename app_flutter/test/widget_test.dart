@@ -42,6 +42,29 @@ class _FakeComicRdApi extends ComicRdApi {
   const _FakeComicRdApi();
 
   @override
+  Future<List<bridge.SettingEntry>> listSettings() async {
+    return const [
+      bridge.SettingEntry(
+        key: 'library_source_input',
+        valueJson: '""',
+        updatedAt: 0,
+      ),
+      bridge.SettingEntry(key: 'default_zoom', valueJson: '1', updatedAt: 0),
+      bridge.SettingEntry(key: 'page_gap', valueJson: '10', updatedAt: 0),
+      bridge.SettingEntry(
+        key: 'image_pipeline_profile',
+        valueJson: '"balanced"',
+        updatedAt: 0,
+      ),
+      bridge.SettingEntry(key: 'app_theme', valueJson: '"light"', updatedAt: 0),
+      bridge.SettingEntry(key: 'app_locale', valueJson: '"en"', updatedAt: 0),
+    ];
+  }
+
+  @override
+  Future<void> setSetting(String key, String valueJson) async {}
+
+  @override
   Future<bridge.LibrarySourceStatus> checkLibrarySource() async {
     return const bridge.LibrarySourceStatus(
       configured: false,
