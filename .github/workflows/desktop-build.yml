@@ -144,7 +144,11 @@ jobs:
 
       - name: Build Windows release
         working-directory: app_flutter
-        run: flutter build windows --release
+        run: |
+          cargo build --release -p comicrd_bridge
+          flutter pub get
+          flutter build windows --release
+          cp ../target/release/comicrd_bridge.dll build/windows/x64/runner/Release/
 
       - name: Archive Windows bundle
         shell: pwsh
@@ -191,7 +195,11 @@ jobs:
 
       - name: Build macOS release
         working-directory: app_flutter
-        run: flutter build macos --release
+        run: |
+          cargo build --release -p comicrd_bridge
+          flutter pub get
+          flutter build macos --release
+          cp ../target/release/libcomicrd_bridge.dylib build/macos/Build/Products/Release/ComicRD.app/Contents/Frameworks/
 
       - name: Archive macOS bundle
         run: |
