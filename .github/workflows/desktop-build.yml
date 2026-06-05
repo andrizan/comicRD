@@ -144,19 +144,29 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install MSYS2 and dav1d
-        uses: msys2/setup-msys2@v2
+      - name: Install LLVM/Clang
+        uses: KyleMayes/install-llvm-action@v2
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-dav1d
-            mingw-w64-x86_64-pkg-config
+          version: "17"
 
-      - name: Set PKG_CONFIG_PATH for dav1d
+      - name: Install NASM
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install Meson and Ninja
         run: |
-          echo "PKG_CONFIG_PATH=C:\msys64\mingw64\lib\pkgconfig" >> $env:GITHUB_ENV
-          echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
+          pip install meson ninja
+          echo "C:\Program Files\NASM" >> $env:GITHUB_PATH
+        shell: pwsh
+
+      - name: Build dav1d from source
+        run: |
+          git clone --depth 1 --branch 1.4.3 https://code.videolan.org/videolan/dav1d.git
+          cd dav1d
+          meson setup build --prefix=C:/dav1d --default-library=static --buildtype=release -Denable_tools=false -Denable_tests=false
+          ninja -C build
+          ninja -C build install
+          echo "PKG_CONFIG_PATH=C:/dav1d/lib/pkgconfig" >> $env:GITHUB_ENV
+          echo "C:/dav1d/bin" >> $env:GITHUB_PATH
         shell: pwsh
 
       - name: Fetch Flutter dependencies
