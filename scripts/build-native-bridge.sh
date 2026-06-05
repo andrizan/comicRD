@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RTK_BIN="${RTK_BIN:-rtk}"
 PLATFORM=""
 CONFIGURATION=""
 DESTINATION=""
@@ -59,7 +58,7 @@ esac
 
 (
   cd "$ROOT_DIR"
-  "$RTK_BIN" cargo build -p comicrd_bridge "${CARGO_PROFILE_ARGS[@]}"
+  cargo build -p comicrd_bridge "${CARGO_PROFILE_ARGS[@]}"
 )
 
 ARTIFACT="$ROOT_DIR/target/$PROFILE/$LIBRARY_NAME"

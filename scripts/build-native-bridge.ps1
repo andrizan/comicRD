@@ -14,7 +14,6 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Profile = if ($Configuration -match "^(Profile|Release)$") { "release" } else { "debug" }
-$RtkBin = if ($env:RTK_BIN) { $env:RTK_BIN } else { "rtk" }
 
 $LibraryName = switch ($Platform) {
   "windows" { "comicrd_bridge.dll" }
@@ -22,16 +21,16 @@ $LibraryName = switch ($Platform) {
   "macos" { "libcomicrd_bridge.dylib" }
 }
 
-$CargoArgs = @("cargo", "build", "-p", "comicrd_bridge")
+$CargoArgs = @("build", "-p", "comicrd_bridge")
 if ($Profile -eq "release") {
   $CargoArgs += "--release"
 }
 
 Push-Location $RootDir
 try {
-  & $RtkBin @CargoArgs
+  & cargo @CargoArgs
   if ($LASTEXITCODE -ne 0) {
-    throw "rtk cargo build failed with exit code $LASTEXITCODE"
+    throw "cargo build failed with exit code $LASTEXITCODE"
   }
 } finally {
   Pop-Location

@@ -288,6 +288,7 @@ Notes:
 
 - Linux build smoke was attempted on 2026-06-04 but this environment has no `cmake`; install CMake before marking Linux desktop run/build verified.
 - Windows native bridge bundling was verified on 2026-06-05 by building the `comicrd_bridge_native_windows` CMake target; full Windows `INSTALL` build still reached Flutter assemble before timing out in this environment.
+- CI native bridge build hooks were updated on 2026-06-05 to avoid the local-only `rtk` wrapper. Static scan confirmed no `rtk` references remain in desktop build hooks, native bridge scripts, Linux packaging, or the desktop GitHub Actions workflow. Windows native bridge script smoke test bundled `comicrd_bridge.dll` successfully.
 
 ## Test Plan
 

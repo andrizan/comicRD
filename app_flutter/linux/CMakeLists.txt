@@ -103,7 +103,7 @@ install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
 
 install(CODE "
   execute_process(
-    COMMAND rtk bash \"${COMICRD_REPO_ROOT}/scripts/build-native-bridge.sh\"
+    COMMAND bash \"${COMICRD_REPO_ROOT}/scripts/build-native-bridge.sh\"
       --platform linux
       --configuration \"\${CMAKE_INSTALL_CONFIG_NAME}\"
       --destination \"${INSTALL_BUNDLE_LIB_DIR}\"

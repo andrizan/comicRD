@@ -19,18 +19,11 @@ PACKAGE_NAME="comicrd-${VERSION}-linux-x86_64"
 PACKAGE_DIR="$DIST_DIR/$PACKAGE_NAME"
 TARBALL="$DIST_DIR/$PACKAGE_NAME.tar.gz"
 BUNDLE_DIR="$ROOT_DIR/app_flutter/build/linux/x64/release/bundle"
-RUST_LIB="$ROOT_DIR/target/release/libcomicrd_bridge.so"
-
-echo "==> Building Rust library..."
-cargo build --release -p comicrd_bridge
 
 echo "==> Building Flutter app..."
 cd "$ROOT_DIR/app_flutter"
 "$FLUTTER_BIN" pub get
 "$FLUTTER_BIN" build linux --release
-
-echo "==> Copying Rust library to bundle..."
-cp "$RUST_LIB" "$BUNDLE_DIR/lib/"
 
 rm -rf "$PACKAGE_DIR" "$TARBALL"
 mkdir -p \
