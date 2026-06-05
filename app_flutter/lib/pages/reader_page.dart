@@ -348,8 +348,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _restoredProgress = true;
-    final page = (data.progress?.lastPage ?? 0).clamp(0, data.pages.length - 1);
+    final isFinished = data.progress?.isRead ?? false;
+    final page = isFinished ? 0 : (data.progress?.lastPage ?? 0).clamp(0, data.pages.length - 1);
     _currentPage = page;
+    if (isFinished) {
+      _lastSavedPage = -1;
+      _scheduleProgressSave();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _jumpToPage(page);
       unawaited(_prefetchAround(page));
