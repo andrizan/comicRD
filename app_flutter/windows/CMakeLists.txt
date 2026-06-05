@@ -52,6 +52,18 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
+set(COMICRD_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+set(COMICRD_WINDOWS_BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/runner/$<CONFIG>")
+add_custom_target(comicrd_bridge_native_windows ALL
+  COMMAND rtk powershell -NoProfile -ExecutionPolicy Bypass
+    -File "${COMICRD_REPO_ROOT}/scripts/build-native-bridge.ps1"
+    -Platform windows
+    -Configuration "$<CONFIG>"
+    -Destination "${COMICRD_WINDOWS_BUNDLE_DIR}"
+  COMMENT "Building and bundling comicrd_bridge.dll"
+  VERBATIM
+)
+add_dependencies(${BINARY_NAME} comicrd_bridge_native_windows)
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.

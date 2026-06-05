@@ -275,6 +275,7 @@ Important data types:
 - [x] Set desktop bundle/application identifier to `com.andrizan.comicrd`.
 - [x] Replace default Flutter icons with existing ComicRD icons where format permits.
 - [x] Wire platform-specific `openContainingFolder` implementation from Rust.
+- [x] Wire native `comicrd_bridge` build-and-bundle hooks into Windows, Linux, and macOS desktop builds.
 - [ ] Verify Linux desktop run.
 - [ ] Verify Windows build no longer starts WebView2 or `msedgewebview2.exe`.
 - [ ] Verify macOS bundle uses the correct name, icon, and support directory.
@@ -286,6 +287,7 @@ Important data types:
 Notes:
 
 - Linux build smoke was attempted on 2026-06-04 but this environment has no `cmake`; install CMake before marking Linux desktop run/build verified.
+- Windows native bridge bundling was verified on 2026-06-05 by building the `comicrd_bridge_native_windows` CMake target; full Windows `INSTALL` build still reached Flutter assemble before timing out in this environment.
 
 ## Test Plan
 

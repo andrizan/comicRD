@@ -131,8 +131,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 ),
                 const SizedBox(width: 12),
                 ToggleButton(
-                  checked:
-                      preferences.displayMode == ChapterDisplayMode.grid,
+                  checked: preferences.displayMode == ChapterDisplayMode.grid,
                   onChanged: (value) => ref
                       .read(comicPreferencesProvider.notifier)
                       .setDisplayMode(
@@ -145,8 +144,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 ),
                 const SizedBox(width: 4),
                 ToggleButton(
-                  checked:
-                      preferences.displayMode == ChapterDisplayMode.list,
+                  checked: preferences.displayMode == ChapterDisplayMode.list,
                   onChanged: (value) => ref
                       .read(comicPreferencesProvider.notifier)
                       .setDisplayMode(
@@ -446,15 +444,12 @@ class _ChapterList extends StatelessWidget {
           onPressed: () => onOpen(chapter),
           builder: (context, states) {
             return Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: states.isHovered
-                    ? FluentTheme.of(context)
-                        .resources
-                        .cardBackgroundFillColorSecondary
+                    ? FluentTheme.of(
+                        context,
+                      ).resources.cardBackgroundFillColorSecondary
                     : null,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -535,9 +530,9 @@ class _ChapterGridTile extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: states.isHovered
-                  ? FluentTheme.of(context)
-                      .resources
-                      .cardBackgroundFillColorSecondary
+                  ? FluentTheme.of(
+                      context,
+                    ).resources.cardBackgroundFillColorSecondary
                   : null,
               borderRadius: BorderRadius.circular(4),
             ),

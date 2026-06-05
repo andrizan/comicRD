@@ -156,18 +156,6 @@ The `Desktop Build` workflow:
 - uploads release assets to GitHub Releases
 - publishes `comicrd-bin` to AUR from the Linux tarball
 
-AUR publishing requires this repository secret:
-
-```text
-AUR_SSH_PRIVATE_KEY
-```
-
-The key must have push access to:
-
-```text
-ssh://aur@aur.archlinux.org/comicrd-bin.git
-```
-
 ## Repository Layout
 
 ```text

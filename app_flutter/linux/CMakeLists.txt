@@ -90,6 +90,7 @@ install(CODE "
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
+set(COMICRD_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -99,6 +100,19 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
+
+install(CODE "
+  execute_process(
+    COMMAND rtk bash \"${COMICRD_REPO_ROOT}/scripts/build-native-bridge.sh\"
+      --platform linux
+      --configuration \"\${CMAKE_INSTALL_CONFIG_NAME}\"
+      --destination \"${INSTALL_BUNDLE_LIB_DIR}\"
+    RESULT_VARIABLE COMICRD_BRIDGE_RESULT
+  )
+  if(NOT COMICRD_BRIDGE_RESULT EQUAL 0)
+    message(FATAL_ERROR \"Failed to build and bundle libcomicrd_bridge.so\")
+  endif()
+  " COMPONENT Runtime)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"

@@ -88,9 +88,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     style: TextStyle(
                       fontSize: 12,
                       color: status.error == null
-                          ? FluentTheme.of(context)
-                              .resources
-                              .textFillColorSecondary
+                          ? FluentTheme.of(
+                              context,
+                            ).resources.textFillColorSecondary
                           : Colors.red,
                     ),
                   ),
@@ -109,7 +109,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         text.defaultZoom,
                         TextBox(
                           controller: _defaultZoom,
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           placeholder: text.defaultZoom,
                         ),
                       ),
@@ -120,7 +122,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         text.pageGap,
                         TextBox(
                           controller: _pageGap,
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           placeholder: text.pageGap,
                         ),
                       ),
@@ -142,10 +146,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         value: 'balanced',
                         child: Text(text.balanced),
                       ),
-                      ComboBoxItem(
-                        value: 'quality',
-                        child: Text(text.quality),
-                      ),
+                      ComboBoxItem(value: 'quality', child: Text(text.quality)),
                     ],
                     onChanged: (value) {
                       if (value != null) setState(() => _profile = value);
@@ -165,27 +166,33 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                           items: [
                             ComboBoxItem(
                               value: ThemeMode.light,
-                              child: Row(children: [
-                                const Icon(FluentIcons.sunny, size: 16),
-                                const SizedBox(width: 8),
-                                Text(text.themeLight),
-                              ]),
+                              child: Row(
+                                children: [
+                                  const Icon(FluentIcons.sunny, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(text.themeLight),
+                                ],
+                              ),
                             ),
                             ComboBoxItem(
                               value: ThemeMode.dark,
-                              child: Row(children: [
-                                const Icon(FluentIcons.clear_night, size: 16),
-                                const SizedBox(width: 8),
-                                Text(text.themeDark),
-                              ]),
+                              child: Row(
+                                children: [
+                                  const Icon(FluentIcons.clear_night, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(text.themeDark),
+                                ],
+                              ),
                             ),
                             ComboBoxItem(
                               value: ThemeMode.system,
-                              child: Row(children: [
-                                const Icon(FluentIcons.screen, size: 16),
-                                const SizedBox(width: 8),
-                                Text(text.themeSystem),
-                              ]),
+                              child: Row(
+                                children: [
+                                  const Icon(FluentIcons.screen, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(text.themeSystem),
+                                ],
+                              ),
                             ),
                           ],
                           onChanged: (value) async {
@@ -194,7 +201,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                               ref
                                   .read(appSettingsProvider.notifier)
                                   .setThemeMode(value);
-                              await ref.read(comicRdApiProvider).setSetting(
+                              await ref
+                                  .read(comicRdApiProvider)
+                                  .setSetting(
                                     'app_theme',
                                     jsonEncode(themeModeToSetting(value)),
                                   );
@@ -213,19 +222,23 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                           items: [
                             ComboBoxItem(
                               value: 'en',
-                              child: Row(children: [
-                                const Text('🇺🇸'),
-                                const SizedBox(width: 8),
-                                Text(text.english),
-                              ]),
+                              child: Row(
+                                children: [
+                                  const Text('🇺🇸'),
+                                  const SizedBox(width: 8),
+                                  Text(text.english),
+                                ],
+                              ),
                             ),
                             ComboBoxItem(
                               value: 'id',
-                              child: Row(children: [
-                                const Text('🇮🇩'),
-                                const SizedBox(width: 8),
-                                Text(text.indonesian),
-                              ]),
+                              child: Row(
+                                children: [
+                                  const Text('🇮🇩'),
+                                  const SizedBox(width: 8),
+                                  Text(text.indonesian),
+                                ],
+                              ),
                             ),
                           ],
                           onChanged: (value) async {
@@ -234,10 +247,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                               ref
                                   .read(appSettingsProvider.notifier)
                                   .setLocale(value);
-                              await ref.read(comicRdApiProvider).setSetting(
-                                    'app_locale',
-                                    jsonEncode(value),
-                                  );
+                              await ref
+                                  .read(comicRdApiProvider)
+                                  .setSetting('app_locale', jsonEncode(value));
                             }
                           },
                         ),
@@ -312,10 +324,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   Widget _sectionHeader(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        label,
-        style: FluentTheme.of(context).typography.subtitle,
-      ),
+      child: Text(label, style: FluentTheme.of(context).typography.subtitle),
     );
   }
 

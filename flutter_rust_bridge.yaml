@@ -1,5 +1,5 @@
 rust_input: crate::api
 rust_root: crates/comicrd_bridge
 dart_output: app_flutter/lib
-rust_output: crates/comicrd_bridge/src/frb_generated.rs
+# rust_output: crates/comicrd_bridge/src/frb_generated.rs
 web: false

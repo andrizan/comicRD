@@ -124,149 +124,147 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               ],
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-          child: Row(
-            children: [
-              ToggleButton(
-                checked: preferences.viewMode == LibraryViewMode.all,
-                onChanged: (value) => _setViewMode(LibraryViewMode.all),
-                child: Text(text.all),
-              ),
-              const SizedBox(width: 4),
-              ToggleButton(
-                checked: preferences.viewMode == LibraryViewMode.unread,
-                onChanged: (value) => _setViewMode(LibraryViewMode.unread),
-                child: Text(text.unread),
-              ),
-              const SizedBox(width: 4),
-              ToggleButton(
-                checked: preferences.viewMode == LibraryViewMode.reading,
-                onChanged: (value) => _setViewMode(LibraryViewMode.reading),
-                child: Text(text.progress),
-              ),
-              const SizedBox(width: 12),
-              ComboBox<bridge.SortBy>(
-                value: preferences.sortBy,
-                items: [
-                  ComboBoxItem(
-                    value: bridge.SortBy.name,
-                    child: Text(text.name),
-                  ),
-                  ComboBoxItem(
-                    value: bridge.SortBy.folderDate,
-                    child: Text(text.folderDate),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    _setSort(value, preferences.sortDir);
-                  }
-                },
-              ),
-              const SizedBox(width: 4),
-              Tooltip(
-                message: preferences.sortDir == bridge.SortDir.asc
-                    ? text.ascending
-                    : text.descending,
-                child: IconButton(
-                  onPressed: () => _setSort(
-                    preferences.sortBy,
-                    preferences.sortDir == bridge.SortDir.asc
-                        ? bridge.SortDir.desc
-                        : bridge.SortDir.asc,
-                  ),
-                  icon: Icon(
-                    preferences.sortDir == bridge.SortDir.asc
-                        ? FluentIcons.sort_up
-                        : FluentIcons.sort_down,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Row(
+              children: [
+                ToggleButton(
+                  checked: preferences.viewMode == LibraryViewMode.all,
+                  onChanged: (value) => _setViewMode(LibraryViewMode.all),
+                  child: Text(text.all),
+                ),
+                const SizedBox(width: 4),
+                ToggleButton(
+                  checked: preferences.viewMode == LibraryViewMode.unread,
+                  onChanged: (value) => _setViewMode(LibraryViewMode.unread),
+                  child: Text(text.unread),
+                ),
+                const SizedBox(width: 4),
+                ToggleButton(
+                  checked: preferences.viewMode == LibraryViewMode.reading,
+                  onChanged: (value) => _setViewMode(LibraryViewMode.reading),
+                  child: Text(text.progress),
+                ),
+                const SizedBox(width: 12),
+                ComboBox<bridge.SortBy>(
+                  value: preferences.sortBy,
+                  items: [
+                    ComboBoxItem(
+                      value: bridge.SortBy.name,
+                      child: Text(text.name),
+                    ),
+                    ComboBoxItem(
+                      value: bridge.SortBy.folderDate,
+                      child: Text(text.folderDate),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      _setSort(value, preferences.sortDir);
+                    }
+                  },
+                ),
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: preferences.sortDir == bridge.SortDir.asc
+                      ? text.ascending
+                      : text.descending,
+                  child: IconButton(
+                    onPressed: () => _setSort(
+                      preferences.sortBy,
+                      preferences.sortDir == bridge.SortDir.asc
+                          ? bridge.SortDir.desc
+                          : bridge.SortDir.asc,
+                    ),
+                    icon: Icon(
+                      preferences.sortDir == bridge.SortDir.asc
+                          ? FluentIcons.sort_up
+                          : FluentIcons.sort_down,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        sourceStatus.when(
-          data: (status) {
-            if (status.configured && status.error == null) {
-              return const SizedBox.shrink();
-            }
-            final message = status.configured
-                ? status.error!
-                : text.noLibrarySource;
-            return Padding(
+          sourceStatus.when(
+            data: (status) {
+              if (status.configured && status.error == null) {
+                return const SizedBox.shrink();
+              }
+              final message = status.configured
+                  ? status.error!
+                  : text.noLibrarySource;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: FluentTheme.of(context).accentColor,
+                    ),
+                  ),
+                ),
+              );
+            },
+            error: (error, _) => Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  message,
-                  style: TextStyle(
-                    color: FluentTheme.of(context).accentColor,
-                  ),
-                ),
-              ),
-            );
-          },
-          error: (error, _) => Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                error.toString(),
-                style: TextStyle(
-                  color: FluentTheme.of(context).accentColor,
+                  error.toString(),
+                  style: TextStyle(color: FluentTheme.of(context).accentColor),
                 ),
               ),
             ),
+            loading: () => const SizedBox.shrink(),
           ),
-          loading: () => const SizedBox.shrink(),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            children: [
-              _buildTab(text.history, FluentIcons.history, 0),
-              const SizedBox(width: 4),
-              _buildTab(text.library, FluentIcons.library, 1),
-              const SizedBox(width: 4),
-              _buildTab(text.bookmarks, FluentIcons.bookmarks, 2),
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                _buildTab(text.history, FluentIcons.history, 0),
+                const SizedBox(width: 4),
+                _buildTab(text.library, FluentIcons.library, 1),
+                const SizedBox(width: 4),
+                _buildTab(text.bookmarks, FluentIcons.bookmarks, 2),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: IndexedStack(
-            index: _currentIndex,
-            children: [
-              _HistoryList(
-                history: history,
-                displayMode: preferences.displayMode,
-                controller: _historyScroll,
-                emptyLabel: text.emptyLibrary,
-              ),
-              _ComicList(
-                text: text,
-                comics: comics,
-                displayMode: preferences.displayMode,
-                bookmarkedPaths: bookmarkedPaths,
-                controller: _libraryScroll,
-                emptyLabel: text.emptyLibrary,
-                onToggleBookmark: _toggleComicBookmark,
-                onCopyTitle: _copyComicTitle,
-                onCopyPath: _copyComicPath,
-                onOpenFolder: _openContainingFolder,
-              ),
-              _BookmarkList(
-                bookmarks: bookmarks,
-                displayMode: preferences.displayMode,
-                controller: _bookmarksScroll,
-                emptyLabel: text.emptyLibrary,
-              ),
-            ],
+          const SizedBox(height: 8),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: [
+                _HistoryList(
+                  history: history,
+                  displayMode: preferences.displayMode,
+                  controller: _historyScroll,
+                  emptyLabel: text.emptyLibrary,
+                ),
+                _ComicList(
+                  text: text,
+                  comics: comics,
+                  displayMode: preferences.displayMode,
+                  bookmarkedPaths: bookmarkedPaths,
+                  controller: _libraryScroll,
+                  emptyLabel: text.emptyLibrary,
+                  onToggleBookmark: _toggleComicBookmark,
+                  onCopyTitle: _copyComicTitle,
+                  onCopyPath: _copyComicPath,
+                  onOpenFolder: _openContainingFolder,
+                ),
+                _BookmarkList(
+                  bookmarks: bookmarks,
+                  displayMode: preferences.displayMode,
+                  controller: _bookmarksScroll,
+                  emptyLabel: text.emptyLibrary,
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
+        ],
+      ),
     );
   }
 
@@ -283,8 +281,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               color: isActive
                   ? theme.accentColor.withValues(alpha: 0.1)
                   : states.isHovered
-                      ? theme.resources.cardBackgroundFillColorSecondary
-                      : Colors.transparent,
+                  ? theme.resources.cardBackgroundFillColorSecondary
+                  : Colors.transparent,
               border: Border(
                 bottom: BorderSide(
                   color: isActive ? theme.accentColor : Colors.transparent,
@@ -449,9 +447,9 @@ class _ComicList extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: states.isHovered
-                        ? FluentTheme.of(context)
-                            .resources
-                            .cardBackgroundFillColorSecondary
+                        ? FluentTheme.of(
+                            context,
+                          ).resources.cardBackgroundFillColorSecondary
                         : null,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -473,9 +471,7 @@ class _ComicList extends StatelessWidget {
                               comic.sourcePath,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: FluentTheme.of(context)
-                                  .typography
-                                  .caption,
+                              style: FluentTheme.of(context).typography.caption,
                             ),
                           ],
                         ),
@@ -505,7 +501,8 @@ class _ComicList extends StatelessWidget {
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () => const Align(alignment: Alignment.center, child: ProgressRing()),
+      loading: () =>
+          const Align(alignment: Alignment.center, child: ProgressRing()),
     );
   }
 }
@@ -541,9 +538,9 @@ class _ComicGridTile extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: states.isHovered
-                  ? FluentTheme.of(context)
-                      .resources
-                      .cardBackgroundFillColorSecondary
+                  ? FluentTheme.of(
+                      context,
+                    ).resources.cardBackgroundFillColorSecondary
                   : null,
               borderRadius: BorderRadius.circular(4),
             ),
@@ -742,16 +739,17 @@ class _HistoryList extends StatelessWidget {
               final item = items[index];
               return Card(
                 child: HoverButton(
-                  onPressed: () => context
-                      .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+                  onPressed: () => context.go(
+                    '/comic/${encodeRoutePath(item.comicSourcePath)}',
+                  ),
                   builder: (context, states) {
                     return Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: states.isHovered
-                            ? FluentTheme.of(context)
-                                .resources
-                                .cardBackgroundFillColorSecondary
+                            ? FluentTheme.of(
+                                context,
+                              ).resources.cardBackgroundFillColorSecondary
                             : null,
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -764,8 +762,9 @@ class _HistoryList extends StatelessWidget {
                             item.comicTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:
-                                FluentTheme.of(context).typography.bodyStrong,
+                            style: FluentTheme.of(
+                              context,
+                            ).typography.bodyStrong,
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -791,8 +790,8 @@ class _HistoryList extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = items[index];
             return HoverButton(
-              onPressed: () => context
-                  .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+              onPressed: () =>
+                  context.go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
               builder: (context, states) {
                 return Container(
                   padding: const EdgeInsets.symmetric(
@@ -801,9 +800,9 @@ class _HistoryList extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: states.isHovered
-                        ? FluentTheme.of(context)
-                            .resources
-                            .cardBackgroundFillColorSecondary
+                        ? FluentTheme.of(
+                            context,
+                          ).resources.cardBackgroundFillColorSecondary
                         : null,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -818,8 +817,7 @@ class _HistoryList extends StatelessWidget {
                             Text(item.comicTitle),
                             Text(
                               item.chapterTitle,
-                              style:
-                                  FluentTheme.of(context).typography.caption,
+                              style: FluentTheme.of(context).typography.caption,
                             ),
                           ],
                         ),
@@ -833,7 +831,8 @@ class _HistoryList extends StatelessWidget {
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () => const Align(alignment: Alignment.center, child: ProgressRing()),
+      loading: () =>
+          const Align(alignment: Alignment.center, child: ProgressRing()),
     );
   }
 }
@@ -873,16 +872,17 @@ class _BookmarkList extends StatelessWidget {
               final item = items[index];
               return Card(
                 child: HoverButton(
-                  onPressed: () => context
-                      .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+                  onPressed: () => context.go(
+                    '/comic/${encodeRoutePath(item.comicSourcePath)}',
+                  ),
                   builder: (context, states) {
                     return Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: states.isHovered
-                            ? FluentTheme.of(context)
-                                .resources
-                                .cardBackgroundFillColorSecondary
+                            ? FluentTheme.of(
+                                context,
+                              ).resources.cardBackgroundFillColorSecondary
                             : null,
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -895,8 +895,9 @@ class _BookmarkList extends StatelessWidget {
                             item.comicTitle,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style:
-                                FluentTheme.of(context).typography.bodyStrong,
+                            style: FluentTheme.of(
+                              context,
+                            ).typography.bodyStrong,
                           ),
                         ],
                       ),
@@ -915,8 +916,8 @@ class _BookmarkList extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = items[index];
             return HoverButton(
-              onPressed: () => context
-                  .go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+              onPressed: () =>
+                  context.go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
               builder: (context, states) {
                 return Container(
                   padding: const EdgeInsets.symmetric(
@@ -925,9 +926,9 @@ class _BookmarkList extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: states.isHovered
-                        ? FluentTheme.of(context)
-                            .resources
-                            .cardBackgroundFillColorSecondary
+                        ? FluentTheme.of(
+                            context,
+                          ).resources.cardBackgroundFillColorSecondary
                         : null,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -944,8 +945,7 @@ class _BookmarkList extends StatelessWidget {
                               item.comicSourcePath,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style:
-                                  FluentTheme.of(context).typography.caption,
+                              style: FluentTheme.of(context).typography.caption,
                             ),
                           ],
                         ),
@@ -959,10 +959,8 @@ class _BookmarkList extends StatelessWidget {
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () => const Align(
-        alignment: Alignment.center,
-        child: ProgressRing(),
-      ),
+      loading: () =>
+          const Align(alignment: Alignment.center, child: ProgressRing()),
     );
   }
 }
@@ -975,10 +973,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text(
-        label,
-        style: FluentTheme.of(context).typography.bodyStrong,
-      ),
+      child: Text(label, style: FluentTheme.of(context).typography.bodyStrong),
     );
   }
 }

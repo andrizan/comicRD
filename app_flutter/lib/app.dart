@@ -53,10 +53,12 @@ class ComicRdApp extends ConsumerWidget {
       theme: FluentThemeData(
         brightness: Brightness.light,
         accentColor: Colors.blue,
+        fontFamily: 'DM Sans',
       ),
       darkTheme: FluentThemeData(
         brightness: Brightness.dark,
         accentColor: Colors.blue,
+        fontFamily: 'DM Sans',
       ),
       routerConfig: _router,
     );
@@ -78,15 +80,19 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
-      next.whenData(
-        ref.read(appSettingsProvider.notifier).hydrateFromSettings,
-      );
+      next.whenData(ref.read(appSettingsProvider.notifier).hydrateFromSettings);
     });
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
     return NavigationView(
       titleBar: TitleBar(
-        title: Text(text.appName),
+        title: Text(
+          text.appName,
+          style: const TextStyle(
+            fontFamily: 'Syne',
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         endHeader: Row(
           children: [
             Tooltip(
@@ -96,8 +102,8 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                   settings.themeMode == ThemeMode.dark
                       ? FluentIcons.clear_night
                       : settings.themeMode == ThemeMode.light
-                          ? FluentIcons.sunny
-                          : FluentIcons.screen,
+                      ? FluentIcons.sunny
+                      : FluentIcons.screen,
                 ),
                 items: [
                   MenuFlyoutItem(
@@ -112,7 +118,9 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                       ref
                           .read(appSettingsProvider.notifier)
                           .setThemeMode(ThemeMode.system);
-                      await ref.read(comicRdApiProvider).setSetting(
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting(
                             'app_theme',
                             jsonEncode(themeModeToSetting(ThemeMode.system)),
                           );
@@ -130,7 +138,9 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                       ref
                           .read(appSettingsProvider.notifier)
                           .setThemeMode(ThemeMode.light);
-                      await ref.read(comicRdApiProvider).setSetting(
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting(
                             'app_theme',
                             jsonEncode(themeModeToSetting(ThemeMode.light)),
                           );
@@ -148,7 +158,9 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                       ref
                           .read(appSettingsProvider.notifier)
                           .setThemeMode(ThemeMode.dark);
-                      await ref.read(comicRdApiProvider).setSetting(
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting(
                             'app_theme',
                             jsonEncode(themeModeToSetting(ThemeMode.dark)),
                           );
@@ -170,13 +182,10 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                       style: FluentTheme.of(context).typography.body,
                     ),
                     onPressed: () async {
-                      ref
-                          .read(appSettingsProvider.notifier)
-                          .setLocale('en');
-                      await ref.read(comicRdApiProvider).setSetting(
-                            'app_locale',
-                            jsonEncode('en'),
-                          );
+                      ref.read(appSettingsProvider.notifier).setLocale('en');
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting('app_locale', jsonEncode('en'));
                     },
                   ),
                   MenuFlyoutItem(
@@ -186,13 +195,10 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                       style: FluentTheme.of(context).typography.body,
                     ),
                     onPressed: () async {
-                      ref
-                          .read(appSettingsProvider.notifier)
-                          .setLocale('id');
-                      await ref.read(comicRdApiProvider).setSetting(
-                            'app_locale',
-                            jsonEncode('id'),
-                          );
+                      ref.read(appSettingsProvider.notifier).setLocale('id');
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting('app_locale', jsonEncode('id'));
                     },
                   ),
                 ],
