@@ -144,10 +144,19 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dav1d via vcpkg
+      - name: Install MSYS2 and dav1d
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-dav1d
+            mingw-w64-x86_64-pkg-config
+
+      - name: Set PKG_CONFIG_PATH for dav1d
         run: |
-          vcpkg install dav1d:x64-windows
-          echo "PKG_CONFIG_PATH=$VCPKG_INSTALLATION_ROOT/packages/dav1d_x64-windows/lib/pkgconfig" >> $env:GITHUB_ENV
+          echo "PKG_CONFIG_PATH=C:\msys64\mingw64\lib\pkgconfig" >> $env:GITHUB_ENV
+          echo "C:\msys64\mingw64\bin" >> $env:GITHUB_PATH
         shell: pwsh
 
       - name: Fetch Flutter dependencies
