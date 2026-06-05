@@ -47,6 +47,7 @@ jobs:
             curl \
             file \
             git \
+            libdav1d-dev \
             libgtk-3-dev \
             ninja-build \
             pkg-config \
@@ -96,6 +97,7 @@ jobs:
             cmake \
             file \
             git \
+            libdav1d-dev \
             libgtk-3-dev \
             ninja-build \
             pkg-config \
