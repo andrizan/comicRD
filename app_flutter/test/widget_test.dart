@@ -53,6 +53,20 @@ void main() {
     expect(find.text('Other Comic'), findsOneWidget);
     expect(find.text('Total comics: 2'), findsOneWidget);
   });
+
+  testWidgets('opens comic paths that contain URL special characters', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp(api: const _PercentPathApi()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('100% Comic #1 [A+B] %20?x=y&z'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('100% Comic #1 [A+B] %20?x=y&z'), findsOneWidget);
+    expect(find.text('Chapter 1'), findsOneWidget);
+  });
 }
 
 Widget _testApp({ComicRdApi api = const _FakeComicRdApi()}) {
@@ -285,5 +299,52 @@ class _PartiallyIndexedSourceApi extends _FakeComicRdApi {
     required bridge.SortDir sortDir,
   }) {
     throw StateError('library catalog must come from filesystem, not database');
+  }
+}
+
+class _PercentPathApi extends _PartiallyIndexedSourceApi {
+  const _PercentPathApi();
+
+  @override
+  Future<List<bridge.RawComic>> listLibraryComicsRaw({
+    required bridge.SortBy sortBy,
+    required bridge.SortDir sortDir,
+  }) async {
+    return const [
+      bridge.RawComic(
+        key: '/library/100% Comic #1 [A+B] %20?x=y&z',
+        title: '100% Comic #1 [A+B] %20?x=y&z',
+        sourcePath: '/library/100% Comic #1 [A+B] %20?x=y&z',
+        sourceType: 'folder',
+        libraryPath: '/library',
+        dateModified: 0,
+        chapterCount: 1,
+        readChapterCount: 0,
+        inProgressChapterCount: 0,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<bridge.RawChapter>> listComicChaptersRaw(
+    String comicSourcePath,
+  ) async {
+    if (comicSourcePath != '/library/100% Comic #1 [A+B] %20?x=y&z') {
+      throw StateError('unexpected comic path: $comicSourcePath');
+    }
+    return const [
+      bridge.RawChapter(
+        key: '/library/100% Comic #1 [A+B] %20?x=y&z/Chapter 1',
+        title: 'Chapter 1',
+        chapterIndex: 1,
+        sourcePath: '/library/100% Comic #1 [A+B] %20?x=y&z/Chapter 1',
+        sourceType: 'folder',
+        dateModified: 0,
+        pageCount: 12,
+        isRead: false,
+        lastPage: 0,
+        totalPages: 12,
+      ),
+    ];
   }
 }

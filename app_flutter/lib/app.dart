@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'pages/comic_page.dart';
 import 'pages/library_page.dart';
 import 'pages/reader_page.dart';
-import 'routes/path_codec.dart';
 import 'state/api_state.dart';
 import 'state/library_state.dart';
 import 'state/settings_data_state.dart';
@@ -23,8 +22,8 @@ final _router = GoRouter(
         GoRoute(
           path: '/comic/:comicPath',
           builder: (context, state) {
-            final encodedPath = state.pathParameters['comicPath'] ?? '';
-            return ComicPage(comicPath: decodeRoutePath(encodedPath));
+            final comicPath = state.pathParameters['comicPath'] ?? '';
+            return ComicPage(comicPath: comicPath);
           },
         ),
       ],
