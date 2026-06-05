@@ -1,5 +1,5 @@
 use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPagePayload};
-use image::{ImageBuffer, Rgba};
+use image::{ImageBuffer, ImageFormat, Rgba};
 use std::fs;
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -110,7 +110,49 @@ fn concurrent_render_page_variant_shares_cached_bytes() {
     assert_eq!(stats.page_bytes_loads, 1);
 }
 
+#[test]
+fn render_page_variant_reads_avif_dimensions_and_mime() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter = comic.join("Chapter 1");
+    fs::create_dir_all(&chapter).expect("chapter");
+    create_avif(chapter.join("001.avif"), 32, 24);
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let chapter_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter.to_string_lossy().to_string(),
+        })
+        .expect("open chapter");
+
+    let page = core
+        .render_page_variant(RenderPagePayload {
+            chapter_id,
+            page_index: 0,
+        })
+        .expect("render avif page");
+
+    assert_eq!(page.mime, "image/avif");
+    assert_eq!(page.width, 32);
+    assert_eq!(page.height, 24);
+}
+
 fn create_png(path: impl AsRef<std::path::Path>, width: u32, height: u32) {
     let image = ImageBuffer::from_pixel(width, height, Rgba([10u8, 20, 30, 255]));
     image.save(path).expect("save png");
+}
+
+fn create_avif(path: impl AsRef<std::path::Path>, width: u32, height: u32) {
+    let image = ImageBuffer::from_pixel(width, height, Rgba([10u8, 20, 30, 255]));
+    image
+        .save_with_format(path, ImageFormat::Avif)
+        .expect("save avif");
 }

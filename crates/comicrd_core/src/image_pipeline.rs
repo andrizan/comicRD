@@ -1,13 +1,14 @@
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::Connection;
-use zip::ZipArchive;
 
-use crate::chapter::{archive_image_entries, chapter_source, image_entries_in_dir};
+use crate::chapter::{
+    archive_image_bytes, archive_image_entries, chapter_source, image_entries_in_dir,
+};
 use crate::{RenderPagePayload, RenderedPage};
 
 const PAGE_SOURCE_CACHE_CAP: usize = 2;
@@ -151,7 +152,7 @@ fn compute_page_source(source_path: &str, source_type: &str) -> Result<PageSourc
         "folder" => Ok(PageSource::Folder(image_entries_in_dir(Path::new(
             source_path,
         )))),
-        "zip" | "cbz" => Ok(PageSource::Archive {
+        "zip" | "cbz" | "cbr" | "rar" => Ok(PageSource::Archive {
             source_path: PathBuf::from(source_path),
             pages: archive_image_entries(Path::new(source_path))?,
         }),
@@ -203,16 +204,7 @@ pub(crate) fn read_page_bytes(
                 .get(page_index)
                 .ok_or_else(|| "page index out of range".to_string())?;
             let mime = mime_for_path(Path::new(name));
-            let file =
-                fs::File::open(source_path).map_err(|e| format!("failed opening archive: {e}"))?;
-            let mut archive = ZipArchive::new(file).map_err(|e| format!("invalid zip/cbz: {e}"))?;
-            let mut entry = archive
-                .by_name(name)
-                .map_err(|e| format!("failed reading archive entry: {e}"))?;
-            let mut bytes = Vec::new();
-            entry
-                .read_to_end(&mut bytes)
-                .map_err(|e| format!("failed extracting image: {e}"))?;
+            let bytes = archive_image_bytes(source_path, name)?;
             Ok((bytes, mime))
         }
     }

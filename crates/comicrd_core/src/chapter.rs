@@ -1,7 +1,9 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection};
+use unrar::Archive;
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
@@ -16,7 +18,15 @@ pub(crate) fn ext_eq(path: &Path, target: &str) -> bool {
 }
 
 pub(crate) fn is_archive(path: &Path) -> bool {
+    is_zip_archive(path) || is_rar_archive(path)
+}
+
+pub(crate) fn is_zip_archive(path: &Path) -> bool {
     ext_eq(path, "zip") || ext_eq(path, "cbz")
+}
+
+pub(crate) fn is_rar_archive(path: &Path) -> bool {
+    ext_eq(path, "cbr") || ext_eq(path, "rar")
 }
 
 pub(crate) fn source_type_for_path(path: &Path) -> String {
@@ -214,6 +224,20 @@ pub(crate) fn is_image(path: &Path) -> bool {
 }
 
 pub(crate) fn archive_image_entries(path: &Path) -> Result<Vec<String>, String> {
+    if is_rar_archive(path) {
+        return rar_image_entries(path);
+    }
+    zip_image_entries(path)
+}
+
+pub(crate) fn archive_image_bytes(path: &Path, name: &str) -> Result<Vec<u8>, String> {
+    if is_rar_archive(path) {
+        return rar_image_bytes(path, name);
+    }
+    zip_image_bytes(path, name)
+}
+
+fn zip_image_entries(path: &Path) -> Result<Vec<String>, String> {
     let file = fs::File::open(path).map_err(|e| format!("failed opening archive: {e}"))?;
     let mut archive = ZipArchive::new(file).map_err(|e| format!("invalid zip/cbz: {e}"))?;
     let mut names = Vec::new();
@@ -230,6 +254,61 @@ pub(crate) fn archive_image_entries(path: &Path) -> Result<Vec<String>, String> 
     }
     names.sort();
     Ok(names)
+}
+
+fn zip_image_bytes(path: &Path, name: &str) -> Result<Vec<u8>, String> {
+    let file = fs::File::open(path).map_err(|e| format!("failed opening archive: {e}"))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("invalid zip/cbz: {e}"))?;
+    let mut entry = archive
+        .by_name(name)
+        .map_err(|e| format!("failed reading archive entry: {e}"))?;
+    let mut bytes = Vec::new();
+    entry
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("failed extracting image: {e}"))?;
+    Ok(bytes)
+}
+
+fn rar_image_entries(path: &Path) -> Result<Vec<String>, String> {
+    let archive = Archive::new(path)
+        .open_for_listing()
+        .map_err(|e| format!("invalid rar/cbr: {e}"))?;
+    let mut names = Vec::new();
+
+    for entry in archive {
+        let entry = entry.map_err(|e| format!("failed reading rar/cbr entry: {e}"))?;
+        if entry.is_file() && is_image(&entry.filename) {
+            names.push(normalize_slashes(entry.filename.to_string_lossy().as_ref()));
+        }
+    }
+
+    names.sort();
+    Ok(names)
+}
+
+fn rar_image_bytes(path: &Path, name: &str) -> Result<Vec<u8>, String> {
+    let mut archive = Archive::new(path)
+        .open_for_processing()
+        .map_err(|e| format!("invalid rar/cbr: {e}"))?;
+    loop {
+        let Some(entry_archive) = archive
+            .read_header()
+            .map_err(|e| format!("failed reading rar/cbr entry: {e}"))?
+        else {
+            return Err(format!("rar/cbr image entry not found: {name}"));
+        };
+        let entry_name =
+            normalize_slashes(entry_archive.entry().filename.to_string_lossy().as_ref());
+        if entry_archive.entry().is_file() && entry_name == name {
+            let (bytes, _rest) = entry_archive
+                .read()
+                .map_err(|e| format!("failed extracting rar/cbr image: {e}"))?;
+            return Ok(bytes);
+        }
+        archive = entry_archive
+            .skip()
+            .map_err(|e| format!("failed skipping rar/cbr entry: {e}"))?;
+    }
 }
 
 pub(crate) fn image_entries_in_dir(path: &Path) -> Vec<PathBuf> {
@@ -555,7 +634,7 @@ pub(crate) fn get_chapter_pages_conn(
                     .to_string()
             })
             .collect::<Vec<_>>(),
-        "zip" | "cbz" => archive_image_entries(Path::new(&source_path))?,
+        "zip" | "cbz" | "cbr" | "rar" => archive_image_entries(Path::new(&source_path))?,
         other => return Err(format!("unsupported source type: {other}")),
     };
     let page_count = names.len() as i64;
@@ -681,4 +760,29 @@ pub(crate) fn get_chapter_context_conn(
         next_chapter_id,
         next_chapter_title,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rar_image_bytes;
+
+    const VERSION_RAR: &[u8] = &[
+        0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00, 0xcf, 0x90, 0x73, 0x00, 0x00, 0x0d, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x0c, 0x74, 0x20, 0x80, 0x27, 0x00, 0x15, 0x00, 0x00,
+        0x00, 0x0b, 0x00, 0x00, 0x00, 0x03, 0x45, 0xf3, 0x7d, 0xc6, 0xa4, 0x8a, 0x07, 0x47, 0x1d,
+        0x33, 0x07, 0x00, 0xa4, 0x81, 0x00, 0x00, 0x56, 0x45, 0x52, 0x53, 0x49, 0x4f, 0x4e, 0x0c,
+        0x00, 0x8f, 0xec, 0x8a, 0x45, 0xcc, 0x23, 0xc8, 0x48, 0x08, 0x83, 0x62, 0xfe, 0x5f, 0xdd,
+        0x5c, 0x53, 0x88, 0xf0, 0x72, 0xc4, 0x3d, 0x7b, 0x00, 0x40, 0x07, 0x00,
+    ];
+
+    #[test]
+    fn rar_image_bytes_reads_named_entry_from_cbr_file() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let archive = temp.path().join("fixture.cbr");
+        std::fs::write(&archive, VERSION_RAR).expect("write fixture");
+
+        let bytes = rar_image_bytes(&archive, "VERSION").expect("read cbr entry");
+
+        assert_eq!(bytes, b"unrar-0.4.0");
+    }
 }

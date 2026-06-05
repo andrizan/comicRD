@@ -7,7 +7,8 @@ SQLite metadata, and reader state.
 ## Features
 
 - Local comic library scanner
-- Folder comics, ZIP, and CBZ support
+- Folder comics, ZIP/CBZ, and RAR/CBR support
+- JPEG, PNG, WebP, GIF, BMP, and AVIF page image support
 - Library, reading history, and bookmarks views
 - Comic and chapter search
 - Read, reading, and unread status
@@ -219,7 +220,7 @@ bridge functions directly.
 
 ### Image Pipeline
 
-The image pipeline reads raw bytes from ZIP/folder sources and passes them
+The image pipeline reads raw bytes from folder and archive sources and passes them
 directly to Flutter for display. No resize or decode operations are performed
 on the Rust side.
 

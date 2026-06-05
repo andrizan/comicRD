@@ -13,6 +13,11 @@ fn list_library_comics_raw_reads_configured_source_folder_and_archive() {
         b"not opened during raw listing",
     )
     .expect("cbz");
+    fs::write(
+        library.join("Rar Comic.cbr"),
+        b"not opened during raw listing",
+    )
+    .expect("cbr");
 
     let core = ComicRdCore::open(&app_data).expect("open core");
     core.set_setting(
@@ -35,12 +40,14 @@ fn list_library_comics_raw_reads_configured_source_folder_and_archive() {
         .iter()
         .map(|comic| comic.title.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(titles, vec!["Comic Folder", "Zed Comic"]);
+    assert_eq!(titles, vec!["Comic Folder", "Rar Comic", "Zed Comic"]);
 
     assert_eq!(comics[0].source_type, "folder");
     assert_eq!(comics[0].chapter_count, 0);
-    assert_eq!(comics[1].source_type, "cbz");
+    assert_eq!(comics[1].source_type, "cbr");
     assert_eq!(comics[1].chapter_count, 1);
+    assert_eq!(comics[2].source_type, "cbz");
+    assert_eq!(comics[2].chapter_count, 1);
 }
 
 #[test]

@@ -72,3 +72,30 @@ fn list_comic_chapters_raw_treats_archive_comic_as_single_chapter() {
     assert_eq!(chapters[0].source_type, "cbz");
     assert_eq!(chapters[0].page_count, 0);
 }
+
+#[test]
+fn list_comic_chapters_raw_treats_cbr_comic_as_single_chapter() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    fs::create_dir_all(&library).expect("library");
+    let comic = library.join("Rar Comic.cbr");
+    fs::write(&comic, b"not opened during raw chapter listing").expect("cbr");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+
+    let chapters = core
+        .list_comic_chapters_raw(&comic.to_string_lossy())
+        .expect("list chapters");
+
+    assert_eq!(chapters.len(), 1);
+    assert_eq!(chapters[0].title, "Chapter 1");
+    assert_eq!(chapters[0].chapter_index, 1);
+    assert_eq!(chapters[0].source_type, "cbr");
+    assert_eq!(chapters[0].page_count, 0);
+}
