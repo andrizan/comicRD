@@ -30,19 +30,38 @@ final rawLibraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
   final sortDir = ref.watch(
     libraryPreferencesProvider.select((preferences) => preferences.sortDir),
   );
-  final rawComics = await api.listLibraryComicsRaw(
-    sortBy: sortBy,
-    sortDir: sortDir,
-  );
-  return rawComics;
+  return api.listLibraryComicsRaw(sortBy: sortBy, sortDir: sortDir);
 });
 
-final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
-  ref,
-) async {
-  final preferences = ref.watch(libraryPreferencesProvider);
-  final comics = await ref.watch(rawLibraryComicsProvider.future);
-  final query = preferences.query.trim().toLowerCase();
+class LibraryPaginationNotifier extends Notifier<int> {
+  static const int pageSize = 60;
+
+  @override
+  int build() => pageSize;
+
+  void loadMore() {
+    state = state + pageSize;
+  }
+
+  void reset() {
+    state = pageSize;
+  }
+}
+
+final libraryPaginationProvider =
+    NotifierProvider<LibraryPaginationNotifier, int>(
+      LibraryPaginationNotifier.new,
+    );
+
+final filteredLibraryComicsProvider = Provider<List<bridge.RawComic>>((ref) {
+  final comics = ref.watch(rawLibraryComicsProvider).asData?.value ?? const [];
+  final query = ref
+      .watch(libraryPreferencesProvider.select((p) => p.query))
+      .trim()
+      .toLowerCase();
+  final viewMode = ref.watch(
+    libraryPreferencesProvider.select((p) => p.viewMode),
+  );
   return comics
       .where(
         (comic) =>
@@ -51,7 +70,7 @@ final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
             comic.sourcePath.toLowerCase().contains(query),
       )
       .where((comic) {
-        return switch (preferences.viewMode) {
+        return switch (viewMode) {
           LibraryViewMode.all => true,
           LibraryViewMode.unread =>
             comic.readChapterCount == 0 && comic.inProgressChapterCount == 0,
@@ -59,6 +78,34 @@ final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
         };
       })
       .toList();
+});
+
+class LibraryComicsState {
+  const LibraryComicsState({
+    required this.items,
+    required this.filteredTotal,
+    required this.visibleCount,
+    required this.hasMore,
+  });
+
+  final List<bridge.RawComic> items;
+  final int filteredTotal;
+  final int visibleCount;
+  final bool hasMore;
+}
+
+final libraryComicsProvider = Provider<LibraryComicsState>((ref) {
+  final filtered = ref.watch(filteredLibraryComicsProvider);
+  final visibleLimit = ref.watch(libraryPaginationProvider);
+  final visibleCount = filtered.length < visibleLimit
+      ? filtered.length
+      : visibleLimit;
+  return LibraryComicsState(
+    items: filtered,
+    filteredTotal: filtered.length,
+    visibleCount: visibleCount,
+    hasMore: visibleCount < filtered.length,
+  );
 });
 
 final readingHistoryProvider = FutureProvider<List<bridge.ReadingHistoryEntry>>(

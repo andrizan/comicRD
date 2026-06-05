@@ -7,7 +7,10 @@ mod reader;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use std::thread;
+
+use walkdir::WalkDir;
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -238,11 +241,18 @@ pub struct SettingEntry {
     pub updated_at: i64,
 }
 
+struct LibraryListCache {
+    library_path: String,
+    entries: Vec<PathBuf>,
+    updated_at: Instant,
+}
+
 pub struct ComicRdCore {
     db_path: PathBuf,
     conn: Mutex<Connection>,
     page_cache: PageCache,
     scan_state: Mutex<LibraryScanState>,
+    library_list_cache: Mutex<Option<LibraryListCache>>,
 }
 
 impl ComicRdCore {
@@ -260,6 +270,7 @@ impl ComicRdCore {
             conn: Mutex::new(conn),
             page_cache: PageCache::default(),
             scan_state: Mutex::new(LibraryScanState::default()),
+            library_list_cache: Mutex::new(None),
         })
     }
 
@@ -305,11 +316,67 @@ impl ComicRdCore {
         sort_by: SortBy,
         sort_dir: SortDir,
     ) -> Result<Vec<RawComic>, String> {
+        let library_path = {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            get_library_source_setting(&conn)?
+        };
+        let base = Path::new(&library_path);
+        if library_path.is_empty() || !base.exists() || !base.is_dir() {
+            return Ok(Vec::new());
+        }
+
+        let entries = {
+            let mut cache_guard = self
+                .library_list_cache
+                .lock()
+                .map_err(|_| "library list cache lock poisoned".to_string())?;
+            let needs_refresh = match &*cache_guard {
+                Some(cached) => {
+                    cached.library_path != library_path
+                        || cached.updated_at.elapsed() > Duration::from_secs(30)
+                }
+                None => true,
+            };
+            if needs_refresh {
+                let mut entries = WalkDir::new(base)
+                    .min_depth(1)
+                    .max_depth(1)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.into_path())
+                    .collect::<Vec<_>>();
+                entries.sort();
+                *cache_guard = Some(LibraryListCache {
+                    library_path: library_path.clone(),
+                    entries: entries.clone(),
+                    updated_at: Instant::now(),
+                });
+                entries
+            } else {
+                cache_guard.as_ref().unwrap().entries.clone()
+            }
+        };
+
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        list_library_comics_raw_conn(&conn, sort_by, sort_dir)
+        let mut comics = Vec::new();
+        comics_from_fs_entries(&conn, &library_path, &entries, &mut comics)?;
+        comics.sort_by(|a, b| {
+            let ord = match sort_by {
+                SortBy::FolderDate => a.date_modified.cmp(&b.date_modified),
+                SortBy::Name => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
+            };
+            match sort_dir {
+                SortDir::Desc => ord.reverse(),
+                SortDir::Asc => ord,
+            }
+        });
+        Ok(comics)
     }
 
     pub fn add_library(&self, path: &str) -> Result<i64, String> {
@@ -332,6 +399,7 @@ impl ComicRdCore {
         self.mark_scan_started()?;
         let result = self.scan_libraries_now();
         self.mark_scan_finished(&result);
+        self.clear_library_list_cache();
         result
     }
 
@@ -456,7 +524,9 @@ impl ComicRdCore {
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        save_progress_conn(&conn, &payload)
+        save_progress_conn(&conn, &payload)?;
+        self.clear_library_list_cache();
+        Ok(())
     }
 
     pub fn get_progress(&self, chapter_id: i64) -> Result<Option<ReadingProgress>, String> {
@@ -508,12 +578,20 @@ impl ComicRdCore {
         self.page_cache.stats()
     }
 
+    fn clear_library_list_cache(&self) {
+        if let Ok(mut cache) = self.library_list_cache.lock() {
+            *cache = None;
+        }
+    }
+
     pub fn add_bookmark(&self, payload: SaveBookmarkPayload) -> Result<i64, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        add_bookmark_conn(&conn, payload)
+        let id = add_bookmark_conn(&conn, payload)?;
+        self.clear_library_list_cache();
+        Ok(id)
     }
 
     pub fn remove_bookmark(&self, bookmark_id: i64) -> Result<(), String> {
@@ -521,7 +599,9 @@ impl ComicRdCore {
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        remove_bookmark_conn(&conn, bookmark_id)
+        remove_bookmark_conn(&conn, bookmark_id)?;
+        self.clear_library_list_cache();
+        Ok(())
     }
 
     pub fn list_bookmarks(&self, chapter_id: i64) -> Result<Vec<Bookmark>, String> {
@@ -545,7 +625,9 @@ impl ComicRdCore {
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        add_comic_bookmark_conn(&conn, comic_source_path)
+        let id = add_comic_bookmark_conn(&conn, comic_source_path)?;
+        self.clear_library_list_cache();
+        Ok(id)
     }
 
     pub fn remove_comic_bookmark(&self, comic_source_path: &str) -> Result<(), String> {
@@ -553,7 +635,9 @@ impl ComicRdCore {
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        remove_comic_bookmark_conn(&conn, comic_source_path)
+        remove_comic_bookmark_conn(&conn, comic_source_path)?;
+        self.clear_library_list_cache();
+        Ok(())
     }
 
     pub fn is_comic_bookmarked(&self, comic_source_path: &str) -> Result<bool, String> {
@@ -674,6 +758,7 @@ impl ComicRdCore {
             .map_err(|e| format!("failed opening imported db: {e}"))?;
         run_migrations(&imported_conn)?;
         *conn_guard = imported_conn;
+        self.clear_library_list_cache();
         Ok(())
     }
 }

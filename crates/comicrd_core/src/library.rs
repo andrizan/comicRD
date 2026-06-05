@@ -8,7 +8,7 @@ use crate::chapter::{
     discover_chapter_entries_from_comic_dir, is_archive, source_type_for_path, upsert_chapter,
     upsert_comic, ChapterUpsert,
 };
-use crate::database::{file_modified_ts, get_library_source_setting, now_ts};
+use crate::database::{file_modified_ts, now_ts};
 use crate::{Comic, Library, LibrarySourceStatus, RawComic, ScanSummary, SortBy, SortDir};
 
 pub(crate) fn library_source_status_for(path: &str) -> LibrarySourceStatus {
@@ -49,79 +49,73 @@ pub(crate) fn library_source_status_for(path: &str) -> LibrarySourceStatus {
     }
 }
 
-pub(crate) fn list_library_comics_raw_conn(
+pub(crate) fn comics_from_fs_entries(
     conn: &Connection,
-    sort_by: SortBy,
-    sort_dir: SortDir,
-) -> Result<Vec<RawComic>, String> {
-    let library_path = get_library_source_setting(conn)?;
-    let base = Path::new(&library_path);
-    if !base.exists() || !base.is_dir() {
-        return Ok(Vec::new());
-    }
-
-    let mut comics = Vec::new();
-    let mut entries = WalkDir::new(base)
-        .min_depth(1)
-        .max_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .map(|e| e.into_path())
-        .collect::<Vec<_>>();
-    entries.sort();
-
+    library_path: &str,
+    entries: &[std::path::PathBuf],
+    comics: &mut Vec<RawComic>,
+) -> Result<(), String> {
     for entry in entries {
         if entry.is_dir() {
             let source_path = entry.to_string_lossy().to_string();
-            let chapter_keys = discover_chapter_entries_from_comic_dir(&entry)
-                .into_iter()
-                .map(|(_, chapter_path, _, chapter_index)| {
-                    chapter_history_key(&library_path, &chapter_path, chapter_index)
-                })
-                .collect::<Vec<_>>();
-            let (read_chapter_count, in_progress_chapter_count) =
-                progress_counts_for_chapter_keys(conn, &chapter_keys)?;
+            let comic_key = comic_history_key(library_path, &source_path);
+            let (chapter_count, read_chapter_count, in_progress_chapter_count) =
+                comic_counts_from_db(conn, &comic_key)?;
             comics.push(RawComic {
                 key: source_path.clone(),
-                title: comic_title_for_path(&entry),
+                title: comic_title_for_path(entry),
                 source_path,
                 source_type: "folder".to_string(),
-                library_path: library_path.clone(),
-                date_modified: file_modified_ts(&entry),
-                chapter_count: chapter_keys.len() as i64,
+                library_path: library_path.to_string(),
+                date_modified: file_modified_ts(entry),
+                chapter_count,
                 read_chapter_count,
                 in_progress_chapter_count,
             });
-        } else if entry.is_file() && is_archive(&entry) {
+        } else if entry.is_file() && is_archive(entry) {
             let source_path = entry.to_string_lossy().to_string();
-            let chapter_keys = vec![chapter_history_key(&library_path, &source_path, 1)];
+            let chapter_keys = vec![chapter_history_key(library_path, &source_path, 1)];
             let (read_chapter_count, in_progress_chapter_count) =
                 progress_counts_for_chapter_keys(conn, &chapter_keys)?;
             comics.push(RawComic {
                 key: source_path.clone(),
-                title: comic_title_for_path(&entry),
+                title: comic_title_for_path(entry),
                 source_path,
-                source_type: source_type_for_path(&entry),
-                library_path: library_path.clone(),
-                date_modified: file_modified_ts(&entry),
+                source_type: source_type_for_path(entry),
+                library_path: library_path.to_string(),
+                date_modified: file_modified_ts(entry),
                 chapter_count: 1,
                 read_chapter_count,
                 in_progress_chapter_count,
             });
         }
     }
+    Ok(())
+}
 
-    comics.sort_by(|a, b| {
-        let ord = match sort_by {
-            SortBy::FolderDate => a.date_modified.cmp(&b.date_modified),
-            SortBy::Name => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
-        };
-        match sort_dir {
-            SortDir::Desc => ord.reverse(),
-            SortDir::Asc => ord,
-        }
-    });
-    Ok(comics)
+fn comic_counts_from_db(
+    conn: &Connection,
+    comic_history_key: &str,
+) -> Result<(i64, i64, i64), String> {
+    let result = conn
+        .query_row(
+            r#"
+            SELECT
+                COUNT(ch.id),
+                COALESCE(SUM(CASE WHEN COALESCE(r.is_read, 0) = 1 THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN COALESCE(r.last_page, 0) > 0 AND COALESCE(r.is_read, 0) = 0 THEN 1 ELSE 0 END), 0)
+            FROM comics c
+            LEFT JOIN chapters ch ON ch.comic_id = c.id
+            LEFT JOIN reading_progress r ON r.chapter_id = ch.id
+            WHERE c.history_key = ?1
+            "#,
+            params![comic_history_key],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?)),
+        )
+        .optional()
+        .map_err(|e| format!("failed querying comic counts: {e}"))?;
+
+    Ok(result.unwrap_or((0, 0, 0)))
 }
 
 fn progress_counts_for_chapter_keys(

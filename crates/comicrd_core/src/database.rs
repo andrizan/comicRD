@@ -212,6 +212,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
       CREATE INDEX IF NOT EXISTS idx_reading_progress_updated_at ON reading_progress(updated_at);
       CREATE INDEX IF NOT EXISTS idx_comics_date_modified ON comics(date_modified);
       CREATE INDEX IF NOT EXISTS idx_libraries_updated_at ON libraries(updated_at);
+      CREATE INDEX IF NOT EXISTS idx_comics_history_key ON comics(history_key);
+      CREATE INDEX IF NOT EXISTS idx_chapters_history_key ON chapters(history_key);
       "#,
     )
     .map_err(|e| format!("failed creating indexes: {e}"))?;

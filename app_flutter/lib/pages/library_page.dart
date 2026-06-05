@@ -32,9 +32,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     _historyScroll = _restoredScrollController('library:history');
     _libraryScroll = _restoredScrollController('library:library');
     _bookmarksScroll = _restoredScrollController('library:bookmarks');
-    _search.addListener(() {
-      ref.read(libraryPreferencesProvider.notifier).setQuery(_search.text);
-    });
+    final savedQuery = ref.read(
+      libraryPreferencesProvider.select((p) => p.query),
+    );
+    if (savedQuery.isNotEmpty) {
+      _search.text = savedQuery;
+    }
   }
 
   @override
@@ -78,7 +81,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final sourceStatus = ref.watch(librarySourceStatusProvider);
     final history = ref.watch(readingHistoryProvider);
     final rawComics = ref.watch(rawLibraryComicsProvider);
-    final comics = ref.watch(libraryComicsProvider);
+    final comicsState = ref.watch(libraryComicsProvider);
+    final visibleComics = comicsState.items.sublist(0, comicsState.visibleCount);
     final bookmarks = ref.watch(allBookmarksProvider);
     final bookmarkedPaths =
         bookmarks.asData?.value
@@ -236,7 +240,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 const SizedBox(width: 12),
                 _ComicCountLabel(
                   text: text,
-                  visibleComics: comics,
+                  visibleComics: visibleComics,
                   totalComics: rawComics,
                 ),
               ],
@@ -287,7 +291,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 ),
                 _ComicList(
                   text: text,
-                  comics: comics,
+                  comics: visibleComics,
+                  hasMore: comicsState.hasMore,
+                  onLoadMore: () => ref.read(libraryPaginationProvider.notifier).loadMore(),
                   displayMode: preferences.displayMode,
                   bookmarkedPaths: bookmarkedPaths,
                   controller: _libraryScroll,
@@ -339,13 +345,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   Future<void> _refreshLibrary() async {
-    ref.invalidate(libraryComicsProvider);
+    ref.invalidate(libraryPaginationProvider);
     await Future.wait<void>([
-      ref.refresh(librarySourceStatusProvider.future).then((_) {}),
-      ref.refresh(rawLibraryComicsProvider.future).then((_) {}),
-      ref.refresh(comicsWithProgressProvider.future).then((_) {}),
-      ref.refresh(readingHistoryProvider.future).then((_) {}),
-      ref.refresh(allBookmarksProvider.future).then((_) {}),
+      ref.refresh(librarySourceStatusProvider.future),
+      ref.refresh(rawLibraryComicsProvider.future),
+      ref.refresh(readingHistoryProvider.future),
+      ref.refresh(allBookmarksProvider.future),
     ]);
   }
 
@@ -383,15 +388,15 @@ class _ComicCountLabel extends StatelessWidget {
   });
 
   final AppStrings text;
-  final AsyncValue<List<bridge.RawComic>> visibleComics;
+  final List<bridge.RawComic> visibleComics;
   final AsyncValue<List<bridge.RawComic>> totalComics;
 
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
     final total = totalComics.asData?.value.length;
-    final visible = visibleComics.asData?.value.length;
-    final isLoading = totalComics.isLoading || visibleComics.isLoading;
+    final visible = visibleComics.length;
+    final isLoading = totalComics.isLoading;
 
     final label = switch ((visible, total)) {
       (final int visibleCount, final int totalCount)
@@ -424,6 +429,8 @@ class _ComicList extends StatelessWidget {
   const _ComicList({
     required this.text,
     required this.comics,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.displayMode,
     required this.bookmarkedPaths,
     required this.controller,
@@ -435,7 +442,9 @@ class _ComicList extends StatelessWidget {
   });
 
   final AppStrings text;
-  final AsyncValue<List<bridge.RawComic>> comics;
+  final List<bridge.RawComic> comics;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final LibraryDisplayMode displayMode;
   final Set<String> bookmarkedPaths;
   final ScrollController controller;
@@ -448,114 +457,122 @@ class _ComicList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return comics.when(
-      data: (items) {
-        if (items.isEmpty) {
-          return _EmptyState(label: emptyLabel);
+    if (comics.isEmpty) {
+      return _EmptyState(label: emptyLabel);
+    }
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (hasMore &&
+            notification.metrics.pixels >=
+                notification.metrics.maxScrollExtent - 200) {
+          onLoadMore();
         }
-        if (displayMode == LibraryDisplayMode.grid) {
-          return GridView.builder(
-            controller: controller,
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 220,
-              mainAxisExtent: 184,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final comic = items[index];
-              final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
-              return _ComicGridTile(
-                text: text,
-                comic: comic,
-                bookmarked: bookmarked,
-                onOpen: () =>
-                    context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
-                onToggleBookmark: () => onToggleBookmark(comic, bookmarked),
-                onCopyTitle: () => onCopyTitle(comic),
-                onCopyPath: () => onCopyPath(comic),
-                onOpenFolder: () => onOpenFolder(comic),
-              );
-            },
-          );
-        }
-        return ListView.separated(
-          controller: controller,
-          padding: const EdgeInsets.all(16),
-          itemCount: items.length,
-          separatorBuilder: (_, _) => const Divider(),
-          itemBuilder: (context, index) {
-            final comic = items[index];
-            final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
-            return HoverButton(
-              onPressed: () =>
-                  context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
-              builder: (context, states) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: states.isHovered
-                        ? FluentTheme.of(
-                            context,
-                          ).resources.cardBackgroundFillColorSecondary
-                        : null,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(FluentIcons.folder_open, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(comic.title),
-                            Text(
-                              comic.sourcePath,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: FluentTheme.of(context).typography.caption,
-                            ),
-                          ],
-                        ),
-                      ),
-                      _ReadStatusBadge(
-                        text: text,
-                        readCount: comic.readChapterCount,
-                        totalCount: comic.chapterCount,
-                        inProgressCount: comic.inProgressChapterCount,
-                      ),
-                      const SizedBox(width: 8),
-                      if (bookmarked) ...[
-                        _BookmarkMarker(text: text),
-                        const SizedBox(width: 8),
-                      ],
-                      _ComicActionsButton(
-                        text: text,
-                        bookmarked: bookmarked,
-                        onToggleBookmark: () =>
-                            onToggleBookmark(comic, bookmarked),
-                        onCopyTitle: () => onCopyTitle(comic),
-                        onCopyPath: () => onCopyPath(comic),
-                        onOpenFolder: () => onOpenFolder(comic),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
+        return false;
       },
-      error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () =>
-          const Align(alignment: Alignment.center, child: ProgressRing()),
-    );
+      child: displayMode == LibraryDisplayMode.grid
+          ? GridView.builder(
+              controller: controller,
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    mainAxisExtent: 184,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: comics.length,
+                  itemBuilder: (context, index) {
+                    final comic = comics[index];
+                    final bookmarked =
+                        bookmarkedPaths.contains(comic.sourcePath);
+                    return _ComicGridTile(
+                      text: text,
+                      comic: comic,
+                      bookmarked: bookmarked,
+                      onOpen: () => context
+                          .go('/comic/${encodeRoutePath(comic.sourcePath)}'),
+                      onToggleBookmark: () =>
+                          onToggleBookmark(comic, bookmarked),
+                      onCopyTitle: () => onCopyTitle(comic),
+                      onCopyPath: () => onCopyPath(comic),
+                      onOpenFolder: () => onOpenFolder(comic),
+                    );
+                  },
+                )
+              : ListView.separated(
+                  controller: controller,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: comics.length,
+                  separatorBuilder: (_, _) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final comic = comics[index];
+                    final bookmarked =
+                        bookmarkedPaths.contains(comic.sourcePath);
+                    return HoverButton(
+                      onPressed: () => context
+                          .go('/comic/${encodeRoutePath(comic.sourcePath)}'),
+                      builder: (context, states) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: states.isHovered
+                                ? FluentTheme.of(context)
+                                    .resources
+                                    .cardBackgroundFillColorSecondary
+                                : null,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(FluentIcons.folder_open, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(comic.title),
+                                    Text(
+                                      comic.sourcePath,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: FluentTheme.of(context)
+                                          .typography
+                                          .caption,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              _ReadStatusBadge(
+                                text: text,
+                                readCount: comic.readChapterCount,
+                                totalCount: comic.chapterCount,
+                                inProgressCount: comic.inProgressChapterCount,
+                              ),
+                              const SizedBox(width: 8),
+                              if (bookmarked) ...[
+                                _BookmarkMarker(text: text),
+                                const SizedBox(width: 8),
+                              ],
+                              _ComicActionsButton(
+                                text: text,
+                                bookmarked: bookmarked,
+                                onToggleBookmark: () =>
+                                    onToggleBookmark(comic, bookmarked),
+                                onCopyTitle: () => onCopyTitle(comic),
+                                onCopyPath: () => onCopyPath(comic),
+                                onOpenFolder: () => onOpenFolder(comic),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+        );
   }
 }
 
