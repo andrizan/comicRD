@@ -273,7 +273,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       trackBorderColor: const Color(0xff050505),
       child: ListView.builder(
         controller: _scroll,
-        cacheExtent: 0,
         padding: EdgeInsets.only(top: 78, bottom: 48 + readerSettings.pageGap),
         itemCount: data.pages.length,
         itemBuilder: (context, index) {
