@@ -41,6 +41,7 @@ dependencies:
   flutter_riverpod: ^3.0.3
   file_selector: ^1.0.4
   fluent_ui: ^4.15.1
+  window_manager: ^0.5.1
 
 dev_dependencies:
   flutter_test:

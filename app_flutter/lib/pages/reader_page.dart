@@ -8,6 +8,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' as widgets;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/comicrd_api.dart';
@@ -480,7 +481,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _handleKey(LogicalKeyboardKey key, ReaderData? data) {
     if (key == LogicalKeyboardKey.escape) {
-      if (data != null) {
+      if (_fullscreen) {
+        _toggleFullscreen();
+      } else if (data != null) {
         _close(data);
       } else {
         context.pop();
@@ -585,9 +588,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _toggleFullscreen() async {
     _fullscreen = !_fullscreen;
-    await SystemChrome.setEnabledSystemUIMode(
-      _fullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
-    );
+    if (_fullscreen) {
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setFullScreen(true);
+    } else {
+      await windowManager.setFullScreen(false);
+      await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+    }
     if (mounted) {
       setState(() {});
     }
