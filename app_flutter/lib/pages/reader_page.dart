@@ -86,6 +86,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
       next.whenData(_applySettings);
     });
+    final settingsData = ref.watch(settingsMapProvider);
+    settingsData.whenData(_applySettings);
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
     final reader = ref.watch(readerDataProvider(widget.chapterId));
@@ -165,10 +167,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                 : () => _switchChapter(
                                     data.context!.nextChapterId!,
                                   ),
-                            onGapChanged: (gap) =>
-                                setState(() => _pageGap = gap),
-                            onZoomChanged: (zoom) =>
-                                setState(() => _zoom = zoom),
+                            onGapChanged: (gap) {
+                              setState(() => _pageGap = gap);
+                              _api.setSetting(
+                                'page_gap',
+                                gap.round().toString(),
+                              );
+                            },
+                            onZoomChanged: (zoom) {
+                              setState(() => _zoom = zoom);
+                              _api.setSetting(
+                                'default_zoom',
+                                zoom.toStringAsFixed(1),
+                              );
+                            },
                             onToggleFullscreen: _toggleFullscreen,
                           ),
                         ),
@@ -288,7 +300,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _applySettings(Map<String, String> values) {
     final zoom = _decodeNumber(values['default_zoom'], 1);
-    final gap = _decodeNumber(values['page_gap'], 10);
+    final gap = _decodeNumber(values['page_gap'], 20);
     if (zoom == _zoom && gap == _pageGap) {
       return;
     }
