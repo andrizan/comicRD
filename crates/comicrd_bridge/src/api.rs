@@ -17,13 +17,6 @@ pub enum SortDir {
     Desc,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ImageVariantProfile {
-    Performance,
-    Balanced,
-    Quality,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawComic {
     pub key: String,
@@ -177,16 +170,12 @@ pub struct SaveBookmarkPayload {
 pub struct RenderPagePayload {
     pub chapter_id: i64,
     pub page_index: u32,
-    pub target_width: Option<u32>,
-    pub profile: ImageVariantProfile,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PrefetchPageVariantsPayload {
+pub struct PrefetchPagesPayload {
     pub chapter_id: i64,
     pub page_indices: Vec<u32>,
-    pub target_width: Option<u32>,
-    pub profile: ImageVariantProfile,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,16 +218,6 @@ impl From<SortDir> for core::SortDir {
         match value {
             SortDir::Asc => Self::Asc,
             SortDir::Desc => Self::Desc,
-        }
-    }
-}
-
-impl From<ImageVariantProfile> for core::ImageVariantProfile {
-    fn from(value: ImageVariantProfile) -> Self {
-        match value {
-            ImageVariantProfile::Performance => Self::Performance,
-            ImageVariantProfile::Balanced => Self::Balanced,
-            ImageVariantProfile::Quality => Self::Quality,
         }
     }
 }
@@ -442,14 +421,12 @@ impl From<RenderPagePayload> for core::RenderPagePayload {
         Self {
             chapter_id: value.chapter_id,
             page_index: value.page_index as usize,
-            target_width: value.target_width,
-            profile: value.profile.into(),
         }
     }
 }
 
-impl From<PrefetchPageVariantsPayload> for core::PrefetchPageVariantsPayload {
-    fn from(value: PrefetchPageVariantsPayload) -> Self {
+impl From<PrefetchPagesPayload> for core::PrefetchPagesPayload {
+    fn from(value: PrefetchPagesPayload) -> Self {
         Self {
             chapter_id: value.chapter_id,
             page_indices: value
@@ -457,8 +434,6 @@ impl From<PrefetchPageVariantsPayload> for core::PrefetchPageVariantsPayload {
                 .into_iter()
                 .map(|index| index as usize)
                 .collect(),
-            target_width: value.target_width,
-            profile: value.profile.into(),
         }
     }
 }
@@ -609,8 +584,14 @@ pub fn render_page_preview(chapter_id: i64, page_index: u32) -> Result<RenderedP
         .map(Into::into)
 }
 
-pub fn prefetch_page_variants(payload: PrefetchPageVariantsPayload) -> Result<(), String> {
-    core()?.prefetch_page_variants(payload.into())
+pub fn prefetch_pages(payload: PrefetchPagesPayload) -> Result<(), String> {
+    core()?.prefetch_pages(payload.into())
+}
+
+pub fn evict_chapter_pages(chapter_id: i64, keep_pages: Vec<u32>) -> Result<(), String> {
+    let keep: Vec<usize> = keep_pages.into_iter().map(|p| p as usize).collect();
+    core()?.evict_chapter_pages(chapter_id, keep);
+    Ok(())
 }
 
 pub fn save_progress(payload: SaveProgressPayload) -> Result<(), String> {

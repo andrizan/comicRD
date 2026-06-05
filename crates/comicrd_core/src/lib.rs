@@ -200,60 +200,16 @@ pub struct SaveBookmarkPayload {
     pub note: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum ImageVariantProfile {
-    Performance,
-    Balanced,
-    Quality,
-}
-
-impl ImageVariantProfile {
-    fn jpeg_quality(self) -> u8 {
-        match self {
-            Self::Performance => 78,
-            Self::Balanced => 82,
-            Self::Quality => 88,
-        }
-    }
-
-    fn filter(self) -> image::imageops::FilterType {
-        match self {
-            Self::Performance => image::imageops::FilterType::Nearest,
-            Self::Balanced => image::imageops::FilterType::Triangle,
-            Self::Quality => image::imageops::FilterType::CatmullRom,
-        }
-    }
-
-    fn resize_threshold(self, source_mime: &'static str) -> (u32, u32) {
-        if source_mime == "image/jpeg" || source_mime == "image/webp" {
-            return match self {
-                Self::Performance => (3, 2),
-                Self::Balanced => (4, 3),
-                Self::Quality => (6, 5),
-            };
-        }
-        match self {
-            Self::Performance => (6, 5),
-            Self::Balanced => (6, 5),
-            Self::Quality => (11, 10),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RenderPagePayload {
     pub chapter_id: i64,
     pub page_index: usize,
-    pub target_width: Option<u32>,
-    pub profile: ImageVariantProfile,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PrefetchPageVariantsPayload {
+pub struct PrefetchPagesPayload {
     pub chapter_id: i64,
     pub page_indices: Vec<usize>,
-    pub target_width: Option<u32>,
-    pub profile: ImageVariantProfile,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -527,24 +483,24 @@ impl ComicRdCore {
         self.render_page_variant(RenderPagePayload {
             chapter_id,
             page_index,
-            target_width: Some(320),
-            profile: ImageVariantProfile::Performance,
         })
     }
 
-    pub fn prefetch_page_variants(
+    pub fn prefetch_pages(
         &self,
-        payload: PrefetchPageVariantsPayload,
+        payload: PrefetchPagesPayload,
     ) -> Result<(), String> {
         for page_index in payload.page_indices {
             self.render_page_variant(RenderPagePayload {
                 chapter_id: payload.chapter_id,
                 page_index,
-                target_width: payload.target_width,
-                profile: payload.profile,
             })?;
         }
         Ok(())
+    }
+
+    pub fn evict_chapter_pages(&self, chapter_id: i64, keep_pages: Vec<usize>) {
+        self.page_cache.evict_except(chapter_id, &keep_pages);
     }
 
     #[doc(hidden)]

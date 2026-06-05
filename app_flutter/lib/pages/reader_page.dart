@@ -42,14 +42,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _toolbarVisible = true;
   double _zoom = 1;
   double _pageGap = 10;
-  bridge.ImageVariantProfile _profile = bridge.ImageVariantProfile.balanced;
   late final ComicRdApi _api = const ComicRdApi();
   ReaderData? _lastReaderData;
 
   @override
   void initState() {
     super.initState();
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 128 * 1024 * 1024;
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 64 * 1024 * 1024;
     _scroll.addListener(_handleScroll);
   }
 
@@ -57,6 +56,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void dispose() {
     _progressTimer?.cancel();
     unawaited(_saveProgressDirect());
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
+    PaintingBinding.instance.imageCache.clear();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scroll.dispose();
     _focusNode.dispose();
@@ -112,6 +113,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   left: 0,
                   right: 0,
                   height: 22,
+                  child: MouseRegion(
+                    onEnter: (_) => _showToolbar(),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 48,
                   child: MouseRegion(
                     onEnter: (_) => _showToolbar(),
                     child: const SizedBox.expand(),
@@ -263,9 +274,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               active: active,
               chapterId: widget.chapterId,
               page: page,
-              targetWidth: _targetWidth(context),
               zoom: _zoom,
-              profile: _profile,
             ),
           );
         },
@@ -274,24 +283,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   bool _isActivePage(int index) {
-    final policy = _profilePolicy(_profile);
-    return index >= _currentPage - policy.backward - 1 &&
-        index <= _currentPage + policy.forward + 1;
-  }
-
-  int _targetWidth(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final policy = _profilePolicy(_profile);
-    final width = (size.width * math.min(dpr, policy.maxDpr) * _zoom).round();
-    return width.clamp(320, policy.maxWidth);
+    return index >= _currentPage - 3 && index <= _currentPage + 3;
   }
 
   void _applySettings(Map<String, String> values) {
     final zoom = _decodeNumber(values['default_zoom'], 1);
     final gap = _decodeNumber(values['page_gap'], 10);
-    final profile = _decodeProfile(values['image_pipeline_profile']);
-    if (zoom == _zoom && gap == _pageGap && profile == _profile) {
+    if (zoom == _zoom && gap == _pageGap) {
       return;
     }
     if (!mounted) {
@@ -300,7 +298,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     setState(() {
       _zoom = zoom.clamp(0.5, 3);
       _pageGap = gap.clamp(0, 80);
-      _profile = profile;
     });
   }
 
@@ -320,28 +317,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return num.tryParse(raw)?.toDouble() ?? fallback;
     }
     return fallback;
-  }
-
-  bridge.ImageVariantProfile _decodeProfile(String? raw) {
-    if (raw == null) {
-      return bridge.ImageVariantProfile.balanced;
-    }
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(raw);
-    } on FormatException {
-      return _profileFromValue(raw);
-    }
-    final value = decoded is String ? decoded : raw.replaceAll('"', '');
-    return _profileFromValue(value);
-  }
-
-  bridge.ImageVariantProfile _profileFromValue(String value) {
-    return switch (value) {
-      'performance' => bridge.ImageVariantProfile.performance,
-      'quality' => bridge.ImageVariantProfile.quality,
-      _ => bridge.ImageVariantProfile.balanced,
-    };
   }
 
   void _restoreProgress(ReaderData data) {
@@ -462,21 +437,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (data == null || data.pages.isEmpty) {
       return;
     }
-    final policy = _profilePolicy(_profile);
-    final start = math.max(0, page - policy.backward);
-    final end = math.min(data.pages.length - 1, page + policy.forward);
-    await ref
-        .read(comicRdApiProvider)
-        .prefetchPageVariants(
-          bridge.PrefetchPageVariantsPayload(
-            chapterId: widget.chapterId,
-            pageIndices: Uint32List.fromList([
-              for (var index = start; index <= end; index++) index,
-            ]),
-            targetWidth: policy.maxWidth,
-            profile: _profile,
-          ),
-        );
+    final start = math.max(0, page - 2);
+    final end = math.min(data.pages.length - 1, page + 2);
+    final api = ref.read(comicRdApiProvider);
+    await api.prefetchPages(
+      bridge.PrefetchPagesPayload(
+        chapterId: widget.chapterId,
+        pageIndices: Uint32List.fromList([
+          for (var index = start; index <= end; index++) index,
+        ]),
+      ),
+    );
+    await api.evictChapterPages(
+      chapterId: widget.chapterId,
+      keepPages: Uint32List.fromList([
+        for (var index = start; index <= end; index++) index,
+      ]),
+    );
   }
 
   void _handleKey(LogicalKeyboardKey key, ReaderData? data) {
@@ -607,17 +584,13 @@ class _ReaderPageItem extends ConsumerWidget {
     required this.active,
     required this.chapterId,
     required this.page,
-    required this.targetWidth,
     required this.zoom,
-    required this.profile,
   });
 
   final bool active;
   final int chapterId;
   final bridge.PageInfo page;
-  final int targetWidth;
   final double zoom;
-  final bridge.ImageVariantProfile profile;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -627,25 +600,16 @@ class _ReaderPageItem extends ConsumerWidget {
     }
     final rendered = ref.watch(
       renderedPageProvider(
-        RenderedPageRequest(
-          chapterId: chapterId,
-          pageIndex: page.index,
-          targetWidth: targetWidth,
-          profile: profile,
-        ),
+        RenderedPageRequest(chapterId: chapterId, pageIndex: page.index),
       ),
     );
     return rendered.when(
       data: (page) => Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: targetWidth * zoom),
-          child: Image.memory(
-            page.bytes,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
-            fit: BoxFit.contain,
-            width: page.width == 0 ? null : page.width.toDouble() * zoom,
-          ),
+        child: Image.memory(
+          page.bytes,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.medium,
+          fit: BoxFit.contain,
         ),
       ),
       error: (error, _) =>
@@ -1428,41 +1392,4 @@ class _PageIndicator extends StatelessWidget {
       ),
     );
   }
-}
-
-_ProfilePolicy _profilePolicy(bridge.ImageVariantProfile profile) {
-  return switch (profile) {
-    bridge.ImageVariantProfile.performance => const _ProfilePolicy(
-      maxWidth: 1280,
-      maxDpr: 1,
-      forward: 6,
-      backward: 1,
-    ),
-    bridge.ImageVariantProfile.quality => const _ProfilePolicy(
-      maxWidth: 2400,
-      maxDpr: 1.75,
-      forward: 4,
-      backward: 2,
-    ),
-    bridge.ImageVariantProfile.balanced => const _ProfilePolicy(
-      maxWidth: 1600,
-      maxDpr: 1.25,
-      forward: 5,
-      backward: 1,
-    ),
-  };
-}
-
-class _ProfilePolicy {
-  const _ProfilePolicy({
-    required this.maxWidth,
-    required this.maxDpr,
-    required this.forward,
-    required this.backward,
-  });
-
-  final int maxWidth;
-  final double maxDpr;
-  final int forward;
-  final int backward;
 }

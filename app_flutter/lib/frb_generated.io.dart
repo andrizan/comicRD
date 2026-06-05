@@ -37,8 +37,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OpenChapterPayload dco_decode_box_autoadd_open_chapter_payload(dynamic raw);
 
   @protected
-  PrefetchPageVariantsPayload
-  dco_decode_box_autoadd_prefetch_page_variants_payload(dynamic raw);
+  PrefetchPagesPayload dco_decode_box_autoadd_prefetch_pages_payload(
+    dynamic raw,
+  );
 
   @protected
   ReadingProgress dco_decode_box_autoadd_reading_progress(dynamic raw);
@@ -74,9 +75,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
-  ImageVariantProfile dco_decode_image_variant_profile(dynamic raw);
-
-  @protected
   Library dco_decode_library(dynamic raw);
 
   @protected
@@ -102,6 +100,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<PageInfo> dco_decode_list_page_info(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
@@ -146,9 +147,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageInfo dco_decode_page_info(dynamic raw);
 
   @protected
-  PrefetchPageVariantsPayload dco_decode_prefetch_page_variants_payload(
-    dynamic raw,
-  );
+  PrefetchPagesPayload dco_decode_prefetch_pages_payload(dynamic raw);
 
   @protected
   RawChapter dco_decode_raw_chapter(dynamic raw);
@@ -218,8 +217,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  PrefetchPageVariantsPayload
-  sse_decode_box_autoadd_prefetch_page_variants_payload(
+  PrefetchPagesPayload sse_decode_box_autoadd_prefetch_pages_payload(
     SseDeserializer deserializer,
   );
 
@@ -265,11 +263,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
-  ImageVariantProfile sse_decode_image_variant_profile(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   Library sse_decode_library(SseDeserializer deserializer);
 
   @protected
@@ -301,6 +294,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<PageInfo> sse_decode_list_page_info(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
@@ -357,7 +353,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageInfo sse_decode_page_info(SseDeserializer deserializer);
 
   @protected
-  PrefetchPageVariantsPayload sse_decode_prefetch_page_variants_payload(
+  PrefetchPagesPayload sse_decode_prefetch_pages_payload(
     SseDeserializer deserializer,
   );
 
@@ -442,8 +438,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_box_autoadd_prefetch_page_variants_payload(
-    PrefetchPageVariantsPayload self,
+  void sse_encode_box_autoadd_prefetch_pages_payload(
+    PrefetchPagesPayload self,
     SseSerializer serializer,
   );
 
@@ -499,12 +495,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
-  void sse_encode_image_variant_profile(
-    ImageVariantProfile self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_library(Library self, SseSerializer serializer);
 
   @protected
@@ -539,6 +529,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_page_info(List<PageInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_u_32_loose(
+    List<int> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_32_strict(
@@ -613,8 +609,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_page_info(PageInfo self, SseSerializer serializer);
 
   @protected
-  void sse_encode_prefetch_page_variants_payload(
-    PrefetchPageVariantsPayload self,
+  void sse_encode_prefetch_pages_payload(
+    PrefetchPagesPayload self,
     SseSerializer serializer,
   );
 

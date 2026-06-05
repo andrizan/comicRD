@@ -326,12 +326,10 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         index,
     ];
     if (pages.isNotEmpty) {
-      await api.prefetchPageVariants(
-        bridge.PrefetchPageVariantsPayload(
+      await api.prefetchPages(
+        bridge.PrefetchPagesPayload(
           chapterId: chapterId,
           pageIndices: Uint32List.fromList(pages.cast<int>()),
-          targetWidth: 1024,
-          profile: bridge.ImageVariantProfile.balanced,
         ),
       );
     }

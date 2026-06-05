@@ -21,7 +21,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   double _defaultZoom = 1;
   double _pageGap = 10;
   bool _initialized = false;
-  String _profile = 'balanced';
   ThemeMode _themeMode = ThemeMode.light;
   String _locale = 'en';
   String? _message;
@@ -127,33 +126,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     divisions: 16,
                     label: '${_pageGap.round()}px',
                     onChanged: (value) => setState(() => _pageGap = value),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _labeledField(
-                  text.imagePipelineProfile,
-                  _controlBox(
-                    ComboBox<String>(
-                      value: _profile,
-                      isExpanded: true,
-                      items: [
-                        ComboBoxItem(
-                          value: 'performance',
-                          child: Text(text.performance),
-                        ),
-                        ComboBoxItem(
-                          value: 'balanced',
-                          child: Text(text.balanced),
-                        ),
-                        ComboBoxItem(
-                          value: 'quality',
-                          child: Text(text.quality),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) setState(() => _profile = value);
-                      },
-                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -365,7 +337,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     _librarySource.text = _decodeString(values['library_source_input'], '');
     _defaultZoom = _decodeDouble(values['default_zoom'], 1);
     _pageGap = _decodeDouble(values['page_gap'], 10);
-    _profile = _decodeString(values['image_pipeline_profile'], 'balanced');
     _themeMode = appSettings.themeMode;
     _locale = appSettings.localeCode;
     _initialized = true;
@@ -399,7 +370,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     }
     await api.setSetting('default_zoom', _defaultZoom.toStringAsFixed(1));
     await api.setSetting('page_gap', _pageGap.round().toString());
-    await api.setSetting('image_pipeline_profile', jsonEncode(_profile));
     await api.setSetting(
       'app_theme',
       jsonEncode(themeModeToSetting(_themeMode)),

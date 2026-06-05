@@ -30,8 +30,6 @@ final renderedPageProvider =
             bridge.RenderPagePayload(
               chapterId: request.chapterId,
               pageIndex: request.pageIndex,
-              targetWidth: request.targetWidth,
-              profile: request.profile,
             ),
           );
     });
@@ -49,17 +47,10 @@ class ReaderData {
 }
 
 class RenderedPageRequest {
-  const RenderedPageRequest({
-    required this.chapterId,
-    required this.pageIndex,
-    required this.targetWidth,
-    required this.profile,
-  });
+  const RenderedPageRequest({required this.chapterId, required this.pageIndex});
 
   final int chapterId;
   final int pageIndex;
-  final int targetWidth;
-  final bridge.ImageVariantProfile profile;
 
   @override
   bool operator ==(Object other) =>
@@ -67,10 +58,8 @@ class RenderedPageRequest {
       other is RenderedPageRequest &&
           runtimeType == other.runtimeType &&
           chapterId == other.chapterId &&
-          pageIndex == other.pageIndex &&
-          targetWidth == other.targetWidth &&
-          profile == other.profile;
+          pageIndex == other.pageIndex;
 
   @override
-  int get hashCode => Object.hash(chapterId, pageIndex, targetWidth, profile);
+  int get hashCode => Object.hash(chapterId, pageIndex);
 }

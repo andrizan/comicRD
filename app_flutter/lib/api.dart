@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `core`, `open_path`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<void> initApp({required String appDataDir}) =>
     RustLib.instance.api.crateApiInitApp(appDataDir: appDataDir);
@@ -78,9 +78,16 @@ Future<RenderedPage> renderPagePreview({
   pageIndex: pageIndex,
 );
 
-Future<void> prefetchPageVariants({
-  required PrefetchPageVariantsPayload payload,
-}) => RustLib.instance.api.crateApiPrefetchPageVariants(payload: payload);
+Future<void> prefetchPages({required PrefetchPagesPayload payload}) =>
+    RustLib.instance.api.crateApiPrefetchPages(payload: payload);
+
+Future<void> evictChapterPages({
+  required PlatformInt64 chapterId,
+  required List<int> keepPages,
+}) => RustLib.instance.api.crateApiEvictChapterPages(
+  chapterId: chapterId,
+  keepPages: keepPages,
+);
 
 Future<void> saveProgress({required SaveProgressPayload payload}) =>
     RustLib.instance.api.crateApiSaveProgress(payload: payload);
@@ -339,8 +346,6 @@ class ComicBookmark {
           createdAt == other.createdAt;
 }
 
-enum ImageVariantProfile { performance, balanced, quality }
-
 class Library {
   final PlatformInt64 id;
   final String path;
@@ -492,35 +497,25 @@ class PageInfo {
           height == other.height;
 }
 
-class PrefetchPageVariantsPayload {
+class PrefetchPagesPayload {
   final PlatformInt64 chapterId;
   final Uint32List pageIndices;
-  final int? targetWidth;
-  final ImageVariantProfile profile;
 
-  const PrefetchPageVariantsPayload({
+  const PrefetchPagesPayload({
     required this.chapterId,
     required this.pageIndices,
-    this.targetWidth,
-    required this.profile,
   });
 
   @override
-  int get hashCode =>
-      chapterId.hashCode ^
-      pageIndices.hashCode ^
-      targetWidth.hashCode ^
-      profile.hashCode;
+  int get hashCode => chapterId.hashCode ^ pageIndices.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PrefetchPageVariantsPayload &&
+      other is PrefetchPagesPayload &&
           runtimeType == other.runtimeType &&
           chapterId == other.chapterId &&
-          pageIndices == other.pageIndices &&
-          targetWidth == other.targetWidth &&
-          profile == other.profile;
+          pageIndices == other.pageIndices;
 }
 
 class RawChapter {
@@ -718,22 +713,11 @@ class ReadingProgress {
 class RenderPagePayload {
   final PlatformInt64 chapterId;
   final int pageIndex;
-  final int? targetWidth;
-  final ImageVariantProfile profile;
 
-  const RenderPagePayload({
-    required this.chapterId,
-    required this.pageIndex,
-    this.targetWidth,
-    required this.profile,
-  });
+  const RenderPagePayload({required this.chapterId, required this.pageIndex});
 
   @override
-  int get hashCode =>
-      chapterId.hashCode ^
-      pageIndex.hashCode ^
-      targetWidth.hashCode ^
-      profile.hashCode;
+  int get hashCode => chapterId.hashCode ^ pageIndex.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -741,9 +725,7 @@ class RenderPagePayload {
       other is RenderPagePayload &&
           runtimeType == other.runtimeType &&
           chapterId == other.chapterId &&
-          pageIndex == other.pageIndex &&
-          targetWidth == other.targetWidth &&
-          profile == other.profile;
+          pageIndex == other.pageIndex;
 }
 
 class RenderedPage {

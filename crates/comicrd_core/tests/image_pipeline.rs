@@ -1,4 +1,4 @@
-use comicrd_core::{ComicRdCore, ImageVariantProfile, OpenChapterPayload, RenderPagePayload};
+use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPagePayload};
 use image::{ImageBuffer, Rgba};
 use std::fs;
 use std::io::Write;
@@ -34,7 +34,7 @@ fn get_chapter_pages_lists_sorted_archive_images() {
 }
 
 #[test]
-fn render_page_variant_downscales_to_jpeg_when_target_width_is_smaller() {
+fn render_page_variant_returns_raw_image_bytes() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -60,14 +60,12 @@ fn render_page_variant_downscales_to_jpeg_when_target_width_is_smaller() {
         .render_page_variant(RenderPagePayload {
             chapter_id,
             page_index: 0,
-            target_width: Some(320),
-            profile: ImageVariantProfile::Balanced,
         })
         .expect("render page");
 
-    assert_eq!(rendered.mime, "image/jpeg");
-    assert_eq!(rendered.width, 320);
-    assert_eq!(rendered.height, 160);
+    assert_eq!(rendered.mime, "image/png");
+    assert_eq!(rendered.width, 800);
+    assert_eq!(rendered.height, 400);
     assert!(!rendered.bytes.is_empty());
 }
 

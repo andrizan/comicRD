@@ -1,4 +1,4 @@
-use comicrd_core::{ComicRdCore, ImageVariantProfile, OpenChapterPayload, RenderPagePayload};
+use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPagePayload};
 use image::{ImageBuffer, Rgba};
 use std::fs;
 use std::sync::{Arc, Barrier};
@@ -6,7 +6,7 @@ use std::thread;
 use tempfile::tempdir;
 
 #[test]
-fn render_page_variant_reuses_page_source_page_bytes_and_variant_cache() {
+fn render_page_variant_reuses_page_source_and_page_bytes_cache() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -31,8 +31,6 @@ fn render_page_variant_reuses_page_source_page_bytes_and_variant_cache() {
     let payload = RenderPagePayload {
         chapter_id,
         page_index: 0,
-        target_width: Some(320),
-        profile: ImageVariantProfile::Balanced,
     };
 
     let first = core
@@ -49,15 +47,13 @@ fn render_page_variant_reuses_page_source_page_bytes_and_variant_cache() {
 
     assert_eq!(first_stats.page_source_loads, 1);
     assert_eq!(first_stats.page_bytes_loads, 1);
-    assert_eq!(first_stats.variant_renders, 1);
     assert_eq!(second_stats.page_source_loads, 1);
     assert_eq!(second_stats.page_bytes_loads, 1);
-    assert_eq!(second_stats.variant_renders, 1);
-    assert_eq!(second_stats.variant_cache_hits, 1);
+    assert_eq!(second_stats.page_bytes_cache_hits, 1);
 }
 
 #[test]
-fn concurrent_render_page_variant_dedupes_identical_in_flight_work() {
+fn concurrent_render_page_variant_shares_cached_bytes() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -82,8 +78,6 @@ fn concurrent_render_page_variant_dedupes_identical_in_flight_work() {
     let payload = RenderPagePayload {
         chapter_id,
         page_index: 0,
-        target_width: Some(640),
-        profile: ImageVariantProfile::Quality,
     };
     let worker_count = 8;
     let barrier = Arc::new(Barrier::new(worker_count));
@@ -114,8 +108,6 @@ fn concurrent_render_page_variant_dedupes_identical_in_flight_work() {
     let stats = core.cache_stats_for_test();
     assert_eq!(stats.page_source_loads, 1);
     assert_eq!(stats.page_bytes_loads, 1);
-    assert_eq!(stats.variant_renders, 1);
-    assert_eq!(stats.variant_cache_hits, worker_count - 1);
 }
 
 fn create_png(path: impl AsRef<std::path::Path>, width: u32, height: u32) {

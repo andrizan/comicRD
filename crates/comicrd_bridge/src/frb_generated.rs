@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1834397260;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2142201554;
 
 // Section: executor
 
@@ -208,6 +208,41 @@ fn wire__crate__api__check_library_source_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::check_library_source()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__evict_chapter_pages_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "evict_chapter_pages",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_chapter_id = <i64>::sse_decode(&mut deserializer);
+            let api_keep_pages = <Vec<u32>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok =
+                        crate::api::evict_chapter_pages(api_chapter_id, api_keep_pages)?;
                     Ok(output_ok)
                 })())
             }
@@ -903,7 +938,7 @@ fn wire__crate__api__open_containing_folder_impl(
         },
     )
 }
-fn wire__crate__api__prefetch_page_variants_impl(
+fn wire__crate__api__prefetch_pages_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -911,7 +946,7 @@ fn wire__crate__api__prefetch_page_variants_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "prefetch_page_variants",
+            debug_name: "prefetch_pages",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -925,12 +960,11 @@ fn wire__crate__api__prefetch_page_variants_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_payload =
-                <crate::api::PrefetchPageVariantsPayload>::sse_decode(&mut deserializer);
+            let api_payload = <crate::api::PrefetchPagesPayload>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::prefetch_page_variants(api_payload)?;
+                    let output_ok = crate::api::prefetch_pages(api_payload)?;
                     Ok(output_ok)
                 })())
             }
@@ -1395,19 +1429,6 @@ impl SseDecode for i64 {
     }
 }
 
-impl SseDecode for crate::api::ImageVariantProfile {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::ImageVariantProfile::Performance,
-            1 => crate::api::ImageVariantProfile::Balanced,
-            2 => crate::api::ImageVariantProfile::Quality,
-            _ => unreachable!("Invalid variant for ImageVariantProfile: {}", inner),
-        };
-    }
-}
-
 impl SseDecode for crate::api::Library {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1700,18 +1721,14 @@ impl SseDecode for crate::api::PageInfo {
     }
 }
 
-impl SseDecode for crate::api::PrefetchPageVariantsPayload {
+impl SseDecode for crate::api::PrefetchPagesPayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_chapterId = <i64>::sse_decode(deserializer);
         let mut var_pageIndices = <Vec<u32>>::sse_decode(deserializer);
-        let mut var_targetWidth = <Option<u32>>::sse_decode(deserializer);
-        let mut var_profile = <crate::api::ImageVariantProfile>::sse_decode(deserializer);
-        return crate::api::PrefetchPageVariantsPayload {
+        return crate::api::PrefetchPagesPayload {
             chapter_id: var_chapterId,
             page_indices: var_pageIndices,
-            target_width: var_targetWidth,
-            profile: var_profile,
         };
     }
 }
@@ -1819,13 +1836,9 @@ impl SseDecode for crate::api::RenderPagePayload {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_chapterId = <i64>::sse_decode(deserializer);
         let mut var_pageIndex = <u32>::sse_decode(deserializer);
-        let mut var_targetWidth = <Option<u32>>::sse_decode(deserializer);
-        let mut var_profile = <crate::api::ImageVariantProfile>::sse_decode(deserializer);
         return crate::api::RenderPagePayload {
             chapter_id: var_chapterId,
             page_index: var_pageIndex,
-            target_width: var_targetWidth,
-            profile: var_profile,
         };
     }
 }
@@ -1961,38 +1974,39 @@ fn pde_ffi_dispatcher_primary_impl(
         3 => wire__crate__api__add_comic_bookmark_impl(port, ptr, rust_vec_len, data_len),
         4 => wire__crate__api__add_library_impl(port, ptr, rust_vec_len, data_len),
         5 => wire__crate__api__check_library_source_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__export_database_backup_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__get_chapter_context_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__get_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__get_library_scan_status_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__import_database_backup_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__is_comic_bookmarked_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__list_all_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__list_chapter_favorites_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__list_comics_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__list_reading_history_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__list_settings_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__prefetch_page_variants_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__remove_chapter_favorite_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__remove_comic_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__render_page_preview_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__scan_libraries_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__evict_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__export_database_backup_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__get_chapter_context_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__get_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__get_library_scan_status_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__import_database_backup_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__is_comic_bookmarked_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__list_all_bookmarks_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__list_chapter_favorites_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__list_comics_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__list_reading_history_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__list_settings_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__remove_chapter_favorite_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__remove_comic_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__render_page_preview_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__scan_libraries_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2100,28 +2114,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ComicBookmark> for crate::api
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ImageVariantProfile {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::Performance => 0.into_dart(),
-            Self::Balanced => 1.into_dart(),
-            Self::Quality => 2.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::ImageVariantProfile
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ImageVariantProfile>
-    for crate::api::ImageVariantProfile
-{
-    fn into_into_dart(self) -> crate::api::ImageVariantProfile {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::Library {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2225,25 +2217,23 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::PageInfo> for crate::api::Pag
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PrefetchPageVariantsPayload {
+impl flutter_rust_bridge::IntoDart for crate::api::PrefetchPagesPayload {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.chapter_id.into_into_dart().into_dart(),
             self.page_indices.into_into_dart().into_dart(),
-            self.target_width.into_into_dart().into_dart(),
-            self.profile.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::PrefetchPageVariantsPayload
+    for crate::api::PrefetchPagesPayload
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PrefetchPageVariantsPayload>
-    for crate::api::PrefetchPageVariantsPayload
+impl flutter_rust_bridge::IntoIntoDart<crate::api::PrefetchPagesPayload>
+    for crate::api::PrefetchPagesPayload
 {
-    fn into_into_dart(self) -> crate::api::PrefetchPageVariantsPayload {
+    fn into_into_dart(self) -> crate::api::PrefetchPagesPayload {
         self
     }
 }
@@ -2349,8 +2339,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::RenderPagePayload {
         [
             self.chapter_id.into_into_dart().into_dart(),
             self.page_index.into_into_dart().into_dart(),
-            self.target_width.into_into_dart().into_dart(),
-            self.profile.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2574,23 +2562,6 @@ impl SseEncode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_i64::<NativeEndian>(self).unwrap();
-    }
-}
-
-impl SseEncode for crate::api::ImageVariantProfile {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::api::ImageVariantProfile::Performance => 0,
-                crate::api::ImageVariantProfile::Balanced => 1,
-                crate::api::ImageVariantProfile::Quality => 2,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
     }
 }
 
@@ -2825,13 +2796,11 @@ impl SseEncode for crate::api::PageInfo {
     }
 }
 
-impl SseEncode for crate::api::PrefetchPageVariantsPayload {
+impl SseEncode for crate::api::PrefetchPagesPayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.chapter_id, serializer);
         <Vec<u32>>::sse_encode(self.page_indices, serializer);
-        <Option<u32>>::sse_encode(self.target_width, serializer);
-        <crate::api::ImageVariantProfile>::sse_encode(self.profile, serializer);
     }
 }
 
@@ -2897,8 +2866,6 @@ impl SseEncode for crate::api::RenderPagePayload {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.chapter_id, serializer);
         <u32>::sse_encode(self.page_index, serializer);
-        <Option<u32>>::sse_encode(self.target_width, serializer);
-        <crate::api::ImageVariantProfile>::sse_encode(self.profile, serializer);
     }
 }
 
