@@ -539,10 +539,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         page,
         data?.pages.length ?? 0,
       );
-      final targetOffset = estimatedOffset.clamp(
-        0,
-        _scroll.position.maxScrollExtent,
-      ).toDouble();
+      final targetOffset = estimatedOffset
+          .clamp(0, _scroll.position.maxScrollExtent)
+          .toDouble();
       if ((_scroll.position.pixels - targetOffset).abs() > 0.5) {
         _ignoreNextScrollUpdate = _initialScrollDone;
         _scroll.jumpTo(targetOffset);
@@ -1071,7 +1070,11 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
       child: SizedBox(
         width: 32,
         height: 36,
-        child: Icon(icon, size: 14, color: Colors.white.withValues(alpha: 0.78)),
+        child: Icon(
+          icon,
+          size: 14,
+          color: Colors.white.withValues(alpha: 0.78),
+        ),
       ),
     );
   }
@@ -1435,7 +1438,7 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                   ),
                 ),
               ),
-                      Expanded(
+              Expanded(
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: Row(
@@ -1452,9 +1455,7 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                               child: Tooltip(
                                 message: '${index + 1}',
                                 child: SizedBox.expand(
-                                  key: ValueKey(
-                                    'reader-page-indicator-$index',
-                                  ),
+                                  key: ValueKey('reader-page-indicator-$index'),
                                   child: Center(
                                     child: AnimatedContainer(
                                       duration: const Duration(
@@ -1469,9 +1470,7 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                                             : Colors.white.withValues(
                                                 alpha: 0.20,
                                               ),
-                                        borderRadius: BorderRadius.circular(
-                                          99,
-                                        ),
+                                        borderRadius: BorderRadius.circular(99),
                                       ),
                                     ),
                                   ),

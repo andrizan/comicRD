@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:comicrd_flutter/app.dart';
 import 'package:comicrd_flutter/api/comicrd_api.dart';
 import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
@@ -13,11 +15,49 @@ void main() {
 
     expect(find.text('ComicRD'), findsOneWidget);
   });
+
+  testWidgets('shows missing library source without waiting for comics', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp(api: const _MissingSourceApi()));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('No library source configured'), findsOneWidget);
+    expect(find.byType(ProgressRing), findsNothing);
+  });
+
+  testWidgets('shows mount hint when configured library path is unavailable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp(api: const _UnmountedSourceApi()));
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.text(
+        "path '/run/media/andrizan/HDD_Hobby/Komik' not found. On Linux, you may need to mount the partition first.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(ProgressRing), findsNothing);
+  });
+
+  testWidgets('keeps filesystem comics when only one comic is indexed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp(api: const _PartiallyIndexedSourceApi()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('8Kaijuu'), findsOneWidget);
+    expect(find.text('Other Comic'), findsOneWidget);
+    expect(find.text('Total comics: 2'), findsOneWidget);
+  });
 }
 
-Widget _testApp() {
+Widget _testApp({ComicRdApi api = const _FakeComicRdApi()}) {
   return ProviderScope(
-    overrides: [comicRdApiProvider.overrideWithValue(const _FakeComicRdApi())],
+    overrides: [comicRdApiProvider.overrideWithValue(api)],
     child: const ComicRdApp(),
   );
 }
@@ -80,6 +120,27 @@ class _FakeComicRdApi extends ComicRdApi {
   }
 
   @override
+  Future<List<bridge.Comic>> listComics({
+    required bridge.SortBy sortBy,
+    required bridge.SortDir sortDir,
+  }) async {
+    return const [
+      bridge.Comic(
+        id: 1,
+        libraryId: 1,
+        title: 'Demo Comic',
+        sourcePath: '/library/Demo Comic',
+        sourceType: 'folder',
+        dateModified: 0,
+        updatedAt: 0,
+        chapterCount: 0,
+        readChapterCount: 0,
+        inProgressChapterCount: 0,
+      ),
+    ];
+  }
+
+  @override
   Future<List<String>> listComicsWithProgress() async {
     return const [];
   }
@@ -117,5 +178,112 @@ class _FakeComicRdApi extends ComicRdApi {
   @override
   Future<List<String>> listChapterFavorites(String comicSourcePath) async {
     return const [];
+  }
+}
+
+class _MissingSourceApi extends _FakeComicRdApi {
+  const _MissingSourceApi();
+
+  @override
+  Future<bridge.LibrarySourceStatus> checkLibrarySource() async {
+    return const bridge.LibrarySourceStatus(
+      configured: false,
+      path: '',
+      exists: false,
+      isDir: false,
+      readable: false,
+    );
+  }
+
+  @override
+  Future<List<bridge.RawComic>> listLibraryComicsRaw({
+    required bridge.SortBy sortBy,
+    required bridge.SortDir sortDir,
+  }) {
+    return Completer<List<bridge.RawComic>>().future;
+  }
+
+  @override
+  Future<List<bridge.Comic>> listComics({
+    required bridge.SortBy sortBy,
+    required bridge.SortDir sortDir,
+  }) {
+    return Completer<List<bridge.Comic>>().future;
+  }
+
+  @override
+  Future<List<String>> listComicsWithProgress() {
+    return Completer<List<String>>().future;
+  }
+}
+
+class _UnmountedSourceApi extends _MissingSourceApi {
+  const _UnmountedSourceApi();
+
+  @override
+  Future<bridge.LibrarySourceStatus> checkLibrarySource() async {
+    return const bridge.LibrarySourceStatus(
+      configured: true,
+      path: '/run/media/andrizan/HDD_Hobby/Komik',
+      exists: false,
+      isDir: false,
+      readable: false,
+      error:
+          "path '/run/media/andrizan/HDD_Hobby/Komik' not found. On Linux, you may need to mount the partition first.",
+    );
+  }
+}
+
+class _PartiallyIndexedSourceApi extends _FakeComicRdApi {
+  const _PartiallyIndexedSourceApi();
+
+  @override
+  Future<bridge.LibrarySourceStatus> checkLibrarySource() async {
+    return const bridge.LibrarySourceStatus(
+      configured: true,
+      path: '/run/media/andrizan/HDD_Hobby/Komik',
+      exists: true,
+      isDir: true,
+      readable: true,
+    );
+  }
+
+  @override
+  Future<List<bridge.RawComic>> listLibraryComicsRaw({
+    required bridge.SortBy sortBy,
+    required bridge.SortDir sortDir,
+  }) async {
+    return const [
+      bridge.RawComic(
+        key: '/run/media/andrizan/HDD_Hobby/Komik/8Kaijuu',
+        title: '8Kaijuu',
+        sourcePath: '/run/media/andrizan/HDD_Hobby/Komik/8Kaijuu',
+        sourceType: 'folder',
+        libraryPath: '/run/media/andrizan/HDD_Hobby/Komik',
+        dateModified: 2,
+        chapterCount: 151,
+        readChapterCount: 0,
+        inProgressChapterCount: 0,
+      ),
+      bridge.RawComic(
+        key: '/run/media/andrizan/HDD_Hobby/Komik/Other Comic',
+        title: 'Other Comic',
+        sourcePath: '/run/media/andrizan/HDD_Hobby/Komik/Other Comic',
+        sourceType: 'folder',
+        libraryPath: '/run/media/andrizan/HDD_Hobby/Komik',
+        dateModified: 1,
+        chapterCount: 20,
+        readChapterCount: 0,
+        inProgressChapterCount: 0,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<bridge.Comic>> listComics({
+    required bridge.SortBy sortBy,
+    required bridge.SortDir sortDir,
+  }) {
+    throw StateError('library catalog must come from filesystem, not database');
   }
 }

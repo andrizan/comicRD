@@ -89,6 +89,7 @@ Install the bridge generator:
 ```bash
 cargo install flutter_rust_bridge_codegen --version 2.12.0
 cargo install cargo-expand
+cargo build -p comicrd_bridge --release
 ```
 
 ### Development Checks

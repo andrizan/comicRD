@@ -95,10 +95,8 @@ class ReaderSettings {
   final double zoom;
   final double pageGap;
 
-  ReaderSettings copyWith({double? zoom, double? pageGap}) => ReaderSettings(
-    zoom: zoom ?? this.zoom,
-    pageGap: pageGap ?? this.pageGap,
-  );
+  ReaderSettings copyWith({double? zoom, double? pageGap}) =>
+      ReaderSettings(zoom: zoom ?? this.zoom, pageGap: pageGap ?? this.pageGap);
 }
 
 class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
@@ -124,7 +122,10 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
   void hydrateFromSettings(Map<String, String> values) {
     final zoom = _decodeDouble(values['default_zoom'], 1.0);
     final gap = _decodeDouble(values['page_gap'], 20.0);
-    state = ReaderSettings(zoom: zoom.clamp(0.5, 3.0), pageGap: gap.clamp(0, 80));
+    state = ReaderSettings(
+      zoom: zoom.clamp(0.5, 3.0),
+      pageGap: gap.clamp(0, 80),
+    );
   }
 
   double _decodeDouble(String? raw, double fallback) {
@@ -132,7 +133,9 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is num) return decoded.toDouble();
-      if (decoded is String) return num.tryParse(decoded)?.toDouble() ?? fallback;
+      if (decoded is String) {
+        return num.tryParse(decoded)?.toDouble() ?? fallback;
+      }
     } catch (_) {}
     return fallback;
   }

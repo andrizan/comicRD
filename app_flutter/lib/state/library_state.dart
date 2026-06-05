@@ -19,6 +19,10 @@ final librarySourceStatusProvider = FutureProvider<bridge.LibrarySourceStatus>((
 final rawLibraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
   ref,
 ) async {
+  final sourceStatus = await ref.watch(librarySourceStatusProvider.future);
+  if (!sourceStatus.configured || sourceStatus.error != null) {
+    return const [];
+  }
   final api = ref.watch(comicRdApiProvider);
   final sortBy = ref.watch(
     libraryPreferencesProvider.select((preferences) => preferences.sortBy),
@@ -26,16 +30,17 @@ final rawLibraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
   final sortDir = ref.watch(
     libraryPreferencesProvider.select((preferences) => preferences.sortDir),
   );
-  return api.listLibraryComicsRaw(sortBy: sortBy, sortDir: sortDir);
+  final rawComics = await api.listLibraryComicsRaw(
+    sortBy: sortBy,
+    sortDir: sortDir,
+  );
+  return rawComics;
 });
 
 final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
   ref,
 ) async {
   final preferences = ref.watch(libraryPreferencesProvider);
-  final progressPaths = (await ref.watch(
-    comicsWithProgressProvider.future,
-  )).toSet();
   final comics = await ref.watch(rawLibraryComicsProvider.future);
   final query = preferences.query.trim().toLowerCase();
   return comics
@@ -48,8 +53,9 @@ final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
       .where((comic) {
         return switch (preferences.viewMode) {
           LibraryViewMode.all => true,
-          LibraryViewMode.unread => !progressPaths.contains(comic.sourcePath),
-          LibraryViewMode.reading => progressPaths.contains(comic.sourcePath),
+          LibraryViewMode.unread =>
+            comic.readChapterCount == 0 && comic.inProgressChapterCount == 0,
+          LibraryViewMode.reading => comic.inProgressChapterCount > 0,
         };
       })
       .toList();

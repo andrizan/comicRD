@@ -112,8 +112,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     max: 3,
                     divisions: 25,
                     label: '${(readerSettings.zoom * 100).round()}%',
-                    onChanged: (value) =>
-                        ref.read(readerSettingsProvider.notifier).setZoom(value),
+                    onChanged: (value) => ref
+                        .read(readerSettingsProvider.notifier)
+                        .setZoom(value),
                   ),
                 ),
                 const SizedBox(height: 12),

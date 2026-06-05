@@ -69,17 +69,13 @@ class ComicRdApi {
     required int pageIndex,
   }) => bridge.renderPagePreview(chapterId: chapterId, pageIndex: pageIndex);
 
-  Future<void> prefetchPages(
-    bridge.PrefetchPagesPayload payload,
-  ) => bridge.prefetchPages(payload: payload);
+  Future<void> prefetchPages(bridge.PrefetchPagesPayload payload) =>
+      bridge.prefetchPages(payload: payload);
 
   Future<void> evictChapterPages({
     required int chapterId,
     required List<int> keepPages,
-  }) => bridge.evictChapterPages(
-    chapterId: chapterId,
-    keepPages: keepPages,
-  );
+  }) => bridge.evictChapterPages(chapterId: chapterId, keepPages: keepPages);
 
   Future<void> saveProgress(bridge.SaveProgressPayload payload) =>
       bridge.saveProgress(payload: payload);
