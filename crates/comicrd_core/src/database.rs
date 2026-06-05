@@ -165,7 +165,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         chapter_id INTEGER PRIMARY KEY,
         last_page INTEGER NOT NULL,
         total_pages INTEGER NOT NULL,
-        mode TEXT NOT NULL,
         is_read INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         FOREIGN KEY(chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
@@ -219,7 +218,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
 
     let ts = now_ts();
     let defaults = [
-        ("default_mode", "\"webtoon\""),
         ("arrow_navigation_enabled", "false"),
         ("default_zoom", "1"),
         ("page_gap", "10"),

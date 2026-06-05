@@ -63,7 +63,6 @@ fn scan_libraries_upserts_comics_chapters_and_progress_counts() {
         chapter_id,
         last_page: 1,
         total_pages: 3,
-        mode: "webtoon".to_string(),
         is_read: false,
     })
     .expect("save progress");

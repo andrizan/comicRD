@@ -123,12 +123,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 SizedBox(
                   height: 38,
                   child: ToggleButton(
-                    checked:
-                        preferences.displayMode == LibraryDisplayMode.grid,
+                    checked: preferences.displayMode == LibraryDisplayMode.grid,
                     onChanged: (value) => _setDisplayMode(
-                      value
-                          ? LibraryDisplayMode.grid
-                          : LibraryDisplayMode.list,
+                      value ? LibraryDisplayMode.grid : LibraryDisplayMode.list,
                     ),
                     child: const Icon(FluentIcons.grid_view_medium),
                   ),
@@ -137,12 +134,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                 SizedBox(
                   height: 38,
                   child: ToggleButton(
-                    checked:
-                        preferences.displayMode == LibraryDisplayMode.list,
+                    checked: preferences.displayMode == LibraryDisplayMode.list,
                     onChanged: (value) => _setDisplayMode(
-                      value
-                          ? LibraryDisplayMode.list
-                          : LibraryDisplayMode.grid,
+                      value ? LibraryDisplayMode.list : LibraryDisplayMode.grid,
                     ),
                     child: const Icon(FluentIcons.list),
                   ),

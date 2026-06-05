@@ -18,8 +18,8 @@ class SettingsPanel extends ConsumerStatefulWidget {
 
 class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   final _librarySource = TextEditingController();
-  final _defaultZoom = TextEditingController(text: '1');
-  final _pageGap = TextEditingController(text: '10');
+  double _defaultZoom = 1;
+  double _pageGap = 10;
   bool _initialized = false;
   String _profile = 'balanced';
   ThemeMode _themeMode = ThemeMode.light;
@@ -29,8 +29,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   @override
   void dispose() {
     _librarySource.dispose();
-    _defaultZoom.dispose();
-    _pageGap.dispose();
     super.dispose();
   }
 
@@ -108,38 +106,28 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                 ),
                 const SizedBox(height: 16),
                 _sectionHeader(text.readerSection),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _labeledField(
-                        text.defaultZoom,
-                        _controlBox(
-                          TextBox(
-                            controller: _defaultZoom,
-                            keyboardType: TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            placeholder: text.defaultZoom,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _labeledField(
-                        text.pageGap,
-                        _controlBox(
-                          TextBox(
-                            controller: _pageGap,
-                            keyboardType: TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            placeholder: text.pageGap,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                _labeledField(
+                  '${text.defaultZoom} (${(_defaultZoom * 100).round()}%)',
+                  Slider(
+                    value: _defaultZoom,
+                    min: 0.5,
+                    max: 3,
+                    divisions: 25,
+                    label: '${(_defaultZoom * 100).round()}%',
+                    onChanged: (value) => setState(() => _defaultZoom = value),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _labeledField(
+                  '${text.pageGap} (${_pageGap.round()}px)',
+                  Slider(
+                    value: _pageGap,
+                    min: 0,
+                    max: 80,
+                    divisions: 16,
+                    label: '${_pageGap.round()}px',
+                    onChanged: (value) => setState(() => _pageGap = value),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _labeledField(
@@ -238,41 +226,44 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         text.locale,
                         _controlBox(
                           ComboBox<String>(
-                          value: _locale,
-                          isExpanded: true,
-                          items: [
-                            ComboBoxItem(
-                              value: 'en',
-                              child: Row(
-                                children: [
-                                  const Text('🇺🇸'),
-                                  const SizedBox(width: 8),
-                                  Text(text.english),
-                                ],
+                            value: _locale,
+                            isExpanded: true,
+                            items: [
+                              ComboBoxItem(
+                                value: 'en',
+                                child: Row(
+                                  children: [
+                                    const Text('🇺🇸'),
+                                    const SizedBox(width: 8),
+                                    Text(text.english),
+                                  ],
+                                ),
                               ),
-                            ),
-                            ComboBoxItem(
-                              value: 'id',
-                              child: Row(
-                                children: [
-                                  const Text('🇮🇩'),
-                                  const SizedBox(width: 8),
-                                  Text(text.indonesian),
-                                ],
+                              ComboBoxItem(
+                                value: 'id',
+                                child: Row(
+                                  children: [
+                                    const Text('🇮🇩'),
+                                    const SizedBox(width: 8),
+                                    Text(text.indonesian),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                          onChanged: (value) async {
-                            if (value != null) {
-                              setState(() => _locale = value);
-                              ref
-                                  .read(appSettingsProvider.notifier)
-                                  .setLocale(value);
-                              await ref
-                                  .read(comicRdApiProvider)
-                                  .setSetting('app_locale', jsonEncode(value));
-                            }
-                          },
+                            ],
+                            onChanged: (value) async {
+                              if (value != null) {
+                                setState(() => _locale = value);
+                                ref
+                                    .read(appSettingsProvider.notifier)
+                                    .setLocale(value);
+                                await ref
+                                    .read(comicRdApiProvider)
+                                    .setSetting(
+                                      'app_locale',
+                                      jsonEncode(value),
+                                    );
+                              }
+                            },
                           ),
                         ),
                       ),
@@ -372,8 +363,8 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   void _initialize(Map<String, String> values, AppSettings appSettings) {
     if (_initialized) return;
     _librarySource.text = _decodeString(values['library_source_input'], '');
-    _defaultZoom.text = _decodeNumber(values['default_zoom'], '1');
-    _pageGap.text = _decodeNumber(values['page_gap'], '10');
+    _defaultZoom = _decodeDouble(values['default_zoom'], 1);
+    _pageGap = _decodeDouble(values['page_gap'], 10);
     _profile = _decodeString(values['image_pipeline_profile'], 'balanced');
     _themeMode = appSettings.themeMode;
     _locale = appSettings.localeCode;
@@ -386,10 +377,11 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     return decoded is String ? decoded : fallback;
   }
 
-  String _decodeNumber(String? raw, String fallback) {
+  double _decodeDouble(String? raw, double fallback) {
     if (raw == null) return fallback;
     final decoded = jsonDecode(raw);
-    return decoded?.toString() ?? fallback;
+    if (decoded is num) return decoded.toDouble();
+    return fallback;
   }
 
   Future<void> _pickLibrarySource() async {
@@ -405,8 +397,8 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     if (libraryPath.isNotEmpty) {
       await api.addLibrary(libraryPath);
     }
-    await api.setSetting('default_zoom', _defaultZoom.text.trim());
-    await api.setSetting('page_gap', _pageGap.text.trim());
+    await api.setSetting('default_zoom', _defaultZoom.toStringAsFixed(1));
+    await api.setSetting('page_gap', _pageGap.round().toString());
     await api.setSetting('image_pipeline_profile', jsonEncode(_profile));
     await api.setSetting(
       'app_theme',

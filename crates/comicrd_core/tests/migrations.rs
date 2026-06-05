@@ -16,10 +16,6 @@ fn open_creates_database_and_seeds_compatible_default_settings() {
         .collect::<std::collections::BTreeMap<_, _>>();
 
     assert_eq!(
-        pairs.get("default_mode").map(String::as_str),
-        Some("\"webtoon\"")
-    );
-    assert_eq!(
         pairs.get("arrow_navigation_enabled").map(String::as_str),
         Some("false")
     );

@@ -145,7 +145,6 @@ pub struct ReadingProgress {
     pub chapter_id: i64,
     pub last_page: i64,
     pub total_pages: i64,
-    pub mode: String,
     pub is_read: bool,
     pub updated_at: i64,
 }
@@ -191,7 +190,6 @@ pub struct SaveProgressPayload {
     pub chapter_id: i64,
     pub last_page: i64,
     pub total_pages: i64,
-    pub mode: String,
     pub is_read: bool,
 }
 

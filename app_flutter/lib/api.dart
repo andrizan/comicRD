@@ -684,7 +684,6 @@ class ReadingProgress {
   final PlatformInt64 chapterId;
   final PlatformInt64 lastPage;
   final PlatformInt64 totalPages;
-  final String mode;
   final bool isRead;
   final PlatformInt64 updatedAt;
 
@@ -692,7 +691,6 @@ class ReadingProgress {
     required this.chapterId,
     required this.lastPage,
     required this.totalPages,
-    required this.mode,
     required this.isRead,
     required this.updatedAt,
   });
@@ -702,7 +700,6 @@ class ReadingProgress {
       chapterId.hashCode ^
       lastPage.hashCode ^
       totalPages.hashCode ^
-      mode.hashCode ^
       isRead.hashCode ^
       updatedAt.hashCode;
 
@@ -714,7 +711,6 @@ class ReadingProgress {
           chapterId == other.chapterId &&
           lastPage == other.lastPage &&
           totalPages == other.totalPages &&
-          mode == other.mode &&
           isRead == other.isRead &&
           updatedAt == other.updatedAt;
 }
@@ -813,14 +809,12 @@ class SaveProgressPayload {
   final PlatformInt64 chapterId;
   final PlatformInt64 lastPage;
   final PlatformInt64 totalPages;
-  final String mode;
   final bool isRead;
 
   const SaveProgressPayload({
     required this.chapterId,
     required this.lastPage,
     required this.totalPages,
-    required this.mode,
     required this.isRead,
   });
 
@@ -829,7 +823,6 @@ class SaveProgressPayload {
       chapterId.hashCode ^
       lastPage.hashCode ^
       totalPages.hashCode ^
-      mode.hashCode ^
       isRead.hashCode;
 
   @override
@@ -840,7 +833,6 @@ class SaveProgressPayload {
           chapterId == other.chapterId &&
           lastPage == other.lastPage &&
           totalPages == other.totalPages &&
-          mode == other.mode &&
           isRead == other.isRead;
 }
 

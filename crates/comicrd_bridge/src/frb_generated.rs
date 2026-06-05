@@ -1802,14 +1802,12 @@ impl SseDecode for crate::api::ReadingProgress {
         let mut var_chapterId = <i64>::sse_decode(deserializer);
         let mut var_lastPage = <i64>::sse_decode(deserializer);
         let mut var_totalPages = <i64>::sse_decode(deserializer);
-        let mut var_mode = <String>::sse_decode(deserializer);
         let mut var_isRead = <bool>::sse_decode(deserializer);
         let mut var_updatedAt = <i64>::sse_decode(deserializer);
         return crate::api::ReadingProgress {
             chapter_id: var_chapterId,
             last_page: var_lastPage,
             total_pages: var_totalPages,
-            mode: var_mode,
             is_read: var_isRead,
             updated_at: var_updatedAt,
         };
@@ -1870,13 +1868,11 @@ impl SseDecode for crate::api::SaveProgressPayload {
         let mut var_chapterId = <i64>::sse_decode(deserializer);
         let mut var_lastPage = <i64>::sse_decode(deserializer);
         let mut var_totalPages = <i64>::sse_decode(deserializer);
-        let mut var_mode = <String>::sse_decode(deserializer);
         let mut var_isRead = <bool>::sse_decode(deserializer);
         return crate::api::SaveProgressPayload {
             chapter_id: var_chapterId,
             last_page: var_lastPage,
             total_pages: var_totalPages,
-            mode: var_mode,
             is_read: var_isRead,
         };
     }
@@ -2333,7 +2329,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::ReadingProgress {
             self.chapter_id.into_into_dart().into_dart(),
             self.last_page.into_into_dart().into_dart(),
             self.total_pages.into_into_dart().into_dart(),
-            self.mode.into_into_dart().into_dart(),
             self.is_read.into_into_dart().into_dart(),
             self.updated_at.into_into_dart().into_dart(),
         ]
@@ -2416,7 +2411,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::SaveProgressPayload {
             self.chapter_id.into_into_dart().into_dart(),
             self.last_page.into_into_dart().into_dart(),
             self.total_pages.into_into_dart().into_dart(),
-            self.mode.into_into_dart().into_dart(),
             self.is_read.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -2893,7 +2887,6 @@ impl SseEncode for crate::api::ReadingProgress {
         <i64>::sse_encode(self.chapter_id, serializer);
         <i64>::sse_encode(self.last_page, serializer);
         <i64>::sse_encode(self.total_pages, serializer);
-        <String>::sse_encode(self.mode, serializer);
         <bool>::sse_encode(self.is_read, serializer);
         <i64>::sse_encode(self.updated_at, serializer);
     }
@@ -2935,7 +2928,6 @@ impl SseEncode for crate::api::SaveProgressPayload {
         <i64>::sse_encode(self.chapter_id, serializer);
         <i64>::sse_encode(self.last_page, serializer);
         <i64>::sse_encode(self.total_pages, serializer);
-        <String>::sse_encode(self.mode, serializer);
         <bool>::sse_encode(self.is_read, serializer);
     }
 }

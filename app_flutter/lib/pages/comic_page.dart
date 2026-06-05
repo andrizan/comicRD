@@ -136,8 +136,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 SizedBox(
                   height: 38,
                   child: ToggleButton(
-                    checked:
-                        preferences.displayMode == ChapterDisplayMode.grid,
+                    checked: preferences.displayMode == ChapterDisplayMode.grid,
                     onChanged: (value) => ref
                         .read(comicPreferencesProvider.notifier)
                         .setDisplayMode(
@@ -153,8 +152,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 SizedBox(
                   height: 38,
                   child: ToggleButton(
-                    checked:
-                        preferences.displayMode == ChapterDisplayMode.list,
+                    checked: preferences.displayMode == ChapterDisplayMode.list,
                     onChanged: (value) => ref
                         .read(comicPreferencesProvider.notifier)
                         .setDisplayMode(
@@ -429,12 +427,12 @@ class _ChapterList extends StatelessWidget {
     if (displayMode == ChapterDisplayMode.grid) {
       return GridView.builder(
         controller: controller,
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 240,
-              mainAxisExtent: 160,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 240,
+          mainAxisExtent: 160,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
         itemCount: chapters.length,
         itemBuilder: (context, index) {
           final chapter = chapters[index];

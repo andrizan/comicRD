@@ -13,12 +13,11 @@ pub(crate) fn save_progress_conn(
     let ts = now_ts();
     conn.execute(
         r#"
-      INSERT INTO reading_progress (chapter_id, last_page, total_pages, mode, is_read, updated_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+      INSERT INTO reading_progress (chapter_id, last_page, total_pages, is_read, updated_at)
+      VALUES (?1, ?2, ?3, ?4, ?5)
       ON CONFLICT(chapter_id) DO UPDATE SET
         last_page=excluded.last_page,
         total_pages=excluded.total_pages,
-        mode=excluded.mode,
         is_read=excluded.is_read,
         updated_at=excluded.updated_at
       "#,
@@ -26,7 +25,6 @@ pub(crate) fn save_progress_conn(
             payload.chapter_id,
             payload.last_page,
             payload.total_pages,
-            &payload.mode,
             if payload.is_read { 1 } else { 0 },
             ts
         ],
@@ -41,7 +39,7 @@ pub(crate) fn get_progress_conn(
 ) -> Result<Option<ReadingProgress>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT chapter_id, last_page, total_pages, mode, is_read, updated_at FROM reading_progress WHERE chapter_id = ?1",
+            "SELECT chapter_id, last_page, total_pages, is_read, updated_at FROM reading_progress WHERE chapter_id = ?1",
         )
         .map_err(|e| format!("failed preparing progress query: {e}"))?;
     let mut rows = stmt
@@ -61,15 +59,12 @@ pub(crate) fn get_progress_conn(
             total_pages: row
                 .get(2)
                 .map_err(|e| format!("invalid progress row: {e}"))?,
-            mode: row
-                .get(3)
-                .map_err(|e| format!("invalid progress row: {e}"))?,
             is_read: row
-                .get::<_, i64>(4)
+                .get::<_, i64>(3)
                 .map_err(|e| format!("invalid progress row: {e}"))?
                 == 1,
             updated_at: row
-                .get(5)
+                .get(4)
                 .map_err(|e| format!("invalid progress row: {e}"))?,
         }));
     }

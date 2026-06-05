@@ -1747,15 +1747,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReadingProgress dco_decode_reading_progress(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return ReadingProgress(
       chapterId: dco_decode_i_64(arr[0]),
       lastPage: dco_decode_i_64(arr[1]),
       totalPages: dco_decode_i_64(arr[2]),
-      mode: dco_decode_String(arr[3]),
-      isRead: dco_decode_bool(arr[4]),
-      updatedAt: dco_decode_i_64(arr[5]),
+      isRead: dco_decode_bool(arr[3]),
+      updatedAt: dco_decode_i_64(arr[4]),
     );
   }
 
@@ -1805,14 +1804,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SaveProgressPayload dco_decode_save_progress_payload(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return SaveProgressPayload(
       chapterId: dco_decode_i_64(arr[0]),
       lastPage: dco_decode_i_64(arr[1]),
       totalPages: dco_decode_i_64(arr[2]),
-      mode: dco_decode_String(arr[3]),
-      isRead: dco_decode_bool(arr[4]),
+      isRead: dco_decode_bool(arr[3]),
     );
   }
 
@@ -2471,14 +2469,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_chapterId = sse_decode_i_64(deserializer);
     var var_lastPage = sse_decode_i_64(deserializer);
     var var_totalPages = sse_decode_i_64(deserializer);
-    var var_mode = sse_decode_String(deserializer);
     var var_isRead = sse_decode_bool(deserializer);
     var var_updatedAt = sse_decode_i_64(deserializer);
     return ReadingProgress(
       chapterId: var_chapterId,
       lastPage: var_lastPage,
       totalPages: var_totalPages,
-      mode: var_mode,
       isRead: var_isRead,
       updatedAt: var_updatedAt,
     );
@@ -2541,13 +2537,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_chapterId = sse_decode_i_64(deserializer);
     var var_lastPage = sse_decode_i_64(deserializer);
     var var_totalPages = sse_decode_i_64(deserializer);
-    var var_mode = sse_decode_String(deserializer);
     var var_isRead = sse_decode_bool(deserializer);
     return SaveProgressPayload(
       chapterId: var_chapterId,
       lastPage: var_lastPage,
       totalPages: var_totalPages,
-      mode: var_mode,
       isRead: var_isRead,
     );
   }
@@ -3101,7 +3095,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.chapterId, serializer);
     sse_encode_i_64(self.lastPage, serializer);
     sse_encode_i_64(self.totalPages, serializer);
-    sse_encode_String(self.mode, serializer);
     sse_encode_bool(self.isRead, serializer);
     sse_encode_i_64(self.updatedAt, serializer);
   }
@@ -3148,7 +3141,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.chapterId, serializer);
     sse_encode_i_64(self.lastPage, serializer);
     sse_encode_i_64(self.totalPages, serializer);
-    sse_encode_String(self.mode, serializer);
     sse_encode_bool(self.isRead, serializer);
   }
 

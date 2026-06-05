@@ -66,7 +66,6 @@ fn bookmark_favorite_and_history_apis_round_trip_reader_state() {
         chapter_id,
         last_page: 0,
         total_pages: 1,
-        mode: "webtoon".to_string(),
         is_read: true,
     })
     .expect("save progress");

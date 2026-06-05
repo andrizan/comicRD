@@ -350,7 +350,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     _restoredProgress = true;
     final isFinished = data.progress?.isRead ?? false;
-    final page = isFinished ? 0 : (data.progress?.lastPage ?? 0).clamp(0, data.pages.length - 1);
+    final page = isFinished
+        ? 0
+        : (data.progress?.lastPage ?? 0).clamp(0, data.pages.length - 1);
     _currentPage = page;
     if (isFinished) {
       _lastSavedPage = -1;
@@ -420,7 +422,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             chapterId: widget.chapterId,
             lastPage: _currentPage,
             totalPages: data.pages.length,
-            mode: 'webtoon',
             isRead: _currentPage >= data.pages.length - 1,
           ),
         );
@@ -438,7 +439,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         chapterId: widget.chapterId,
         lastPage: _currentPage,
         totalPages: data.pages.length,
-        mode: 'webtoon',
         isRead: _currentPage >= data.pages.length - 1,
       ),
     );
@@ -513,6 +513,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _close(ReaderData data) async {
     await _saveProgress(immediate: true);
+    _invalidateProgressProviders(data);
     if (!mounted) {
       return;
     }
@@ -1098,14 +1099,14 @@ class _ReaderToolbar extends StatelessWidget {
                   _ValueButton(
                     tooltip: text.gap,
                     icon: FluentIcons.align_vertical_center,
-                    label: '${pageGap.round()}',
+                    label: '${pageGap.round()}px',
                     onDecrease: () => onGapChanged((pageGap - 5).clamp(0, 80)),
                     onIncrease: () => onGapChanged((pageGap + 5).clamp(0, 80)),
                   ),
                   _ValueButton(
                     tooltip: text.zoom,
                     icon: FluentIcons.search,
-                    label: '${zoom.toStringAsFixed(1)}×',
+                    label: '${(zoom * 100).round()}%',
                     onDecrease: () => onZoomChanged((zoom - 0.1).clamp(0.5, 3)),
                     onIncrease: () => onZoomChanged((zoom + 0.1).clamp(0.5, 3)),
                   ),
@@ -1147,7 +1148,7 @@ class _ReaderToolbar extends StatelessWidget {
                     label: text.gap,
                     value: sheetGap,
                     decimals: 0,
-                    unit: '',
+                    unit: 'px',
                     onDecrease: () {
                       final v = (sheetGap - 5).clamp(0, 80).toDouble();
                       setSheetState(() => sheetGap = v);
@@ -1161,9 +1162,9 @@ class _ReaderToolbar extends StatelessWidget {
                   ),
                   _SheetValueControl(
                     label: text.zoom,
-                    value: sheetZoom,
-                    decimals: 1,
-                    unit: '×',
+                    value: sheetZoom * 100,
+                    decimals: 0,
+                    unit: '%',
                     onDecrease: () {
                       final v = (sheetZoom - 0.1).clamp(0.5, 3).toDouble();
                       setSheetState(() => sheetZoom = v);

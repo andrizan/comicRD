@@ -52,7 +52,6 @@ fn open_chapter_lists_pages_context_and_persists_progress() {
         chapter_id,
         last_page: 1,
         total_pages: 2,
-        mode: "webtoon".to_string(),
         is_read: true,
     })
     .expect("save progress");
@@ -63,6 +62,5 @@ fn open_chapter_lists_pages_context_and_persists_progress() {
         .expect("progress exists");
     assert_eq!(progress.last_page, 1);
     assert_eq!(progress.total_pages, 2);
-    assert_eq!(progress.mode, "webtoon");
     assert!(progress.is_read);
 }

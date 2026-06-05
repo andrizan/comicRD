@@ -118,7 +118,6 @@ pub struct ReadingProgress {
     pub chapter_id: i64,
     pub last_page: i64,
     pub total_pages: i64,
-    pub mode: String,
     pub is_read: bool,
     pub updated_at: i64,
 }
@@ -164,7 +163,6 @@ pub struct SaveProgressPayload {
     pub chapter_id: i64,
     pub last_page: i64,
     pub total_pages: i64,
-    pub mode: String,
     pub is_read: bool,
 }
 
@@ -364,7 +362,6 @@ impl From<core::ReadingProgress> for ReadingProgress {
             chapter_id: value.chapter_id,
             last_page: value.last_page,
             total_pages: value.total_pages,
-            mode: value.mode,
             is_read: value.is_read,
             updated_at: value.updated_at,
         }
@@ -425,7 +422,6 @@ impl From<SaveProgressPayload> for core::SaveProgressPayload {
             chapter_id: value.chapter_id,
             last_page: value.last_page,
             total_pages: value.total_pages,
-            mode: value.mode,
             is_read: value.is_read,
         }
     }
