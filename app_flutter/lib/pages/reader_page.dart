@@ -625,13 +625,13 @@ class _ReaderPageItem extends ConsumerWidget {
     return rendered.when(
       data: (page) => Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: targetWidth / zoom),
+          constraints: BoxConstraints(maxWidth: targetWidth * zoom),
           child: Image.memory(
             page.bytes,
             gaplessPlayback: true,
             filterQuality: FilterQuality.medium,
             fit: BoxFit.contain,
-            width: page.width == 0 ? null : page.width.toDouble() / zoom,
+            width: page.width == 0 ? null : page.width.toDouble() * zoom,
           ),
         ),
       ),
