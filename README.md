@@ -132,12 +132,14 @@ Create the Linux release tarball used by GitHub Releases and AUR:
 
 ```bash
 ./scripts/package-linux.sh 1.0.0
+./scripts/package-linux.sh 1.0.0a1
 ```
 
 The output is written to:
 
 ```text
 dist/comicrd-1.0.0-linux-x86_64.tar.gz
+dist/comicrd-1.0.0a1-linux-x86_64.tar.gz
 ```
 
 ## Release
@@ -148,6 +150,13 @@ GitHub Actions builds release assets from version tags:
 git tag v1.0.0
 git push origin v1.0.0
 ```
+
+Use `vX.Y.Zsuffix` for Arch-compatible prerelease tags that should also publish
+to AUR, for example `v1.0.0a1`. Tags with underscore or hyphen prerelease
+suffixes, such as `v1.0.0_a1` or `v1.0.0-a1`, create GitHub prereleases but are
+not published to AUR. Arch accepts underscores in `pkgver`, but `1.0.0_a1` sorts
+newer than `1.0.0`, so it is not safe for prereleases in the stable
+`comicrd-bin` package.
 
 The `Desktop Build` workflow:
 

@@ -282,7 +282,7 @@ Important data types:
 - [x] Document build commands for Windows, Linux, and macOS in the README.
 - [x] Replace the old Tauri GitHub Actions workflow with Flutter desktop builds.
 - [x] Add Linux release tarball packaging for GitHub Releases and AUR.
-- [x] Add AUR `comicrd-bin` publish flow based on release tag `vX.Y.Z`.
+- [x] Add AUR `comicrd-bin` publish flow based on release tags `vX.Y.Z` and Arch-compatible prerelease tags like `vX.Y.Zsuffix`.
 
 Notes:
 

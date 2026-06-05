@@ -107,7 +107,11 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([-_][0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$'; then
+            if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+              echo "Invalid tag: $GITHUB_REF_NAME. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix."
+              exit 1
+            fi
             VERSION="manual-${GITHUB_RUN_NUMBER}"
           fi
           ./scripts/package-linux.sh "$VERSION"
@@ -152,7 +156,11 @@ jobs:
         shell: pwsh
         run: |
           $Version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
-          if ($Version -notmatch '^\d+\.\d+\.\d+([-_][0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+          if ($Version -notmatch '^\d+\.\d+\.\d+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$') {
+            if ($env:GITHUB_REF -like 'refs/tags/*') {
+              Write-Error ("Invalid tag: {0}. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix." -f $env:GITHUB_REF_NAME)
+              exit 1
+            }
             $Version = "manual-${env:GITHUB_RUN_NUMBER}"
           }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
@@ -201,7 +209,11 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([-_][0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$'; then
+            if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+              echo "Invalid tag: $GITHUB_REF_NAME. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix."
+              exit 1
+            fi
             VERSION="manual-${GITHUB_RUN_NUMBER}"
           fi
           mkdir -p dist
@@ -242,6 +254,17 @@ jobs:
           ls -la release-upload
           test "$(find release-upload -maxdepth 1 -type f | wc -l)" -gt 0
 
+      - name: Resolve release metadata
+        id: release-metadata
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v3
         with:
@@ -249,7 +272,7 @@ jobs:
           files: release-upload/*
           fail_on_unmatched_files: true
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') || contains(github.ref_name, '_') }}
+          prerelease: ${{ steps.release-metadata.outputs.prerelease }}
 
   publish-aur:
     name: Publish to AUR
@@ -266,8 +289,8 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Invalid tag: $TAG. Expected vX.Y.Z."
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*)?$'; then
+            echo "Invalid tag: $TAG. Expected vX.Y.Z or vX.Y.Zsuffix."
             exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
