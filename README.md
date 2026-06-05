@@ -33,9 +33,6 @@ on their native platforms.
 
 ### Arch Linux / CachyOS
 
-Release tags publish `comicrd-bin` to AUR when the repository secret
-`AUR_SSH_PRIVATE_KEY` is configured.
-
 ```bash
 paru -S comicrd-bin
 ```
