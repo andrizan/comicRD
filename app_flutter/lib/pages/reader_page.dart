@@ -775,18 +775,6 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     _ReferenceReaderIconButton(
-                      tooltip: text.gap,
-                      icon: FluentIcons.back_to_window,
-                      onPressed: () =>
-                          onGapChanged((pageGap - 10).clamp(0, 100).toDouble()),
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.gap,
-                      icon: FluentIcons.full_screen,
-                      onPressed: () =>
-                          onGapChanged((pageGap + 10).clamp(0, 100).toDouble()),
-                    ),
-                    _ReferenceReaderIconButton(
                       tooltip: text.previousPage,
                       icon: FluentIcons.chevron_left,
                       onPressed: onPreviousPage,
@@ -796,6 +784,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       icon: FluentIcons.chevron_right,
                       onPressed: onNextPage,
                     ),
+                    const SizedBox(width: 4),
                     _ReferenceReaderIconButton(
                       tooltip: text.previousChapter,
                       icon: FluentIcons.previous,
@@ -806,36 +795,26 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       icon: FluentIcons.next,
                       onPressed: onNextChapter,
                     ),
-                    _ReferenceReaderIconButton(
+                    const SizedBox(width: 4),
+                    _ReaderControlChip(
+                      icon: FluentIcons.search,
+                      value: '${(zoom * 100).round()}%',
                       tooltip: text.zoom,
-                      icon: FluentIcons.remove,
-                      onPressed: () =>
+                      onDecrease: () =>
                           onZoomChanged((zoom - 0.1).clamp(0.4, 3).toDouble()),
-                    ),
-                    SizedBox(
-                      width: 58,
-                      height: 40,
-                      child: Center(
-                        child: Text(
-                          '${(zoom * 100).round()}%',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.zoom,
-                      icon: FluentIcons.add,
-                      onPressed: () =>
+                      onIncrease: () =>
                           onZoomChanged((zoom + 0.1).clamp(0.4, 3).toDouble()),
+                      onReset: () => onZoomChanged(1),
                     ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.zoom,
-                      icon: FluentIcons.back_to_window,
-                      onPressed: () => onZoomChanged(1),
+                    _ReaderControlChip(
+                      icon: FluentIcons.align_horizontal_center,
+                      value: '${pageGap.round()}px',
+                      tooltip: text.gap,
+                      onDecrease: () =>
+                          onGapChanged((pageGap - 5).clamp(0, 80).toDouble()),
+                      onIncrease: () =>
+                          onGapChanged((pageGap + 5).clamp(0, 80).toDouble()),
+                      onReset: () => onGapChanged(20),
                     ),
                     _ReferenceReaderIconButton(
                       tooltip: text.fullscreen,
@@ -844,20 +823,6 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                           : FluentIcons.full_screen,
                       active: fullscreen,
                       onPressed: onToggleFullscreen,
-                    ),
-                    SizedBox(
-                      width: 56,
-                      height: 40,
-                      child: Center(
-                        child: Text(
-                          '${pageGap.round()}px',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.78),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -931,6 +896,86 @@ class _ReferenceReaderIconButtonState
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ReaderControlChip extends StatefulWidget {
+  const _ReaderControlChip({
+    required this.icon,
+    required this.value,
+    required this.tooltip,
+    required this.onDecrease,
+    required this.onIncrease,
+    required this.onReset,
+  });
+
+  final IconData icon;
+  final String value;
+  final String tooltip;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
+  final VoidCallback onReset;
+
+  @override
+  State<_ReaderControlChip> createState() => _ReaderControlChipState();
+}
+
+class _ReaderControlChipState extends State<_ReaderControlChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: widget.tooltip,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: _hovered ? 0.12 : 0.06),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _chipButton(FluentIcons.remove, widget.onDecrease),
+              GestureDetector(
+                onDoubleTap: widget.onReset,
+                child: SizedBox(
+                  width: 48,
+                  child: Center(
+                    child: Text(
+                      widget.value,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              _chipButton(FluentIcons.add, widget.onIncrease),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chipButton(IconData icon, VoidCallback onPressed) {
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 32,
+        height: 36,
+        child: Icon(icon, size: 14, color: Colors.white.withValues(alpha: 0.78)),
       ),
     );
   }
