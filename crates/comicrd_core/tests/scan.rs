@@ -73,6 +73,14 @@ fn scan_libraries_upserts_comics_chapters_and_progress_counts() {
         .expect("list comics after progress");
     assert_eq!(comics[0].read_chapter_count, 0);
     assert_eq!(comics[0].in_progress_chapter_count, 1);
+
+    let raw_comics = core
+        .list_library_comics_raw(SortBy::Name, SortDir::Asc)
+        .expect("list raw comics after progress");
+    assert_eq!(raw_comics[0].title, "Comic A");
+    assert_eq!(raw_comics[0].chapter_count, 2);
+    assert_eq!(raw_comics[0].read_chapter_count, 0);
+    assert_eq!(raw_comics[0].in_progress_chapter_count, 1);
 }
 
 #[test]

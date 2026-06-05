@@ -14,6 +14,8 @@ import '../api/comicrd_api.dart';
 import '../bridge_generated.dart' as bridge;
 import '../routes/path_codec.dart';
 import '../state/api_state.dart';
+import '../state/comic_state.dart';
+import '../state/library_state.dart';
 import '../state/reader_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
@@ -97,6 +99,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         color: Colors.black,
         child: reader.when(
           data: (data) {
+            _lastReaderData = data;
             _restoreProgress(data);
             return Stack(
               children: [
@@ -415,6 +418,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             isRead: _currentPage >= data.pages.length - 1,
           ),
         );
+    _invalidateProgressProviders(data);
   }
 
   Future<void> _saveProgressDirect() async {
@@ -432,6 +436,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         isRead: _currentPage >= data.pages.length - 1,
       ),
     );
+  }
+
+  void _invalidateProgressProviders(ReaderData data) {
+    final comicPath = data.context?.comicSourcePath;
+    ref.invalidate(comicsWithProgressProvider);
+    ref.invalidate(rawLibraryComicsProvider);
+    ref.invalidate(libraryComicsProvider);
+    ref.invalidate(readingHistoryProvider);
+    if (comicPath == null || comicPath.isEmpty) {
+      return;
+    }
+    ref.invalidate(comicChaptersProvider(comicPath));
+    ref.invalidate(filteredComicChaptersProvider(comicPath));
   }
 
   Future<void> _prefetchAround(int page) async {

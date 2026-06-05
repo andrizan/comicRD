@@ -78,6 +78,8 @@ enum LibraryViewMode { all, unread, reading }
 
 enum LibraryDisplayMode { grid, list }
 
+enum LibraryTab { history, library, bookmarks }
+
 class LibraryPreferences {
   const LibraryPreferences({
     this.query = '',
@@ -85,6 +87,7 @@ class LibraryPreferences {
     this.sortDir = bridge.SortDir.asc,
     this.viewMode = LibraryViewMode.all,
     this.displayMode = LibraryDisplayMode.grid,
+    this.selectedTab = LibraryTab.library,
   });
 
   final String query;
@@ -92,6 +95,7 @@ class LibraryPreferences {
   final bridge.SortDir sortDir;
   final LibraryViewMode viewMode;
   final LibraryDisplayMode displayMode;
+  final LibraryTab selectedTab;
 
   LibraryPreferences copyWith({
     String? query,
@@ -99,12 +103,14 @@ class LibraryPreferences {
     bridge.SortDir? sortDir,
     LibraryViewMode? viewMode,
     LibraryDisplayMode? displayMode,
+    LibraryTab? selectedTab,
   }) => LibraryPreferences(
     query: query ?? this.query,
     sortBy: sortBy ?? this.sortBy,
     sortDir: sortDir ?? this.sortDir,
     viewMode: viewMode ?? this.viewMode,
     displayMode: displayMode ?? this.displayMode,
+    selectedTab: selectedTab ?? this.selectedTab,
   );
 }
 
@@ -124,6 +130,7 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
       sortDir: _decodeSortDir(values['library_sort_dir']),
       viewMode: _decodeViewMode(values['library_view_mode']),
       displayMode: _decodeDisplayMode(values['library_display_mode']),
+      selectedTab: _decodeLibraryTab(values['library_selected_tab']),
     );
   }
 
@@ -141,6 +148,10 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
 
   void setDisplayMode(LibraryDisplayMode displayMode) {
     state = state.copyWith(displayMode: displayMode);
+  }
+
+  void setSelectedTab(LibraryTab selectedTab) {
+    state = state.copyWith(selectedTab: selectedTab);
   }
 }
 
@@ -173,6 +184,14 @@ LibraryDisplayMode _decodeDisplayMode(String? raw) {
   };
 }
 
+LibraryTab _decodeLibraryTab(String? raw) {
+  return switch (_decodeString(raw, 'library')) {
+    'history' => LibraryTab.history,
+    'bookmarks' => LibraryTab.bookmarks,
+    _ => LibraryTab.library,
+  };
+}
+
 String encodeSortBy(bridge.SortBy value) {
   return switch (value) {
     bridge.SortBy.folderDate => 'folder_date',
@@ -199,6 +218,14 @@ String encodeDisplayMode(LibraryDisplayMode value) {
   return switch (value) {
     LibraryDisplayMode.list => 'list',
     LibraryDisplayMode.grid => 'grid',
+  };
+}
+
+String encodeLibraryTab(LibraryTab value) {
+  return switch (value) {
+    LibraryTab.history => 'history',
+    LibraryTab.bookmarks => 'bookmarks',
+    LibraryTab.library => 'library',
   };
 }
 

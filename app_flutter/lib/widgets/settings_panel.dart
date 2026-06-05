@@ -55,26 +55,32 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: TextBox(
-                        controller: _librarySource,
-                        placeholder: text.librarySource,
+                      child: _controlBox(
+                        TextBox(
+                          controller: _librarySource,
+                          placeholder: text.librarySource,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Tooltip(
                       message: text.browseDirectory,
-                      child: IconButton(
-                        onPressed: _pickLibrarySource,
-                        icon: const Icon(FluentIcons.folder_open),
+                      child: _iconControlBox(
+                        IconButton(
+                          onPressed: _pickLibrarySource,
+                          icon: const Icon(FluentIcons.folder_open),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 4),
                     Tooltip(
                       message: text.refreshSourceStatus,
-                      child: IconButton(
-                        onPressed: () =>
-                            ref.invalidate(librarySourceStatusProvider),
-                        icon: const Icon(FluentIcons.refresh),
+                      child: _iconControlBox(
+                        IconButton(
+                          onPressed: () =>
+                              ref.invalidate(librarySourceStatusProvider),
+                          icon: const Icon(FluentIcons.refresh),
+                        ),
                       ),
                     ),
                   ],
@@ -107,12 +113,14 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     Expanded(
                       child: _labeledField(
                         text.defaultZoom,
-                        TextBox(
-                          controller: _defaultZoom,
-                          keyboardType: TextInputType.numberWithOptions(
-                            decimal: true,
+                        _controlBox(
+                          TextBox(
+                            controller: _defaultZoom,
+                            keyboardType: TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            placeholder: text.defaultZoom,
                           ),
-                          placeholder: text.defaultZoom,
                         ),
                       ),
                     ),
@@ -120,12 +128,14 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     Expanded(
                       child: _labeledField(
                         text.pageGap,
-                        TextBox(
-                          controller: _pageGap,
-                          keyboardType: TextInputType.numberWithOptions(
-                            decimal: true,
+                        _controlBox(
+                          TextBox(
+                            controller: _pageGap,
+                            keyboardType: TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            placeholder: text.pageGap,
                           ),
-                          placeholder: text.pageGap,
                         ),
                       ),
                     ),
@@ -134,23 +144,28 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                 const SizedBox(height: 12),
                 _labeledField(
                   text.imagePipelineProfile,
-                  ComboBox<String>(
-                    value: _profile,
-                    isExpanded: true,
-                    items: [
-                      ComboBoxItem(
-                        value: 'performance',
-                        child: Text(text.performance),
-                      ),
-                      ComboBoxItem(
-                        value: 'balanced',
-                        child: Text(text.balanced),
-                      ),
-                      ComboBoxItem(value: 'quality', child: Text(text.quality)),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => _profile = value);
-                    },
+                  _controlBox(
+                    ComboBox<String>(
+                      value: _profile,
+                      isExpanded: true,
+                      items: [
+                        ComboBoxItem(
+                          value: 'performance',
+                          child: Text(text.performance),
+                        ),
+                        ComboBoxItem(
+                          value: 'balanced',
+                          child: Text(text.balanced),
+                        ),
+                        ComboBoxItem(
+                          value: 'quality',
+                          child: Text(text.quality),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => _profile = value);
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -160,55 +175,60 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     Expanded(
                       child: _labeledField(
                         text.theme,
-                        ComboBox<ThemeMode>(
-                          value: _themeMode,
-                          isExpanded: true,
-                          items: [
-                            ComboBoxItem(
-                              value: ThemeMode.light,
-                              child: Row(
-                                children: [
-                                  const Icon(FluentIcons.sunny, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(text.themeLight),
-                                ],
+                        _controlBox(
+                          ComboBox<ThemeMode>(
+                            value: _themeMode,
+                            isExpanded: true,
+                            items: [
+                              ComboBoxItem(
+                                value: ThemeMode.light,
+                                child: Row(
+                                  children: [
+                                    const Icon(FluentIcons.sunny, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(text.themeLight),
+                                  ],
+                                ),
                               ),
-                            ),
-                            ComboBoxItem(
-                              value: ThemeMode.dark,
-                              child: Row(
-                                children: [
-                                  const Icon(FluentIcons.clear_night, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(text.themeDark),
-                                ],
+                              ComboBoxItem(
+                                value: ThemeMode.dark,
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      FluentIcons.clear_night,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(text.themeDark),
+                                  ],
+                                ),
                               ),
-                            ),
-                            ComboBoxItem(
-                              value: ThemeMode.system,
-                              child: Row(
-                                children: [
-                                  const Icon(FluentIcons.screen, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(text.themeSystem),
-                                ],
+                              ComboBoxItem(
+                                value: ThemeMode.system,
+                                child: Row(
+                                  children: [
+                                    const Icon(FluentIcons.screen, size: 16),
+                                    const SizedBox(width: 8),
+                                    Text(text.themeSystem),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                          onChanged: (value) async {
-                            if (value != null) {
-                              setState(() => _themeMode = value);
-                              ref
-                                  .read(appSettingsProvider.notifier)
-                                  .setThemeMode(value);
-                              await ref
-                                  .read(comicRdApiProvider)
-                                  .setSetting(
-                                    'app_theme',
-                                    jsonEncode(themeModeToSetting(value)),
-                                  );
-                            }
-                          },
+                            ],
+                            onChanged: (value) async {
+                              if (value != null) {
+                                setState(() => _themeMode = value);
+                                ref
+                                    .read(appSettingsProvider.notifier)
+                                    .setThemeMode(value);
+                                await ref
+                                    .read(comicRdApiProvider)
+                                    .setSetting(
+                                      'app_theme',
+                                      jsonEncode(themeModeToSetting(value)),
+                                    );
+                              }
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -216,7 +236,8 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     Expanded(
                       child: _labeledField(
                         text.locale,
-                        ComboBox<String>(
+                        _controlBox(
+                          ComboBox<String>(
                           value: _locale,
                           isExpanded: true,
                           items: [
@@ -252,6 +273,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                                   .setSetting('app_locale', jsonEncode(value));
                             }
                           },
+                          ),
                         ),
                       ),
                     ),
@@ -339,6 +361,14 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     );
   }
 
+  Widget _controlBox(Widget child) {
+    return SizedBox(height: 38, child: child);
+  }
+
+  Widget _iconControlBox(Widget child) {
+    return SizedBox(width: 38, height: 38, child: child);
+  }
+
   void _initialize(Map<String, String> values, AppSettings appSettings) {
     if (_initialized) return;
     _librarySource.text = _decodeString(values['library_source_input'], '');
@@ -370,10 +400,11 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
 
   Future<void> _save() async {
     final api = ref.read(comicRdApiProvider);
-    await api.setSetting(
-      'library_source_input',
-      jsonEncode(_librarySource.text.trim()),
-    );
+    final libraryPath = _librarySource.text.trim();
+    await api.setSetting('library_source_input', jsonEncode(libraryPath));
+    if (libraryPath.isNotEmpty) {
+      await api.addLibrary(libraryPath);
+    }
     await api.setSetting('default_zoom', _defaultZoom.text.trim());
     await api.setSetting('page_gap', _pageGap.text.trim());
     await api.setSetting('image_pipeline_profile', jsonEncode(_profile));
@@ -384,9 +415,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     await api.setSetting('app_locale', jsonEncode(_locale));
     ref.read(appSettingsProvider.notifier).setThemeMode(_themeMode);
     ref.read(appSettingsProvider.notifier).setLocale(_locale);
-    ref.invalidate(settingsEntriesProvider);
-    ref.invalidate(librarySourceStatusProvider);
-    ref.invalidate(libraryComicsProvider);
+    _invalidateDataProviders();
     if (mounted) {
       setState(() => _message = stringsFor(_locale).settingsSaved);
     }
@@ -416,11 +445,20 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     );
     if (file == null) return;
     await ref.read(comicRdApiProvider).importDatabaseBackup(file.path);
-    ref.invalidate(settingsEntriesProvider);
-    ref.invalidate(librarySourceStatusProvider);
-    ref.invalidate(libraryComicsProvider);
+    _invalidateDataProviders();
     if (mounted) {
       setState(() => _message = text.backupImported);
     }
+  }
+
+  void _invalidateDataProviders() {
+    ref.invalidate(settingsEntriesProvider);
+    ref.invalidate(settingsMapProvider);
+    ref.invalidate(librarySourceStatusProvider);
+    ref.invalidate(rawLibraryComicsProvider);
+    ref.invalidate(libraryComicsProvider);
+    ref.invalidate(comicsWithProgressProvider);
+    ref.invalidate(readingHistoryProvider);
+    ref.invalidate(allBookmarksProvider);
   }
 }

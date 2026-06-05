@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use walkdir::WalkDir;
 
 use crate::chapter::{
@@ -73,6 +73,14 @@ pub(crate) fn list_library_comics_raw_conn(
     for entry in entries {
         if entry.is_dir() {
             let source_path = entry.to_string_lossy().to_string();
+            let chapter_keys = discover_chapter_entries_from_comic_dir(&entry)
+                .into_iter()
+                .map(|(_, chapter_path, _, chapter_index)| {
+                    chapter_history_key(&library_path, &chapter_path, chapter_index)
+                })
+                .collect::<Vec<_>>();
+            let (read_chapter_count, in_progress_chapter_count) =
+                progress_counts_for_chapter_keys(conn, &chapter_keys)?;
             comics.push(RawComic {
                 key: source_path.clone(),
                 title: comic_title_for_path(&entry),
@@ -80,12 +88,15 @@ pub(crate) fn list_library_comics_raw_conn(
                 source_type: "folder".to_string(),
                 library_path: library_path.clone(),
                 date_modified: file_modified_ts(&entry),
-                chapter_count: 0,
-                read_chapter_count: 0,
-                in_progress_chapter_count: 0,
+                chapter_count: chapter_keys.len() as i64,
+                read_chapter_count,
+                in_progress_chapter_count,
             });
         } else if entry.is_file() && is_archive(&entry) {
             let source_path = entry.to_string_lossy().to_string();
+            let chapter_keys = vec![chapter_history_key(&library_path, &source_path, 1)];
+            let (read_chapter_count, in_progress_chapter_count) =
+                progress_counts_for_chapter_keys(conn, &chapter_keys)?;
             comics.push(RawComic {
                 key: source_path.clone(),
                 title: comic_title_for_path(&entry),
@@ -94,8 +105,8 @@ pub(crate) fn list_library_comics_raw_conn(
                 library_path: library_path.clone(),
                 date_modified: file_modified_ts(&entry),
                 chapter_count: 1,
-                read_chapter_count: 0,
-                in_progress_chapter_count: 0,
+                read_chapter_count,
+                in_progress_chapter_count,
             });
         }
     }
@@ -111,6 +122,45 @@ pub(crate) fn list_library_comics_raw_conn(
         }
     });
     Ok(comics)
+}
+
+fn progress_counts_for_chapter_keys(
+    conn: &Connection,
+    chapter_keys: &[String],
+) -> Result<(i64, i64), String> {
+    if chapter_keys.is_empty() {
+        return Ok((0, 0));
+    }
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT COALESCE(r.is_read, 0), COALESCE(r.last_page, 0)
+            FROM chapters ch
+            LEFT JOIN reading_progress r ON r.chapter_id = ch.id
+            WHERE ch.history_key = ?1
+            "#,
+        )
+        .map_err(|e| format!("failed preparing raw progress query: {e}"))?;
+
+    let mut read_count = 0;
+    let mut in_progress_count = 0;
+    for chapter_key in chapter_keys {
+        let progress = stmt
+            .query_row(params![chapter_key], |row| {
+                Ok((row.get::<_, bool>(0)?, row.get::<_, i64>(1)?))
+            })
+            .optional()
+            .map_err(|e| format!("failed querying raw progress: {e}"))?;
+        if let Some((is_read, last_page)) = progress {
+            if is_read {
+                read_count += 1;
+            } else if last_page > 0 {
+                in_progress_count += 1;
+            }
+        }
+    }
+    Ok((read_count, in_progress_count))
 }
 
 pub(crate) fn add_library_conn(conn: &Connection, path: &str) -> Result<i64, String> {

@@ -117,16 +117,19 @@ class _ComicPageState extends ConsumerState<ComicPage> {
             Row(
               children: [
                 Expanded(
-                  child: TextBox(
-                    controller: _search,
-                    prefix: const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: Icon(FluentIcons.search, size: 16),
+                  child: SizedBox(
+                    height: 38,
+                    child: TextBox(
+                      controller: _search,
+                      prefix: const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Icon(FluentIcons.search, size: 16),
+                      ),
+                      placeholder: text.search,
+                      onChanged: (value) => ref
+                          .read(comicPreferencesProvider.notifier)
+                          .setQuery(widget.comicPath, value),
                     ),
-                    placeholder: text.search,
-                    onChanged: (value) => ref
-                        .read(comicPreferencesProvider.notifier)
-                        .setQuery(widget.comicPath, value),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -175,27 +178,30 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                ComboBox<ChapterSortBy>(
-                  value: preferences.sortBy,
-                  items: [
-                    ComboBoxItem(
-                      value: ChapterSortBy.chapterIndex,
-                      child: Text(text.chapter),
-                    ),
-                    ComboBoxItem(
-                      value: ChapterSortBy.name,
-                      child: Text(text.name),
-                    ),
-                    ComboBoxItem(
-                      value: ChapterSortBy.folderDate,
-                      child: Text(text.folderDate),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      _setSort(value, preferences.sortDir);
-                    }
-                  },
+                SizedBox(
+                  height: 38,
+                  child: ComboBox<ChapterSortBy>(
+                    value: preferences.sortBy,
+                    items: [
+                      ComboBoxItem(
+                        value: ChapterSortBy.chapterIndex,
+                        child: Text(text.chapter),
+                      ),
+                      ComboBoxItem(
+                        value: ChapterSortBy.name,
+                        child: Text(text.name),
+                      ),
+                      ComboBoxItem(
+                        value: ChapterSortBy.folderDate,
+                        child: Text(text.folderDate),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        _setSort(value, preferences.sortDir);
+                      }
+                    },
+                  ),
                 ),
                 Tooltip(
                   message: preferences.sortDir == bridge.SortDir.asc

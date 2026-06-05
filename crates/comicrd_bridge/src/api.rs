@@ -702,7 +702,11 @@ pub fn import_database_backup(input_path: String) -> Result<(), String> {
 
 pub fn open_containing_folder(path: String) -> Result<(), String> {
     let path = PathBuf::from(path);
-    let target = path.parent().unwrap_or(path.as_path());
+    let target = if path.is_dir() {
+        path.as_path()
+    } else {
+        path.parent().unwrap_or(path.as_path())
+    };
     open_path(target)
 }
 

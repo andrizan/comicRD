@@ -9,6 +9,7 @@ import 'pages/library_page.dart';
 import 'pages/reader_page.dart';
 import 'routes/path_codec.dart';
 import 'state/api_state.dart';
+import 'state/library_state.dart';
 import 'state/settings_data_state.dart';
 import 'state/settings_state.dart';
 import 'widgets/settings_panel.dart';
@@ -75,14 +76,18 @@ class ComicRdShell extends ConsumerStatefulWidget {
 }
 
 class _ComicRdShellState extends ConsumerState<ComicRdShell> {
-  int _selectedIndex = 0;
-
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
-      next.whenData(ref.read(appSettingsProvider.notifier).hydrateFromSettings);
+      next.whenData((values) {
+        ref.read(appSettingsProvider.notifier).hydrateFromSettings(values);
+        ref
+            .read(libraryPreferencesProvider.notifier)
+            .hydrateFromSettings(values);
+      });
     });
     final settings = ref.watch(appSettingsProvider);
+    final libraryPreferences = ref.watch(libraryPreferencesProvider);
     final text = stringsFor(settings.localeCode);
     return NavigationView(
       titleBar: TitleBar(
@@ -222,15 +227,8 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
         ),
       ),
       pane: NavigationPane(
-        selected: _selectedIndex,
-        onChanged: (index) {
-          setState(() => _selectedIndex = index);
-          switch (index) {
-            case 0:
-              context.go('/');
-              break;
-          }
-        },
+        selected: _paneIndexForTab(libraryPreferences.selectedTab),
+        onChanged: (index) => _setSelectedTab(_tabForPaneIndex(index)),
         displayMode: PaneDisplayMode.top,
         items: [
           PaneItem(
@@ -244,7 +242,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
             body: widget.child,
           ),
           PaneItem(
-            icon: const Icon(FluentIcons.bookmarks),
+            icon: const Icon(FluentIcons.single_bookmark_solid),
             title: Text(text.bookmarks),
             body: widget.child,
           ),
@@ -252,4 +250,33 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
       ),
     );
   }
+
+  Future<void> _setSelectedTab(LibraryTab selectedTab) async {
+    ref.read(libraryPreferencesProvider.notifier).setSelectedTab(selectedTab);
+    await ref
+        .read(comicRdApiProvider)
+        .setSetting(
+          'library_selected_tab',
+          jsonEncode(encodeLibraryTab(selectedTab)),
+        );
+    if (mounted) {
+      context.go('/');
+    }
+  }
+}
+
+int _paneIndexForTab(LibraryTab tab) {
+  return switch (tab) {
+    LibraryTab.library => 0,
+    LibraryTab.history => 1,
+    LibraryTab.bookmarks => 2,
+  };
+}
+
+LibraryTab _tabForPaneIndex(int index) {
+  return switch (index) {
+    1 => LibraryTab.history,
+    2 => LibraryTab.bookmarks,
+    _ => LibraryTab.library,
+  };
 }

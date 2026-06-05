@@ -21,7 +21,6 @@ class LibraryPage extends ConsumerStatefulWidget {
 }
 
 class _LibraryPageState extends ConsumerState<LibraryPage> {
-  int _currentIndex = 0;
   late final ScrollController _historyScroll;
   late final ScrollController _libraryScroll;
   late final ScrollController _bookmarksScroll;
@@ -94,16 +93,19 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextBox(
-                    controller: _search,
-                    prefix: const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: Icon(FluentIcons.search, size: 16),
+                  child: SizedBox(
+                    height: 38,
+                    child: TextBox(
+                      controller: _search,
+                      prefix: const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Icon(FluentIcons.search, size: 16),
+                      ),
+                      placeholder: text.search,
+                      onChanged: (value) => ref
+                          .read(libraryPreferencesProvider.notifier)
+                          .setQuery(value),
                     ),
-                    placeholder: text.search,
-                    onChanged: (value) => ref
-                        .read(libraryPreferencesProvider.notifier)
-                        .setQuery(value),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -155,23 +157,26 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   child: Text(text.progress),
                 ),
                 const SizedBox(width: 12),
-                ComboBox<bridge.SortBy>(
-                  value: preferences.sortBy,
-                  items: [
-                    ComboBoxItem(
-                      value: bridge.SortBy.name,
-                      child: Text(text.name),
-                    ),
-                    ComboBoxItem(
-                      value: bridge.SortBy.folderDate,
-                      child: Text(text.folderDate),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      _setSort(value, preferences.sortDir);
-                    }
-                  },
+                SizedBox(
+                  height: 38,
+                  child: ComboBox<bridge.SortBy>(
+                    value: preferences.sortBy,
+                    items: [
+                      ComboBoxItem(
+                        value: bridge.SortBy.name,
+                        child: Text(text.name),
+                      ),
+                      ComboBoxItem(
+                        value: bridge.SortBy.folderDate,
+                        child: Text(text.folderDate),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        _setSort(value, preferences.sortDir);
+                      }
+                    },
+                  ),
                 ),
                 const SizedBox(width: 4),
                 Tooltip(
@@ -234,22 +239,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             ),
             loading: () => const SizedBox.shrink(),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                _buildTab(text.history, FluentIcons.history, 0),
-                const SizedBox(width: 4),
-                _buildTab(text.library, FluentIcons.library, 1),
-                const SizedBox(width: 4),
-                _buildTab(text.bookmarks, FluentIcons.bookmarks, 2),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
           Expanded(
             child: IndexedStack(
-              index: _currentIndex,
+              index: preferences.selectedTab.index,
               children: [
                 _HistoryList(
                   history: history,
@@ -279,52 +271,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTab(String label, IconData icon, int index) {
-    final isActive = _currentIndex == index;
-    final theme = FluentTheme.of(context);
-    return Expanded(
-      child: HoverButton(
-        onPressed: () => setState(() => _currentIndex = index),
-        builder: (context, states) {
-          return Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? theme.accentColor.withValues(alpha: 0.1)
-                  : states.isHovered
-                  ? theme.resources.cardBackgroundFillColorSecondary
-                  : Colors.transparent,
-              border: Border(
-                bottom: BorderSide(
-                  color: isActive ? theme.accentColor : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: isActive ? theme.accentColor : null,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: isActive ? theme.accentColor : null,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
       ),
     );
   }
@@ -526,12 +472,7 @@ class _ComicList extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        bookmarked
-                            ? FluentIcons.bookmarks
-                            : FluentIcons.reading_mode,
-                        size: 20,
-                      ),
+                      const Icon(FluentIcons.folder_open, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -548,12 +489,16 @@ class _ComicList extends StatelessWidget {
                         ),
                       ),
                       _ReadStatusBadge(
+                        text: text,
                         readCount: comic.readChapterCount,
                         totalCount: comic.chapterCount,
                         inProgressCount: comic.inProgressChapterCount,
                       ),
                       const SizedBox(width: 8),
-                      Text(comic.sourceType.toUpperCase()),
+                      if (bookmarked) ...[
+                        _BookmarkMarker(text: text),
+                        const SizedBox(width: 8),
+                      ],
                       _ComicActionsButton(
                         text: text,
                         bookmarked: bookmarked,
@@ -620,18 +565,18 @@ class _ComicGridTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(
-                      bookmarked
-                          ? FluentIcons.bookmarks
-                          : FluentIcons.reading_mode,
-                      size: 20,
-                    ),
+                    const Icon(FluentIcons.folder_open, size: 20),
                     const Spacer(),
                     _ReadStatusBadge(
+                      text: text,
                       readCount: comic.readChapterCount,
                       totalCount: comic.chapterCount,
                       inProgressCount: comic.inProgressChapterCount,
                     ),
+                    if (bookmarked) ...[
+                      const SizedBox(width: 8),
+                      _BookmarkMarker(text: text),
+                    ],
                     _ComicActionsButton(
                       text: text,
                       bookmarked: bookmarked,
@@ -651,7 +596,9 @@ class _ComicGridTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  comic.sourceType.toUpperCase(),
+                  comic.sourcePath,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: FluentTheme.of(context).typography.caption,
                 ),
               ],
@@ -665,11 +612,13 @@ class _ComicGridTile extends StatelessWidget {
 
 class _ReadStatusBadge extends StatelessWidget {
   const _ReadStatusBadge({
+    required this.text,
     required this.readCount,
     required this.totalCount,
     required this.inProgressCount,
   });
 
+  final AppStrings text;
   final int readCount;
   final int totalCount;
   final int inProgressCount;
@@ -688,7 +637,7 @@ class _ReadStatusBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
-          'Read',
+          text.read,
           style: TextStyle(
             color: theme.accentColor,
             fontSize: 11,
@@ -705,7 +654,7 @@ class _ReadStatusBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
-          'Reading $readCount/$totalCount',
+          '${text.reading} $readCount/$totalCount',
           style: TextStyle(
             color: theme.accentColor,
             fontSize: 11,
@@ -721,12 +670,30 @@ class _ReadStatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        'Unread',
+        text.unread,
         style: TextStyle(
           color: theme.resources.textFillColorSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w500,
         ),
+      ),
+    );
+  }
+}
+
+class _BookmarkMarker extends StatelessWidget {
+  const _BookmarkMarker({required this.text});
+
+  final AppStrings text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: text.bookmarks,
+      child: Icon(
+        FluentIcons.single_bookmark_solid,
+        size: 16,
+        color: FluentTheme.of(context).accentColor,
       ),
     );
   }
@@ -960,7 +927,10 @@ class _BookmarkList extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(FluentIcons.bookmarks, size: 20),
+                          const Icon(
+                            FluentIcons.single_bookmark_solid,
+                            size: 20,
+                          ),
                           const Spacer(),
                           Text(
                             item.comicTitle,
@@ -1005,7 +975,7 @@ class _BookmarkList extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      const Icon(FluentIcons.bookmarks, size: 20),
+                      const Icon(FluentIcons.single_bookmark_solid, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
