@@ -19,7 +19,7 @@ class SettingsPanel extends ConsumerStatefulWidget {
 class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   final _librarySource = TextEditingController();
   double _defaultZoom = 1;
-  double _pageGap = 10;
+  double _pageGap = 20;
   bool _initialized = false;
   ThemeMode _themeMode = ThemeMode.light;
   String _locale = 'en';
@@ -336,7 +336,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     if (_initialized) return;
     _librarySource.text = _decodeString(values['library_source_input'], '');
     _defaultZoom = _decodeDouble(values['default_zoom'], 1);
-    _pageGap = _decodeDouble(values['page_gap'], 10);
+    _pageGap = _decodeDouble(values['page_gap'], 20);
     _themeMode = appSettings.themeMode;
     _locale = appSettings.localeCode;
     _initialized = true;

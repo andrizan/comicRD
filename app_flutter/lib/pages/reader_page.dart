@@ -41,7 +41,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _fullscreen = false;
   bool _toolbarVisible = true;
   double _zoom = 1;
-  double _pageGap = 10;
+  double _pageGap = 20;
   late final ComicRdApi _api = const ComicRdApi();
   ReaderData? _lastReaderData;
 
@@ -605,11 +605,14 @@ class _ReaderPageItem extends ConsumerWidget {
     );
     return rendered.when(
       data: (page) => Center(
-        child: Image.memory(
-          page.bytes,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
-          fit: BoxFit.contain,
+        child: SizedBox(
+          width: page.width == 0 ? null : page.width.toDouble() * zoom,
+          child: Image.memory(
+            page.bytes,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
       error: (error, _) =>
