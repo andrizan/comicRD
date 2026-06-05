@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'api_state.dart';
+
 final appSettingsProvider = NotifierProvider<AppSettingsNotifier, AppSettings>(
   AppSettingsNotifier.new,
 );
@@ -80,6 +82,60 @@ String themeModeToSetting(ThemeMode value) {
     ThemeMode.system => 'system',
     ThemeMode.light => 'light',
   };
+}
+
+final readerSettingsProvider =
+    NotifierProvider<ReaderSettingsNotifier, ReaderSettings>(
+      ReaderSettingsNotifier.new,
+    );
+
+class ReaderSettings {
+  const ReaderSettings({this.zoom = 1.0, this.pageGap = 20.0});
+
+  final double zoom;
+  final double pageGap;
+
+  ReaderSettings copyWith({double? zoom, double? pageGap}) => ReaderSettings(
+    zoom: zoom ?? this.zoom,
+    pageGap: pageGap ?? this.pageGap,
+  );
+}
+
+class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
+  @override
+  ReaderSettings build() => const ReaderSettings();
+
+  void setZoom(double zoom) {
+    state = state.copyWith(zoom: zoom.clamp(0.5, 3.0));
+    _saveToDatabase();
+  }
+
+  void setPageGap(double gap) {
+    state = state.copyWith(pageGap: gap.clamp(0, 80));
+    _saveToDatabase();
+  }
+
+  void _saveToDatabase() {
+    final api = ref.read(comicRdApiProvider);
+    api.setSetting('default_zoom', state.zoom.toStringAsFixed(1));
+    api.setSetting('page_gap', state.pageGap.round().toString());
+  }
+
+  void hydrateFromSettings(Map<String, String> values) {
+    final zoom = _decodeDouble(values['default_zoom'], 1.0);
+    final gap = _decodeDouble(values['page_gap'], 20.0);
+    state = ReaderSettings(zoom: zoom.clamp(0.5, 3.0), pageGap: gap.clamp(0, 80));
+  }
+
+  double _decodeDouble(String? raw, double fallback) {
+    if (raw == null) return fallback;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is num) return decoded.toDouble();
+      if (decoded is String) return num.tryParse(decoded)?.toDouble() ?? fallback;
+    } catch (_) {}
+    return fallback;
+  }
 }
 
 AppStrings stringsFor(String localeCode) =>

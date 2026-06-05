@@ -2,7 +2,7 @@
 
 ComicRD is a desktop comic reader for local comic libraries. It is built with
 Flutter for the desktop UI and Rust for filesystem scanning, archive handling,
-SQLite metadata, image rendering, and reader state.
+SQLite metadata, and reader state.
 
 ## Features
 
@@ -16,8 +16,8 @@ SQLite metadata, image rendering, and reader state.
 - Progress restore and automatic progress save
 - Previous/next page and chapter navigation
 - Keyboard navigation
-- Reader zoom, page gap, fullscreen, and image profile controls
-- Image resize, cache, and prefetch pipeline in Rust
+- Reader zoom, page gap, and fullscreen controls
+- Raw image pipeline with viewport-only memory management
 - SQLite-backed settings, metadata, progress, bookmarks, and history
 - Database backup export/import
 - Desktop builds for Linux, Windows, and macOS
@@ -187,8 +187,8 @@ comicrd_flutter/
 
 Flutter owns the UI, routing, theme, localization, desktop presentation, and
 short-lived UI state. Rust owns long-lived application data and heavy work:
-SQLite, filesystem discovery, archive page reading, image decoding/resizing,
-caches, progress, bookmarks, history, settings, and backup/import.
+SQLite, filesystem discovery, archive page reading, caches, progress,
+bookmarks, history, settings, and backup/import.
 
 The API boundary is exposed through `flutter_rust_bridge`:
 
@@ -206,6 +206,24 @@ comicrd_core
 
 UI code should call `app_flutter/lib/api/comicrd_api.dart` instead of generated
 bridge functions directly.
+
+### Image Pipeline
+
+The image pipeline reads raw bytes from ZIP/folder sources and passes them
+directly to Flutter for display. No resize or decode operations are performed
+on the Rust side.
+
+Memory management uses a viewport-only approach:
+- Only 5 pages are kept in memory at any time (-2/+2 from current page)
+- Pages outside the viewport are evicted proactively
+- Source cache: 2 chapter archives
+- Bytes cache: 6 raw image pages
+
+### Reader Settings
+
+Reader settings (zoom, page gap) are synced bidirectionally between the
+settings page and reader page. Changes in either location are persisted to
+the database immediately.
 
 ## Bridge Workflow
 

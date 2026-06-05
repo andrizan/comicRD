@@ -18,8 +18,6 @@ class SettingsPanel extends ConsumerStatefulWidget {
 
 class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   final _librarySource = TextEditingController();
-  double _defaultZoom = 1;
-  double _pageGap = 20;
   bool _initialized = false;
   ThemeMode _themeMode = ThemeMode.light;
   String _locale = 'en';
@@ -36,6 +34,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     final settings = ref.watch(settingsMapProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
     final appSettings = ref.watch(appSettingsProvider);
+    final readerSettings = ref.watch(readerSettingsProvider);
     final text = stringsFor(appSettings.localeCode);
     return ContentDialog(
       title: Text(text.settings),
@@ -106,26 +105,29 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                 const SizedBox(height: 16),
                 _sectionHeader(text.readerSection),
                 _labeledField(
-                  '${text.defaultZoom} (${(_defaultZoom * 100).round()}%)',
+                  '${text.defaultZoom} (${(readerSettings.zoom * 100).round()}%)',
                   Slider(
-                    value: _defaultZoom,
+                    value: readerSettings.zoom,
                     min: 0.5,
                     max: 3,
                     divisions: 25,
-                    label: '${(_defaultZoom * 100).round()}%',
-                    onChanged: (value) => setState(() => _defaultZoom = value),
+                    label: '${(readerSettings.zoom * 100).round()}%',
+                    onChanged: (value) =>
+                        ref.read(readerSettingsProvider.notifier).setZoom(value),
                   ),
                 ),
                 const SizedBox(height: 12),
                 _labeledField(
-                  '${text.pageGap} (${_pageGap.round()}px)',
+                  '${text.pageGap} (${readerSettings.pageGap.round()}px)',
                   Slider(
-                    value: _pageGap,
+                    value: readerSettings.pageGap,
                     min: 0,
                     max: 80,
                     divisions: 16,
-                    label: '${_pageGap.round()}px',
-                    onChanged: (value) => setState(() => _pageGap = value),
+                    label: '${readerSettings.pageGap.round()}px',
+                    onChanged: (value) => ref
+                        .read(readerSettingsProvider.notifier)
+                        .setPageGap(value),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -335,24 +337,18 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   void _initialize(Map<String, String> values, AppSettings appSettings) {
     if (_initialized) return;
     _librarySource.text = _decodeString(values['library_source_input'], '');
-    _defaultZoom = _decodeDouble(values['default_zoom'], 1);
-    _pageGap = _decodeDouble(values['page_gap'], 20);
     _themeMode = appSettings.themeMode;
     _locale = appSettings.localeCode;
     _initialized = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(readerSettingsProvider.notifier).hydrateFromSettings(values);
+    });
   }
 
   String _decodeString(String? raw, String fallback) {
     if (raw == null) return fallback;
     final decoded = jsonDecode(raw);
     return decoded is String ? decoded : fallback;
-  }
-
-  double _decodeDouble(String? raw, double fallback) {
-    if (raw == null) return fallback;
-    final decoded = jsonDecode(raw);
-    if (decoded is num) return decoded.toDouble();
-    return fallback;
   }
 
   Future<void> _pickLibrarySource() async {
@@ -368,8 +364,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     if (libraryPath.isNotEmpty) {
       await api.addLibrary(libraryPath);
     }
-    await api.setSetting('default_zoom', _defaultZoom.toStringAsFixed(1));
-    await api.setSetting('page_gap', _pageGap.round().toString());
     await api.setSetting(
       'app_theme',
       jsonEncode(themeModeToSetting(_themeMode)),

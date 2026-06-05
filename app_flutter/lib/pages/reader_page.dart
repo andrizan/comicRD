@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -38,10 +37,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   int _currentPage = 0;
   int _lastSavedPage = -1;
   bool _restoredProgress = false;
+  bool _initialScrollDone = false;
   bool _fullscreen = false;
   bool _toolbarVisible = true;
-  double _zoom = 1;
-  double _pageGap = 20;
   late final ComicRdApi _api = const ComicRdApi();
   ReaderData? _lastReaderData;
 
@@ -74,6 +72,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _currentPage = 0;
     _lastSavedPage = -1;
     _restoredProgress = false;
+    _initialScrollDone = false;
     _pageKeys.clear();
     _toolbarVisible = true;
     if (_scroll.hasClients) {
@@ -84,10 +83,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
-      next.whenData(_applySettings);
+      next.whenData((values) {
+        ref.read(readerSettingsProvider.notifier).hydrateFromSettings(values);
+      });
     });
-    final settingsData = ref.watch(settingsMapProvider);
-    settingsData.whenData(_applySettings);
+    final readerSettings = ref.watch(readerSettingsProvider);
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
     final reader = ref.watch(readerDataProvider(widget.chapterId));
@@ -150,8 +150,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             text: text,
                             data: data,
                             currentPage: _currentPage,
-                            pageGap: _pageGap,
-                            zoom: _zoom,
+                            pageGap: readerSettings.pageGap,
+                            zoom: readerSettings.zoom,
                             fullscreen: _fullscreen,
                             onClose: () => _close(data),
                             onPreviousPage: () => _jumpBy(-1),
@@ -168,18 +168,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                     data.context!.nextChapterId!,
                                   ),
                             onGapChanged: (gap) {
-                              setState(() => _pageGap = gap);
-                              _api.setSetting(
-                                'page_gap',
-                                gap.round().toString(),
-                              );
+                              ref
+                                  .read(readerSettingsProvider.notifier)
+                                  .setPageGap(gap);
                             },
                             onZoomChanged: (zoom) {
-                              setState(() => _zoom = zoom);
-                              _api.setSetting(
-                                'default_zoom',
-                                zoom.toStringAsFixed(1),
-                              );
+                              ref
+                                  .read(readerSettingsProvider.notifier)
+                                  .setZoom(zoom);
                             },
                             onToggleFullscreen: _toggleFullscreen,
                           ),
@@ -259,6 +255,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         child: Text(text.noPages, style: const TextStyle(color: Colors.white)),
       );
     }
+    final readerSettings = ref.watch(readerSettingsProvider);
     return widgets.RawScrollbar(
       controller: _scroll,
       thumbVisibility: true,
@@ -271,7 +268,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       trackBorderColor: const Color(0xff050505),
       child: ListView.builder(
         controller: _scroll,
-        padding: EdgeInsets.only(top: 78, bottom: 48 + _pageGap),
+        padding: EdgeInsets.only(top: 78, bottom: 48 + readerSettings.pageGap),
         itemCount: data.pages.length,
         itemBuilder: (context, index) {
           final page = data.pages[index];
@@ -280,13 +277,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           return Padding(
             key: key,
             padding: EdgeInsets.only(
-              bottom: index == data.pages.length - 1 ? 0 : _pageGap,
+              bottom: index == data.pages.length - 1
+                  ? 0
+                  : readerSettings.pageGap,
             ),
             child: _ReaderPageItem(
               active: active,
               chapterId: widget.chapterId,
               page: page,
-              zoom: _zoom,
+              zoom: readerSettings.zoom,
             ),
           );
         },
@@ -296,39 +295,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   bool _isActivePage(int index) {
     return index >= _currentPage - 3 && index <= _currentPage + 3;
-  }
-
-  void _applySettings(Map<String, String> values) {
-    final zoom = _decodeNumber(values['default_zoom'], 1);
-    final gap = _decodeNumber(values['page_gap'], 20);
-    if (zoom == _zoom && gap == _pageGap) {
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _zoom = zoom.clamp(0.5, 3);
-      _pageGap = gap.clamp(0, 80);
-    });
-  }
-
-  double _decodeNumber(String? raw, double fallback) {
-    if (raw == null) {
-      return fallback;
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is num) {
-        return decoded.toDouble();
-      }
-      if (decoded is String) {
-        return num.tryParse(decoded)?.toDouble() ?? fallback;
-      }
-    } on FormatException {
-      return num.tryParse(raw)?.toDouble() ?? fallback;
-    }
-    return fallback;
   }
 
   void _restoreProgress(ReaderData data) {
@@ -346,12 +312,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _scheduleProgressSave();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _jumpToPage(page);
       unawaited(_prefetchAround(page));
+      _jumpToPage(page);
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          setState(() => _initialScrollDone = true);
+        }
+      });
     });
   }
 
   void _handleScroll() {
+    if (!_initialScrollDone) {
+      return;
+    }
     _hideToolbar();
     final page = _pageAtViewportCenter();
     if (page == _currentPage) {
@@ -538,6 +512,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         alignment: 0,
+      );
+    } else if (_scroll.hasClients) {
+      final estimatedOffset = page * 1350.0;
+      _scroll.jumpTo(
+        estimatedOffset.clamp(0, _scroll.position.maxScrollExtent),
       );
     }
     setState(() => _currentPage = page);
