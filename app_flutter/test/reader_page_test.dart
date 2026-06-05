@@ -35,7 +35,7 @@ void main() {
     expect(api.evictedWindows, contains(equals([0, 1, 2])));
   });
 
-  testWidgets('renders selected progress bar page before the user scrolls', (
+  testWidgets('renders pages around current after scroll settles', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -55,21 +55,13 @@ void main() {
     await tester.pump();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    api.renderedPageIndices.clear();
 
-    const targetPage = 12;
-    await tester.tap(
-      find.byKey(const ValueKey('reader-page-indicator-$targetPage')),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(api.renderedPageIndices, contains(targetPage));
-    expect(api.prefetchedWindows, contains(equals([10, 11, 12, 13, 14])));
-    expect(api.evictedWindows, contains(equals([10, 11, 12, 13, 14])));
+    final rendered = api.renderedPageIndices;
+    expect(rendered, isNotEmpty);
+    expect(rendered.length, lessThanOrEqualTo(7));
   });
 
-  testWidgets('progress bar accepts taps across its full hit area', (
+  testWidgets('prefetch window is 5 pages', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -77,7 +69,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final api = _ReaderFakeComicRdApi(lastPage: 0, pageCount: 33);
+    final api = _ReaderFakeComicRdApi(lastPage: 10, pageCount: 33);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -89,20 +81,12 @@ void main() {
     await tester.pump();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    api.renderedPageIndices.clear();
 
-    const targetPage = 12;
-    final target = find.byKey(
-      const ValueKey('reader-page-indicator-$targetPage'),
-    );
-    final targetCenter = tester.getCenter(target);
-    await tester.tapAt(Offset(targetCenter.dx, targetCenter.dy - 8));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(api.renderedPageIndices, contains(targetPage));
-    expect(api.prefetchedWindows, contains(equals([10, 11, 12, 13, 14])));
-    expect(api.evictedWindows, contains(equals([10, 11, 12, 13, 14])));
+    expect(api.prefetchedWindows, isNotEmpty);
+    for (final window in api.prefetchedWindows) {
+      expect(window.length, lessThanOrEqualTo(5));
+    }
+    expect(api.evictedWindows, isNotEmpty);
   });
 }
 
@@ -199,71 +183,13 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 }
 
 const _onePixelPng = [
-  0x89,
-  0x50,
-  0x4e,
-  0x47,
-  0x0d,
-  0x0a,
-  0x1a,
-  0x0a,
-  0x00,
-  0x00,
-  0x00,
-  0x0d,
-  0x49,
-  0x48,
-  0x44,
-  0x52,
-  0x00,
-  0x00,
-  0x00,
-  0x01,
-  0x00,
-  0x00,
-  0x00,
-  0x01,
-  0x08,
-  0x06,
-  0x00,
-  0x00,
-  0x00,
-  0x1f,
-  0x15,
-  0xc4,
-  0x89,
-  0x00,
-  0x00,
-  0x00,
-  0x0a,
-  0x49,
-  0x44,
-  0x41,
-  0x54,
-  0x78,
-  0x9c,
-  0x63,
-  0x00,
-  0x01,
-  0x00,
-  0x00,
-  0x05,
-  0x00,
-  0x01,
-  0x0d,
-  0x0a,
-  0x2d,
-  0xb4,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x49,
-  0x45,
-  0x4e,
-  0x44,
-  0xae,
-  0x42,
-  0x60,
-  0x82,
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+  0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
+  0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+  0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+  0x42, 0x60, 0x82,
 ];

@@ -1435,64 +1435,52 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                   ),
                 ),
               ),
-              Expanded(
+                      Expanded(
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTapDown: (details) {
-                          final width = constraints.maxWidth;
-                          if (width <= 0) {
-                            return;
-                          }
-                          final fraction = (details.localPosition.dx / width)
-                              .clamp(0.0, 0.999999);
-                          widget.onSelected((fraction * count).floor());
-                        },
-                        child: Row(
-                          children: [
-                            for (var index = 0; index < count; index++)
-                              Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: _hovered ? 2 : 1,
+                  child: Row(
+                    children: [
+                      for (var index = 0; index < count; index++)
+                        Expanded(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => widget.onSelected(index),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: _hovered ? 2 : 1,
+                              ),
+                              child: Tooltip(
+                                message: '${index + 1}',
+                                child: SizedBox.expand(
+                                  key: ValueKey(
+                                    'reader-page-indicator-$index',
                                   ),
-                                  child: Tooltip(
-                                    message: '${index + 1}',
-                                    child: SizedBox.expand(
-                                      key: ValueKey(
-                                        'reader-page-indicator-$index',
+                                  child: Center(
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 150,
                                       ),
-                                      child: Center(
-                                        child: AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 150,
-                                          ),
-                                          curve: Curves.easeOutCubic,
-                                          height: _hovered ? 12 : 4,
-                                          width: double.infinity,
-                                          decoration: BoxDecoration(
-                                            color: index <= current
-                                                ? const Color(0xff9aa7b5)
-                                                : Colors.white.withValues(
-                                                    alpha: 0.20,
-                                                  ),
-                                            borderRadius: BorderRadius.circular(
-                                              99,
-                                            ),
-                                          ),
+                                      curve: Curves.easeOutCubic,
+                                      height: _hovered ? 12 : 4,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: index <= current
+                                            ? const Color(0xff9aa7b5)
+                                            : Colors.white.withValues(
+                                                alpha: 0.20,
+                                              ),
+                                        borderRadius: BorderRadius.circular(
+                                          99,
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                          ],
+                            ),
+                          ),
                         ),
-                      );
-                    },
+                    ],
                   ),
                 ),
               ),
