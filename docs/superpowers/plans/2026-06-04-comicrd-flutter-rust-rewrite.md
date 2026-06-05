@@ -312,6 +312,7 @@ Notes:
   - [ ] Comic page chapter filtering, favorites-only, open chapter, and warm prefetch.
   - [ ] Settings save flow, directory picker result handling, backup export/import status.
   - [ ] Reader progress restore, current page tracking, keyboard navigation, toolbar controls, active page window, and image eviction calls.
+    - [x] Covered restore progress, progress bar page selection, active page render window, and prefetch/evict `2 + viewport + 2` range in `app_flutter/test/reader_page_test.dart`.
 - Manual desktop smoke tests:
   - [ ] Linux: run with a folder comic and a CBZ comic.
   - [ ] Windows: confirm no WebView2 process and memory remains bounded during long chapter scroll.

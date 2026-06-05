@@ -11,7 +11,16 @@ final readerDataProvider = FutureProvider.family<ReaderData, int>((
   final context = await api.getChapterContext(chapterId);
   final pages = await api.getChapterPages(chapterId);
   final progress = await api.getProgress(chapterId);
-  return ReaderData(context: context, pages: pages, progress: progress);
+  final initialPage = initialReaderPageForProgress(
+    progress: progress,
+    pageCount: pages.length,
+  );
+  return ReaderData(
+    context: context,
+    pages: pages,
+    progress: progress,
+    initialPage: initialPage,
+  );
 });
 
 final chapterBookmarksProvider =
@@ -39,11 +48,13 @@ class ReaderData {
     required this.context,
     required this.pages,
     required this.progress,
+    required this.initialPage,
   });
 
   final bridge.ChapterContext? context;
   final List<bridge.PageInfo> pages;
   final bridge.ReadingProgress? progress;
+  final int initialPage;
 }
 
 class RenderedPageRequest {
@@ -62,4 +73,11 @@ class RenderedPageRequest {
 
   @override
   int get hashCode => Object.hash(chapterId, pageIndex);
+}
+
+int initialReaderPageForProgress({
+  required bridge.ReadingProgress? progress,
+  required int pageCount,
+}) {
+  return 0;
 }

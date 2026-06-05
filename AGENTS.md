@@ -78,6 +78,16 @@ app_flutter/lib/api/comicrd_api.dart
 
 Avoid calling generated bridge functions directly from page/widgets/state code.
 
+## Reader Image Pipeline
+
+The reader image pipeline must keep memory bounded around the current viewport. Cache raw image/page data only for:
+
+- 2 images before the viewport
+- the image currently in the viewport
+- 2 images after the viewport
+
+Do not expand reader raw-image cache or prefetch windows beyond this `2 + viewport + 2` policy unless the user explicitly changes the memory policy.
+
 ## Planning
 
 The active migration plan is:

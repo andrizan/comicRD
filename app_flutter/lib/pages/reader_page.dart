@@ -30,24 +30,27 @@ class ReaderPage extends ConsumerStatefulWidget {
 }
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
-  final _scroll = ScrollController();
+  late ScrollController _scroll;
   final _focusNode = FocusNode(debugLabel: 'ReaderPage');
   final _pageKeys = <int, GlobalKey>{};
   Timer? _progressTimer;
   int _currentPage = 0;
   int _lastSavedPage = -1;
+  int _jumpGeneration = 0;
+  bool _ignoreNextScrollUpdate = false;
   bool _restoredProgress = false;
   bool _initialScrollDone = false;
   bool _fullscreen = false;
   bool _toolbarVisible = true;
-  late final ComicRdApi _api = const ComicRdApi();
+  late final ComicRdApi _api;
   ReaderData? _lastReaderData;
 
   @override
   void initState() {
     super.initState();
+    _api = ref.read(comicRdApiProvider);
     PaintingBinding.instance.imageCache.maximumSizeBytes = 64 * 1024 * 1024;
-    _scroll.addListener(_handleScroll);
+    _scroll = _createScrollController();
   }
 
   @override
@@ -71,6 +74,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _progressTimer?.cancel();
     _currentPage = 0;
     _lastSavedPage = -1;
+    _jumpGeneration++;
+    _ignoreNextScrollUpdate = false;
     _restoredProgress = false;
     _initialScrollDone = false;
     _pageKeys.clear();
@@ -268,21 +273,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       trackBorderColor: const Color(0xff050505),
       child: ListView.builder(
         controller: _scroll,
+        cacheExtent: 0,
         padding: EdgeInsets.only(top: 78, bottom: 48 + readerSettings.pageGap),
         itemCount: data.pages.length,
         itemBuilder: (context, index) {
           final page = data.pages[index];
-          final active = _isActivePage(index);
-          final key = _pageKeys.putIfAbsent(index, GlobalKey.new);
           return Padding(
-            key: key,
+            key: _pageKeys.putIfAbsent(index, GlobalKey.new),
             padding: EdgeInsets.only(
               bottom: index == data.pages.length - 1
                   ? 0
                   : readerSettings.pageGap,
             ),
             child: _ReaderPageItem(
-              active: active,
               chapterId: widget.chapterId,
               page: page,
               zoom: readerSettings.zoom,
@@ -293,8 +296,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  bool _isActivePage(int index) {
-    return index >= _currentPage - 3 && index <= _currentPage + 3;
+  ScrollController _createScrollController([double initialOffset = 0]) {
+    return ScrollController(initialScrollOffset: initialOffset)
+      ..addListener(_handleScroll);
   }
 
   void _restoreProgress(ReaderData data) {
@@ -302,18 +306,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _restoredProgress = true;
-    final isFinished = data.progress?.isRead ?? false;
-    final page = isFinished
-        ? 0
-        : (data.progress?.lastPage ?? 0).clamp(0, data.pages.length - 1);
+    final page = data.initialPage;
     _currentPage = page;
-    if (isFinished) {
-      _lastSavedPage = -1;
-      _scheduleProgressSave();
+    _lastSavedPage = page;
+    final initialOffset = _estimatedOffsetForPage(
+      page,
+      data,
+      ref.read(readerSettingsProvider),
+    );
+    if (!_scroll.hasClients && initialOffset > 0) {
+      _scroll.dispose();
+      _scroll = _createScrollController(initialOffset);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_prefetchAround(page));
-      _jumpToPage(page);
+      if (_scroll.hasClients) {
+        _jumpToPage(page, persist: false);
+      }
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
           setState(() => _initialScrollDone = true);
@@ -327,6 +336,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _hideToolbar();
+    if (_ignoreNextScrollUpdate) {
+      _ignoreNextScrollUpdate = false;
+      return;
+    }
     final page = _pageAtViewportCenter();
     if (page == _currentPage) {
       return;
@@ -340,10 +353,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   int _pageAtViewportCenter() {
-    if (_pageKeys.isEmpty) {
+    if (!_scroll.hasClients) {
       return _currentPage;
     }
-    final viewportCenter = MediaQuery.sizeOf(context).height / 2;
+    final viewportHeight = _scroll.position.viewportDimension;
+    final viewportCenter = viewportHeight / 2;
     var bestPage = _currentPage;
     var bestDistance = double.infinity;
     for (final entry in _pageKeys.entries) {
@@ -352,8 +366,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         continue;
       }
       final position = renderObject.localToGlobal(Offset.zero);
-      final center = position.dy + renderObject.size.height / 2;
-      final distance = (center - viewportCenter).abs();
+      final top = position.dy;
+      final bottom = top + renderObject.size.height;
+      if (bottom <= 0 || top >= viewportHeight) {
+        continue;
+      }
+      final visibleTop = top.clamp(0.0, viewportHeight);
+      final visibleBottom = bottom.clamp(0.0, viewportHeight);
+      final visibleCenter = (visibleTop + visibleBottom) / 2;
+      final distance = (visibleCenter - viewportCenter).abs();
       if (distance < bestDistance) {
         bestDistance = distance;
         bestPage = entry.key;
@@ -504,23 +525,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _jumpToPage((_currentPage + delta).clamp(0, count - 1));
   }
 
-  void _jumpToPage(int page) {
-    final keyContext = _pageKeys[page]?.currentContext;
-    if (keyContext != null) {
+  void _jumpToPage(int page, {bool persist = true}) {
+    final generation = ++_jumpGeneration;
+    setState(() => _currentPage = page);
+    if (persist) {
+      _scheduleProgressSave();
+    } else {
+      _lastSavedPage = page;
+    }
+    unawaited(_prefetchAround(page));
+    if (_scroll.hasClients) {
+      final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+      final estimatedOffset = _scrollOffsetForPageIndex(
+        page,
+        data?.pages.length ?? 0,
+      );
+      final targetOffset = estimatedOffset.clamp(
+        0,
+        _scroll.position.maxScrollExtent,
+      ).toDouble();
+      if ((_scroll.position.pixels - targetOffset).abs() > 0.5) {
+        _ignoreNextScrollUpdate = _initialScrollDone;
+        _scroll.jumpTo(targetOffset);
+      } else {
+        _ignoreNextScrollUpdate = false;
+      }
+      _alignPageAfterLayout(page, generation);
+    }
+  }
+
+  void _alignPageAfterLayout(int page, int generation) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _jumpGeneration != generation) {
+        return;
+      }
+      final pageContext = _pageKeys[page]?.currentContext;
+      if (pageContext == null) {
+        return;
+      }
       Scrollable.ensureVisible(
-        keyContext,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
+        pageContext,
+        duration: Duration.zero,
         alignment: 0,
       );
-    } else if (_scroll.hasClients) {
-      final estimatedOffset = page * 1350.0;
-      _scroll.jumpTo(
-        estimatedOffset.clamp(0, _scroll.position.maxScrollExtent),
-      );
-    }
-    setState(() => _currentPage = page);
-    _scheduleProgressSave();
+    });
   }
 
   void _scrollBy(double delta) {
@@ -539,6 +587,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         curve: Curves.easeOutCubic,
       ),
     );
+  }
+
+  double _estimatedOffsetForPage(
+    int page,
+    ReaderData data,
+    ReaderSettings settings,
+  ) {
+    const topPadding = 78.0;
+    var offset = topPadding;
+    final target = page.clamp(0, data.pages.length - 1);
+    for (var index = 0; index < target; index++) {
+      offset += _estimatedPageHeight(data.pages[index], settings.zoom);
+      offset += settings.pageGap;
+    }
+    return offset;
+  }
+
+  double _estimatedPageHeight(bridge.PageInfo page, double zoom) {
+    final width = (page.width ?? 900).toDouble();
+    final height = (page.height ?? 1300).toDouble();
+    if (width <= 0 || height <= 0) {
+      return 1300 * zoom;
+    }
+    return height * zoom;
+  }
+
+  double _scrollOffsetForPageIndex(int page, int pageCount) {
+    if (!_scroll.hasClients || pageCount <= 1) {
+      return 0;
+    }
+    final lastPage = pageCount - 1;
+    final targetPage = page.clamp(0, lastPage).toDouble();
+    return _scroll.position.maxScrollExtent * (targetPage / lastPage);
   }
 
   void _showToolbar() {
@@ -572,13 +653,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
 class _ReaderPageItem extends ConsumerWidget {
   const _ReaderPageItem({
-    required this.active,
     required this.chapterId,
     required this.page,
     required this.zoom,
   });
 
-  final bool active;
   final int chapterId;
   final bridge.PageInfo page;
   final double zoom;
@@ -586,9 +665,7 @@ class _ReaderPageItem extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final aspectRatio = _aspectRatio(page);
-    if (!active) {
-      return _PagePlaceholder(aspectRatio: aspectRatio);
-    }
+    final displayWidth = _displayWidth(page, zoom);
     final rendered = ref.watch(
       renderedPageProvider(
         RenderedPageRequest(chapterId: chapterId, pageIndex: page.index),
@@ -606,10 +683,22 @@ class _ReaderPageItem extends ConsumerWidget {
           ),
         ),
       ),
-      error: (error, _) =>
-          _PagePlaceholder(aspectRatio: aspectRatio, label: error.toString()),
-      loading: () => _PagePlaceholder(aspectRatio: aspectRatio),
+      error: (error, _) => _PagePlaceholder(
+        aspectRatio: aspectRatio,
+        width: displayWidth,
+        label: error.toString(),
+      ),
+      loading: () =>
+          _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
     );
+  }
+
+  double _displayWidth(bridge.PageInfo page, double zoom) {
+    final width = page.width ?? 900;
+    if (width <= 0) {
+      return 900 * zoom;
+    }
+    return width * zoom;
   }
 
   double _aspectRatio(bridge.PageInfo page) {
@@ -623,31 +712,39 @@ class _ReaderPageItem extends ConsumerWidget {
 }
 
 class _PagePlaceholder extends StatelessWidget {
-  const _PagePlaceholder({required this.aspectRatio, this.label});
+  const _PagePlaceholder({
+    required this.aspectRatio,
+    required this.width,
+    this.label,
+  });
 
   final double aspectRatio;
+  final double width;
   final String? label;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.center,
-      child: AspectRatio(
-        aspectRatio: aspectRatio,
-        child: ColoredBox(
-          color: const Color(0xff141414),
-          child: Align(
-            alignment: Alignment.center,
-            child: label == null
-                ? const ProgressRing()
-                : Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      label!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
+      child: SizedBox(
+        width: width,
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: ColoredBox(
+            color: const Color(0xff141414),
+            child: Align(
+              alignment: Alignment.center,
+              child: label != null
+                  ? Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        label!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    )
+                  : const ProgressRing(),
+            ),
           ),
         ),
       ),
@@ -1340,38 +1437,64 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                 ),
               ),
               Expanded(
-                child: Row(
-                  children: [
-                    for (var index = 0; index < count; index++)
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: _hovered ? 2 : 1,
-                          ),
-                          child: Tooltip(
-                            message: '${index + 1}',
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () => widget.onSelected(index),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 150),
-                                  curve: Curves.easeOutCubic,
-                                  height: _hovered ? 12 : 4,
-                                  decoration: BoxDecoration(
-                                    color: index <= current
-                                        ? const Color(0xff9aa7b5)
-                                        : Colors.white.withValues(alpha: 0.20),
-                                    borderRadius: BorderRadius.circular(99),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) {
+                          final width = constraints.maxWidth;
+                          if (width <= 0) {
+                            return;
+                          }
+                          final fraction = (details.localPosition.dx / width)
+                              .clamp(0.0, 0.999999);
+                          widget.onSelected((fraction * count).floor());
+                        },
+                        child: Row(
+                          children: [
+                            for (var index = 0; index < count; index++)
+                              Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: _hovered ? 2 : 1,
+                                  ),
+                                  child: Tooltip(
+                                    message: '${index + 1}',
+                                    child: SizedBox.expand(
+                                      key: ValueKey(
+                                        'reader-page-indicator-$index',
+                                      ),
+                                      child: Center(
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 150,
+                                          ),
+                                          curve: Curves.easeOutCubic,
+                                          height: _hovered ? 12 : 4,
+                                          width: double.infinity,
+                                          decoration: BoxDecoration(
+                                            color: index <= current
+                                                ? const Color(0xff9aa7b5)
+                                                : Colors.white.withValues(
+                                                    alpha: 0.20,
+                                                  ),
+                                            borderRadius: BorderRadius.circular(
+                                              99,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
+                          ],
                         ),
-                      ),
-                  ],
+                      );
+                    },
+                  ),
                 ),
               ),
               AnimatedContainer(
