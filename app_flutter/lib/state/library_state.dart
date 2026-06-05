@@ -16,18 +16,27 @@ final librarySourceStatusProvider = FutureProvider<bridge.LibrarySourceStatus>((
   return ref.watch(comicRdApiProvider).checkLibrarySource();
 });
 
-final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
+final rawLibraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
   ref,
 ) async {
   final api = ref.watch(comicRdApiProvider);
+  final sortBy = ref.watch(
+    libraryPreferencesProvider.select((preferences) => preferences.sortBy),
+  );
+  final sortDir = ref.watch(
+    libraryPreferencesProvider.select((preferences) => preferences.sortDir),
+  );
+  return api.listLibraryComicsRaw(sortBy: sortBy, sortDir: sortDir);
+});
+
+final libraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
+  ref,
+) async {
   final preferences = ref.watch(libraryPreferencesProvider);
   final progressPaths = (await ref.watch(
     comicsWithProgressProvider.future,
   )).toSet();
-  final comics = await api.listLibraryComicsRaw(
-    sortBy: preferences.sortBy,
-    sortDir: preferences.sortDir,
-  );
+  final comics = await ref.watch(rawLibraryComicsProvider.future);
   final query = preferences.query.trim().toLowerCase();
   return comics
       .where(

@@ -78,6 +78,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final preferences = ref.watch(libraryPreferencesProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
     final history = ref.watch(readingHistoryProvider);
+    final rawComics = ref.watch(rawLibraryComicsProvider);
     final comics = ref.watch(libraryComicsProvider);
     final bookmarks = ref.watch(allBookmarksProvider);
     final bookmarkedPaths =
@@ -106,6 +107,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
+                Tooltip(
+                  message: text.refresh,
+                  child: IconButton(
+                    onPressed: _refreshLibrary,
+                    icon: const Icon(FluentIcons.refresh),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 ToggleButton(
                   checked: preferences.displayMode == LibraryDisplayMode.grid,
                   onChanged: (value) => _setDisplayMode(
@@ -182,6 +191,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           : FluentIcons.sort_down,
                     ),
                   ),
+                ),
+                const Spacer(),
+                _ComicCountLabel(
+                  text: text,
+                  visibleComics: comics,
+                  totalComics: rawComics,
                 ),
               ],
             ),
@@ -341,6 +356,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         );
   }
 
+  Future<void> _refreshLibrary() async {
+    ref.invalidate(libraryComicsProvider);
+    await Future.wait<void>([
+      ref.refresh(librarySourceStatusProvider.future).then((_) {}),
+      ref.refresh(rawLibraryComicsProvider.future).then((_) {}),
+      ref.refresh(comicsWithProgressProvider.future).then((_) {}),
+      ref.refresh(readingHistoryProvider.future).then((_) {}),
+      ref.refresh(allBookmarksProvider.future).then((_) {}),
+    ]);
+  }
+
   Future<void> _toggleComicBookmark(
     bridge.RawComic comic,
     bool bookmarked,
@@ -364,6 +390,51 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   Future<void> _openContainingFolder(bridge.RawComic comic) async {
     await ref.read(comicRdApiProvider).openContainingFolder(comic.sourcePath);
+  }
+}
+
+class _ComicCountLabel extends StatelessWidget {
+  const _ComicCountLabel({
+    required this.text,
+    required this.visibleComics,
+    required this.totalComics,
+  });
+
+  final AppStrings text;
+  final AsyncValue<List<bridge.RawComic>> visibleComics;
+  final AsyncValue<List<bridge.RawComic>> totalComics;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    final total = totalComics.asData?.value.length;
+    final visible = visibleComics.asData?.value.length;
+    final isLoading = totalComics.isLoading || visibleComics.isLoading;
+
+    final label = switch ((visible, total)) {
+      (final int visibleCount, final int totalCount)
+          when visibleCount != totalCount =>
+        '${text.showingComics} $visibleCount/$totalCount',
+      (final int _, final int totalCount) => '${text.totalComics}: $totalCount',
+      _ => text.totalComics,
+    };
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isLoading) ...[
+          const SizedBox(width: 16, height: 16, child: ProgressRing()),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          label,
+          style: theme.typography.caption?.copyWith(
+            color: theme.resources.textFillColorSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 }
 
