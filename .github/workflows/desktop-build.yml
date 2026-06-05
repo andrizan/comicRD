@@ -144,6 +144,12 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install dav1d via vcpkg
+        run: |
+          vcpkg install dav1d:x64-windows
+          echo "PKG_CONFIG_PATH=$VCPKG_INSTALLATION_ROOT/packages/dav1d_x64-windows/lib/pkgconfig" >> $env:GITHUB_ENV
+        shell: pwsh
+
       - name: Fetch Flutter dependencies
         working-directory: app_flutter
         run: flutter pub get
@@ -196,6 +202,9 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dav1d
+        run: brew install dav1d pkg-config
 
       - name: Fetch Flutter dependencies
         working-directory: app_flutter
