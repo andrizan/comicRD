@@ -109,28 +109,43 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Tooltip(
-                  message: text.refresh,
-                  child: IconButton(
-                    onPressed: _refreshLibrary,
-                    icon: const Icon(FluentIcons.refresh),
+                SizedBox(
+                  height: 38,
+                  child: Tooltip(
+                    message: text.refresh,
+                    child: IconButton(
+                      onPressed: _refreshLibrary,
+                      icon: const Icon(FluentIcons.refresh),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                ToggleButton(
-                  checked: preferences.displayMode == LibraryDisplayMode.grid,
-                  onChanged: (value) => _setDisplayMode(
-                    value ? LibraryDisplayMode.grid : LibraryDisplayMode.list,
+                SizedBox(
+                  height: 38,
+                  child: ToggleButton(
+                    checked:
+                        preferences.displayMode == LibraryDisplayMode.grid,
+                    onChanged: (value) => _setDisplayMode(
+                      value
+                          ? LibraryDisplayMode.grid
+                          : LibraryDisplayMode.list,
+                    ),
+                    child: const Icon(FluentIcons.grid_view_medium),
                   ),
-                  child: const Icon(FluentIcons.grid_view_medium),
                 ),
                 const SizedBox(width: 4),
-                ToggleButton(
-                  checked: preferences.displayMode == LibraryDisplayMode.list,
-                  onChanged: (value) => _setDisplayMode(
-                    value ? LibraryDisplayMode.list : LibraryDisplayMode.grid,
+                SizedBox(
+                  height: 38,
+                  child: ToggleButton(
+                    checked:
+                        preferences.displayMode == LibraryDisplayMode.list,
+                    onChanged: (value) => _setDisplayMode(
+                      value
+                          ? LibraryDisplayMode.list
+                          : LibraryDisplayMode.grid,
+                    ),
+                    child: const Icon(FluentIcons.list),
                   ),
-                  child: const Icon(FluentIcons.list),
                 ),
               ],
             ),
@@ -139,65 +154,92 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
             child: Row(
               children: [
-                ToggleButton(
-                  checked: preferences.viewMode == LibraryViewMode.all,
-                  onChanged: (value) => _setViewMode(LibraryViewMode.all),
-                  child: Text(text.all),
-                ),
-                const SizedBox(width: 4),
-                ToggleButton(
-                  checked: preferences.viewMode == LibraryViewMode.unread,
-                  onChanged: (value) => _setViewMode(LibraryViewMode.unread),
-                  child: Text(text.unread),
-                ),
-                const SizedBox(width: 4),
-                ToggleButton(
-                  checked: preferences.viewMode == LibraryViewMode.reading,
-                  onChanged: (value) => _setViewMode(LibraryViewMode.reading),
-                  child: Text(text.progress),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          height: 38,
+                          child: ToggleButton(
+                            checked:
+                                preferences.viewMode == LibraryViewMode.all,
+                            onChanged: (value) =>
+                                _setViewMode(LibraryViewMode.all),
+                            child: Text(text.all),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          height: 38,
+                          child: ToggleButton(
+                            checked:
+                                preferences.viewMode == LibraryViewMode.unread,
+                            onChanged: (value) =>
+                                _setViewMode(LibraryViewMode.unread),
+                            child: Text(text.unread),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          height: 38,
+                          child: ToggleButton(
+                            checked:
+                                preferences.viewMode == LibraryViewMode.reading,
+                            onChanged: (value) =>
+                                _setViewMode(LibraryViewMode.reading),
+                            child: Text(text.progress),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 38,
+                          child: ComboBox<bridge.SortBy>(
+                            value: preferences.sortBy,
+                            items: [
+                              ComboBoxItem(
+                                value: bridge.SortBy.name,
+                                child: Text(text.name),
+                              ),
+                              ComboBoxItem(
+                                value: bridge.SortBy.folderDate,
+                                child: Text(text.folderDate),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                _setSort(value, preferences.sortDir);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          height: 38,
+                          child: Tooltip(
+                            message: preferences.sortDir == bridge.SortDir.asc
+                                ? text.ascending
+                                : text.descending,
+                            child: IconButton(
+                              onPressed: () => _setSort(
+                                preferences.sortBy,
+                                preferences.sortDir == bridge.SortDir.asc
+                                    ? bridge.SortDir.desc
+                                    : bridge.SortDir.asc,
+                              ),
+                              icon: Icon(
+                                preferences.sortDir == bridge.SortDir.asc
+                                    ? FluentIcons.sort_up
+                                    : FluentIcons.sort_down,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
-                SizedBox(
-                  height: 38,
-                  child: ComboBox<bridge.SortBy>(
-                    value: preferences.sortBy,
-                    items: [
-                      ComboBoxItem(
-                        value: bridge.SortBy.name,
-                        child: Text(text.name),
-                      ),
-                      ComboBoxItem(
-                        value: bridge.SortBy.folderDate,
-                        child: Text(text.folderDate),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        _setSort(value, preferences.sortDir);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Tooltip(
-                  message: preferences.sortDir == bridge.SortDir.asc
-                      ? text.ascending
-                      : text.descending,
-                  child: IconButton(
-                    onPressed: () => _setSort(
-                      preferences.sortBy,
-                      preferences.sortDir == bridge.SortDir.asc
-                          ? bridge.SortDir.desc
-                          : bridge.SortDir.asc,
-                    ),
-                    icon: Icon(
-                      preferences.sortDir == bridge.SortDir.asc
-                          ? FluentIcons.sort_up
-                          : FluentIcons.sort_down,
-                    ),
-                  ),
-                ),
-                const Spacer(),
                 _ComicCountLabel(
                   text: text,
                   visibleComics: comics,
@@ -423,7 +465,7 @@ class _ComicList extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 220,
-              mainAxisExtent: 164,
+              mainAxisExtent: 184,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
@@ -567,15 +609,9 @@ class _ComicGridTile extends StatelessWidget {
                   children: [
                     const Icon(FluentIcons.folder_open, size: 20),
                     const Spacer(),
-                    _ReadStatusBadge(
-                      text: text,
-                      readCount: comic.readChapterCount,
-                      totalCount: comic.chapterCount,
-                      inProgressCount: comic.inProgressChapterCount,
-                    ),
                     if (bookmarked) ...[
-                      const SizedBox(width: 8),
                       _BookmarkMarker(text: text),
+                      const SizedBox(width: 4),
                     ],
                     _ComicActionsButton(
                       text: text,
@@ -586,6 +622,13 @@ class _ComicGridTile extends StatelessWidget {
                       onOpenFolder: onOpenFolder,
                     ),
                   ],
+                ),
+                const SizedBox(height: 6),
+                _ReadStatusBadge(
+                  text: text,
+                  readCount: comic.readChapterCount,
+                  totalCount: comic.chapterCount,
+                  inProgressCount: comic.inProgressChapterCount,
                 ),
                 const Spacer(),
                 Text(
@@ -638,6 +681,9 @@ class _ReadStatusBadge extends StatelessWidget {
         ),
         child: Text(
           text.read,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: theme.accentColor,
             fontSize: 11,
@@ -655,6 +701,9 @@ class _ReadStatusBadge extends StatelessWidget {
         ),
         child: Text(
           '${text.reading} $readCount/$totalCount',
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: theme.accentColor,
             fontSize: 11,
@@ -671,6 +720,9 @@ class _ReadStatusBadge extends StatelessWidget {
       ),
       child: Text(
         text.unread,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: theme.resources.textFillColorSecondary,
           fontSize: 11,
@@ -768,7 +820,7 @@ class _HistoryList extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 220,
-              mainAxisExtent: 100,
+              mainAxisExtent: 120,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
@@ -901,7 +953,7 @@ class _BookmarkList extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 220,
-              mainAxisExtent: 100,
+              mainAxisExtent: 120,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
