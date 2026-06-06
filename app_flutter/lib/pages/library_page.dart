@@ -148,239 +148,249 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         }
       },
       child: ScaffoldPage(
-      content: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 38,
-                    child: TextBox(
-                      controller: _search,
-                      prefix: const Padding(
-                        padding: EdgeInsets.only(left: 8),
-                        child: Icon(FluentIcons.search, size: 16),
+        content: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 38,
+                      child: TextBox(
+                        controller: _search,
+                        prefix: const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(FluentIcons.search, size: 16),
+                        ),
+                        placeholder: text.search,
+                        onChanged: (value) {
+                          _searchDebounce?.cancel();
+                          _searchDebounce = Timer(
+                            const Duration(milliseconds: 300),
+                            () => ref
+                                .read(libraryPreferencesProvider.notifier)
+                                .setQuery(value),
+                          );
+                        },
                       ),
-                      placeholder: text.search,
-                      onChanged: (value) {
-                        _searchDebounce?.cancel();
-                        _searchDebounce = Timer(
-                          const Duration(milliseconds: 300),
-                          () => ref
-                              .read(libraryPreferencesProvider.notifier)
-                              .setQuery(value),
-                        );
-                      },
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 38,
-                  child: Tooltip(
-                    message: text.refresh,
-                    child: IconButton(
-                      onPressed: _refreshLibrary,
-                      icon: const Icon(FluentIcons.refresh),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    height: 38,
+                    child: Tooltip(
+                      message: text.refresh,
+                      child: IconButton(
+                        onPressed: _refreshLibrary,
+                        icon: const Icon(FluentIcons.refresh),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 38,
-                  child: ToggleButton(
-                    checked: preferences.displayMode == LibraryDisplayMode.grid,
-                    onChanged: (value) => _setDisplayMode(
-                      value ? LibraryDisplayMode.grid : LibraryDisplayMode.list,
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 38,
+                    child: ToggleButton(
+                      checked:
+                          preferences.displayMode == LibraryDisplayMode.grid,
+                      onChanged: (value) => _setDisplayMode(
+                        value
+                            ? LibraryDisplayMode.grid
+                            : LibraryDisplayMode.list,
+                      ),
+                      child: const Icon(FluentIcons.grid_view_medium),
                     ),
-                    child: const Icon(FluentIcons.grid_view_medium),
                   ),
-                ),
-                const SizedBox(width: 4),
-                SizedBox(
-                  height: 38,
-                  child: ToggleButton(
-                    checked: preferences.displayMode == LibraryDisplayMode.list,
-                    onChanged: (value) => _setDisplayMode(
-                      value ? LibraryDisplayMode.list : LibraryDisplayMode.grid,
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    height: 38,
+                    child: ToggleButton(
+                      checked:
+                          preferences.displayMode == LibraryDisplayMode.list,
+                      onChanged: (value) => _setDisplayMode(
+                        value
+                            ? LibraryDisplayMode.list
+                            : LibraryDisplayMode.grid,
+                      ),
+                      child: const Icon(FluentIcons.list),
                     ),
-                    child: const Icon(FluentIcons.list),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          height: 38,
-                          child: ToggleButton(
-                            checked:
-                                preferences.viewMode == LibraryViewMode.all,
-                            onChanged: (value) =>
-                                _setViewMode(LibraryViewMode.all),
-                            child: Text(text.all),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            height: 38,
+                            child: ToggleButton(
+                              checked:
+                                  preferences.viewMode == LibraryViewMode.all,
+                              onChanged: (value) =>
+                                  _setViewMode(LibraryViewMode.all),
+                              child: Text(text.all),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        SizedBox(
-                          height: 38,
-                          child: ToggleButton(
-                            checked:
-                                preferences.viewMode == LibraryViewMode.unread,
-                            onChanged: (value) =>
-                                _setViewMode(LibraryViewMode.unread),
-                            child: Text(text.unread),
+                          const SizedBox(width: 4),
+                          SizedBox(
+                            height: 38,
+                            child: ToggleButton(
+                              checked:
+                                  preferences.viewMode ==
+                                  LibraryViewMode.unread,
+                              onChanged: (value) =>
+                                  _setViewMode(LibraryViewMode.unread),
+                              child: Text(text.unread),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        SizedBox(
-                          height: 38,
-                          child: ToggleButton(
-                            checked:
-                                preferences.viewMode == LibraryViewMode.reading,
-                            onChanged: (value) =>
-                                _setViewMode(LibraryViewMode.reading),
-                            child: Text(text.progress),
+                          const SizedBox(width: 4),
+                          SizedBox(
+                            height: 38,
+                            child: ToggleButton(
+                              checked:
+                                  preferences.viewMode ==
+                                  LibraryViewMode.reading,
+                              onChanged: (value) =>
+                                  _setViewMode(LibraryViewMode.reading),
+                              child: Text(text.progress),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 38,
-                          child: ComboBox<bridge.SortBy>(
-                            value: preferences.sortBy,
-                            items: [
-                              ComboBoxItem(
-                                value: bridge.SortBy.name,
-                                child: Text(text.name),
-                              ),
-                              ComboBoxItem(
-                                value: bridge.SortBy.folderDate,
-                                child: Text(text.folderDate),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                _setSort(value, preferences.sortDir);
-                              }
-                            },
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 38,
+                            child: ComboBox<bridge.SortBy>(
+                              value: preferences.sortBy,
+                              items: [
+                                ComboBoxItem(
+                                  value: bridge.SortBy.name,
+                                  child: Text(text.name),
+                                ),
+                                ComboBoxItem(
+                                  value: bridge.SortBy.folderDate,
+                                  child: Text(text.folderDate),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value != null) {
+                                  _setSort(value, preferences.sortDir);
+                                }
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        SizedBox(
-                          height: 38,
-                          child: Tooltip(
-                            message: preferences.sortDir == bridge.SortDir.asc
-                                ? text.ascending
-                                : text.descending,
-                            child: IconButton(
-                              onPressed: () => _setSort(
-                                preferences.sortBy,
-                                preferences.sortDir == bridge.SortDir.asc
-                                    ? bridge.SortDir.desc
-                                    : bridge.SortDir.asc,
-                              ),
-                              icon: Icon(
-                                preferences.sortDir == bridge.SortDir.asc
-                                    ? FluentIcons.sort_up
-                                    : FluentIcons.sort_down,
+                          const SizedBox(width: 4),
+                          SizedBox(
+                            height: 38,
+                            child: Tooltip(
+                              message: preferences.sortDir == bridge.SortDir.asc
+                                  ? text.ascending
+                                  : text.descending,
+                              child: IconButton(
+                                onPressed: () => _setSort(
+                                  preferences.sortBy,
+                                  preferences.sortDir == bridge.SortDir.asc
+                                      ? bridge.SortDir.desc
+                                      : bridge.SortDir.asc,
+                                ),
+                                icon: Icon(
+                                  preferences.sortDir == bridge.SortDir.asc
+                                      ? FluentIcons.sort_up
+                                      : FluentIcons.sort_down,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                _TabCountLabel(
-                  text: text,
-                  selectedTab: preferences.selectedTab,
-                  visibleComics: comicsState.visibleCount,
-                  totalComics: comicsState.filteredTotal,
-                  historyCount: history.asData?.value.length ?? 0,
-                  bookmarksCount: bookmarks.asData?.value.length ?? 0,
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  _TabCountLabel(
+                    text: text,
+                    selectedTab: preferences.selectedTab,
+                    visibleComics: comicsState.visibleCount,
+                    totalComics: comicsState.filteredTotal,
+                    historyCount: history.asData?.value.length ?? 0,
+                    bookmarksCount: bookmarks.asData?.value.length ?? 0,
+                  ),
+                ],
+              ),
             ),
-          ),
-          sourceStatus.when(
-            data: (status) {
-              if (status.configured && status.error == null) {
-                return const SizedBox.shrink();
-              }
-              final message = status.configured
-                  ? status.error!
-                  : text.noLibrarySource;
-              return Padding(
+            sourceStatus.when(
+              data: (status) {
+                if (status.configured && status.error == null) {
+                  return const SizedBox.shrink();
+                }
+                final message = status.configured
+                    ? status.error!
+                    : text.noLibrarySource;
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      message,
+                      style: TextStyle(
+                        color: FluentTheme.of(context).accentColor,
+                      ),
+                    ),
+                  ),
+                );
+              },
+              error: (error, _) => Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    message,
+                    error.toString(),
                     style: TextStyle(
                       color: FluentTheme.of(context).accentColor,
                     ),
                   ),
                 ),
-              );
-            },
-            error: (error, _) => Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  error.toString(),
-                  style: TextStyle(color: FluentTheme.of(context).accentColor),
-                ),
               ),
+              loading: () => const SizedBox.shrink(),
             ),
-            loading: () => const SizedBox.shrink(),
-          ),
-          Expanded(
-            child: switch (preferences.selectedTab) {
-              LibraryTab.history => _HistoryList(
-                history: history,
-                displayMode: preferences.displayMode,
-                controller: _historyScroll,
-                emptyLabel: text.emptyLibrary,
-              ),
-              LibraryTab.library => _ComicList(
-                text: text,
-                comics: comicsState.items,
-                visibleCount: comicsState.visibleCount,
-                hasMore: comicsState.hasMore,
-                onLoadMore: () =>
-                    ref.read(libraryPaginationProvider.notifier).loadMore(),
-                displayMode: preferences.displayMode,
-                bookmarkedPaths: bookmarkedPaths,
-                controller: _libraryScroll,
-                emptyLabel: text.emptyLibrary,
-                onToggleBookmark: _toggleComicBookmark,
-                onCopyTitle: _copyComicTitle,
-                onCopyPath: _copyComicPath,
-                onOpenFolder: _openContainingFolder,
-              ),
-              LibraryTab.bookmarks => _BookmarkList(
-                bookmarks: bookmarks,
-                displayMode: preferences.displayMode,
-                controller: _bookmarksScroll,
-                emptyLabel: text.emptyLibrary,
-              ),
-            },
-          ),
-        ],
+            Expanded(
+              child: switch (preferences.selectedTab) {
+                LibraryTab.history => _HistoryList(
+                  history: history,
+                  displayMode: preferences.displayMode,
+                  controller: _historyScroll,
+                  emptyLabel: text.emptyLibrary,
+                ),
+                LibraryTab.library => _ComicList(
+                  text: text,
+                  comics: comicsState.items,
+                  visibleCount: comicsState.visibleCount,
+                  hasMore: comicsState.hasMore,
+                  onLoadMore: () =>
+                      ref.read(libraryPaginationProvider.notifier).loadMore(),
+                  displayMode: preferences.displayMode,
+                  bookmarkedPaths: bookmarkedPaths,
+                  controller: _libraryScroll,
+                  emptyLabel: text.emptyLibrary,
+                  onToggleBookmark: _toggleComicBookmark,
+                  onCopyTitle: _copyComicTitle,
+                  onCopyPath: _copyComicPath,
+                  onOpenFolder: _openContainingFolder,
+                ),
+                LibraryTab.bookmarks => _BookmarkList(
+                  bookmarks: bookmarks,
+                  displayMode: preferences.displayMode,
+                  controller: _bookmarksScroll,
+                  emptyLabel: text.emptyLibrary,
+                ),
+              },
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 

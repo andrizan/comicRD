@@ -403,8 +403,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (bestDistance > viewportHeight * 0.5) {
       final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
       if (data != null && data.pages.isNotEmpty) {
-        final pageGap =
-            ref.read(readerSettingsProvider).pageGap;
+        final pageGap = ref.read(readerSettingsProvider).pageGap;
         double offset = 78;
         for (var i = 0; i < data.pages.length; i++) {
           final pInfo = data.pages[i];
