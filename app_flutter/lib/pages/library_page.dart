@@ -558,13 +558,14 @@ class _ComicList extends StatelessWidget {
                                 if (comic.dateModified > 0)
                                   Text(
                                     _formatModifiedDate(comic.dateModified),
-                                    style: FluentTheme.of(
-                                      context,
-                                    ).typography.caption?.copyWith(
-                                      color: FluentTheme.of(context)
-                                          .resources
-                                          .textFillColorSecondary,
-                                    ),
+                                    style: FluentTheme.of(context)
+                                        .typography
+                                        .caption
+                                        ?.copyWith(
+                                          color: FluentTheme.of(
+                                            context,
+                                          ).resources.textFillColorSecondary,
+                                        ),
                                   ),
                               ],
                             ),
@@ -683,9 +684,9 @@ class _ComicGridTile extends StatelessWidget {
                   Text(
                     _formatModifiedDate(comic.dateModified),
                     style: FluentTheme.of(context).typography.caption?.copyWith(
-                      color: FluentTheme.of(context)
-                          .resources
-                          .textFillColorSecondary,
+                      color: FluentTheme.of(
+                        context,
+                      ).resources.textFillColorSecondary,
                     ),
                   ),
               ],

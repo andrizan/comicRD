@@ -380,10 +380,15 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
 
   Future<void> _exportBackup() async {
     final text = stringsFor(_locale);
+    final now = DateTime.now();
+    final timestamp = now
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .substring(0, 19);
     final location = await getSaveLocation(
-      suggestedName: 'comicrd-backup.db',
+      suggestedName: 'comicrd-backup-$timestamp.zip',
       acceptedTypeGroups: [
-        XTypeGroup(label: text.sqliteDatabase, extensions: ['db']),
+        XTypeGroup(label: 'ComicRD Backup', extensions: ['zip']),
       ],
     );
     if (location == null) return;
@@ -397,7 +402,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     final text = stringsFor(_locale);
     final file = await openFile(
       acceptedTypeGroups: [
-        XTypeGroup(label: text.sqliteDatabase, extensions: ['db']),
+        XTypeGroup(label: 'ComicRD Backup', extensions: ['zip', 'db']),
       ],
     );
     if (file == null) return;

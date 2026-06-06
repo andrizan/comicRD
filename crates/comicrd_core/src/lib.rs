@@ -782,8 +782,21 @@ impl ComicRdCore {
             fs::remove_file(output_path)
                 .map_err(|e| format!("failed replacing existing backup file: {e}"))?;
         }
-        fs::copy(&self.db_path, output_path)
-            .map_err(|e| format!("failed exporting database backup: {e}"))?;
+
+        let db_bytes = fs::read(&self.db_path)
+            .map_err(|e| format!("failed reading database file: {e}"))?;
+        let zip_file = fs::File::create(output_path)
+            .map_err(|e| format!("failed creating zip file: {e}"))?;
+        let mut zip = zip::ZipWriter::new(zip_file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        zip.start_file("comicrd.db", options)
+            .map_err(|e| format!("failed starting zip entry: {e}"))?;
+        use std::io::Write;
+        zip.write_all(&db_bytes)
+            .map_err(|e| format!("failed writing db to zip: {e}"))?;
+        zip.finish()
+            .map_err(|e| format!("failed finishing zip: {e}"))?;
         Ok(())
     }
 
@@ -795,6 +808,19 @@ impl ComicRdCore {
         if !input_path.exists() || !input_path.is_file() {
             return Err("file backup tidak ditemukan".to_string());
         }
+
+        let temp_dir = std::env::temp_dir().join(format!("comicrd-import-{}", now_ts()));
+        fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("failed creating temp dir: {e}"))?;
+        let db_bytes = if is_zip_file(input_path) {
+            extract_db_from_zip(input_path)?
+        } else {
+            fs::read(input_path)
+                .map_err(|e| format!("failed reading backup file: {e}"))?
+        };
+        let temp_db_path = temp_dir.join("comicrd.db");
+        fs::write(&temp_db_path, &db_bytes)
+            .map_err(|e| format!("failed writing temp db: {e}"))?;
 
         let mut conn_guard = self
             .conn
@@ -820,7 +846,7 @@ impl ComicRdCore {
         }
         remove_sqlite_sidecars(&self.db_path);
 
-        fs::copy(input_path, &self.db_path)
+        fs::copy(&temp_db_path, &self.db_path)
             .map_err(|e| format!("failed importing backup file: {e}"))?;
         let imported_conn = open_database_file(&self.db_path)
             .map_err(|e| format!("failed opening imported db: {e}"))?;
@@ -828,6 +854,32 @@ impl ComicRdCore {
         *conn_guard = imported_conn;
         self.clear_library_list_cache();
         self.clear_chapter_discovery_cache();
+        let _ = fs::remove_dir_all(&temp_dir);
         Ok(())
     }
+}
+
+fn is_zip_file(path: &Path) -> bool {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    ext == "zip"
+}
+
+fn extract_db_from_zip(zip_path: &Path) -> Result<Vec<u8>, String> {
+    let file = fs::File::open(zip_path)
+        .map_err(|e| format!("failed opening zip file: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("failed reading zip archive: {e}"))?;
+    let mut entry = archive
+        .by_name("comicrd.db")
+        .map_err(|_| "comicrd.db not found in zip archive".to_string())?;
+    let mut bytes = Vec::new();
+    use std::io::Read;
+    entry
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("failed reading db from zip: {e}"))?;
+    Ok(bytes)
 }

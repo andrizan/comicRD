@@ -6,7 +6,7 @@ fn export_and_import_database_backup_replaces_active_database() {
     let temp = tempdir().expect("tempdir");
     let source_app_data = temp.path().join("source-app-data");
     let target_app_data = temp.path().join("target-app-data");
-    let backup_path = temp.path().join("backup").join("comicrd-backup.db");
+    let backup_path = temp.path().join("backup").join("comicrd-backup.zip");
 
     let source = ComicRdCore::open(&source_app_data).expect("open source");
     source
