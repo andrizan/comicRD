@@ -555,6 +555,17 @@ class _ComicList extends StatelessWidget {
                                     context,
                                   ).typography.caption,
                                 ),
+                                if (comic.dateModified > 0)
+                                  Text(
+                                    _formatModifiedDate(comic.dateModified),
+                                    style: FluentTheme.of(
+                                      context,
+                                    ).typography.caption?.copyWith(
+                                      color: FluentTheme.of(context)
+                                          .resources
+                                          .textFillColorSecondary,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -668,6 +679,15 @@ class _ComicGridTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: FluentTheme.of(context).typography.caption,
                 ),
+                if (comic.dateModified > 0)
+                  Text(
+                    _formatModifiedDate(comic.dateModified),
+                    style: FluentTheme.of(context).typography.caption?.copyWith(
+                      color: FluentTheme.of(context)
+                          .resources
+                          .textFillColorSecondary,
+                    ),
+                  ),
               ],
             ),
           );
@@ -1109,4 +1129,13 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatModifiedDate(int timestamp) {
+  if (timestamp <= 0) return '';
+  final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final year = date.year;
+  return '$day/$month/$year';
 }

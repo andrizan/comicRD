@@ -230,6 +230,7 @@ class AppStrings {
     required this.backupExported,
     required this.backupImported,
     required this.sqliteDatabase,
+    required this.modified,
   });
 
   // App identity
@@ -315,6 +316,7 @@ class AppStrings {
   final String backupExported;
   final String backupImported;
   final String sqliteDatabase;
+  final String modified;
 
   static const en = AppStrings(
     appName: 'ComicRD',
@@ -391,6 +393,7 @@ class AppStrings {
     backupExported: 'Backup exported',
     backupImported: 'Backup imported',
     sqliteDatabase: 'SQLite database',
+    modified: 'Modified',
   );
 
   static const id = AppStrings(
@@ -468,5 +471,6 @@ class AppStrings {
     backupExported: 'Cadangan diekspor',
     backupImported: 'Cadangan diimpor',
     sqliteDatabase: 'Database SQLite',
+    modified: 'Diubah',
   );
 }
