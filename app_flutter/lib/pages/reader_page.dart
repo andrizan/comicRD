@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' as widgets;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,13 +32,13 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   static int _activeInstances = 0;
+  static const double _topPadding = 78;
+  static const double _bottomChromeHeight = 48;
   late ScrollController _scroll;
   final _focusNode = FocusNode(debugLabel: 'ReaderPage');
-  final _pageKeys = <int, GlobalKey>{};
   Timer? _progressTimer;
   int _currentPage = 0;
   int _lastSavedPage = -1;
-  int _jumpGeneration = 0;
   bool _ignoreNextScrollUpdate = false;
   bool _restoredProgress = false;
   bool _initialScrollDone = false;
@@ -46,9 +47,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final ComicRdApi _api;
   ReaderData? _lastReaderData;
   Completer<void>? _prefetchQueue;
-  int? _prefetchQueuedPage;
+  int? _prefetchQueuedStart;
+  int? _prefetchQueuedEnd;
   bool _wasReset = false;
-  final _renderedPageCache = <int, bridge.RenderedPage>{};
+  int _renderStart = 0;
+  int _renderEnd = -1;
 
   @override
   void initState() {
@@ -63,13 +66,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void dispose() {
     _progressTimer?.cancel();
     unawaited(_saveProgressDirect());
-    _pageKeys.clear();
-    _renderedPageCache.clear();
+    final data = _lastReaderData;
+    if (data != null) {
+      unawaited(
+        _api.evictChapterPages(chapterId: widget.chapterId, keepPages: []),
+      );
+    }
     _activeInstances--;
     if (_activeInstances <= 0) {
       _activeInstances = 0;
       PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
       PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
     }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scroll.dispose();
@@ -86,13 +94,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _progressTimer?.cancel();
     _currentPage = 0;
     _lastSavedPage = -1;
-    _jumpGeneration++;
     _ignoreNextScrollUpdate = false;
     _restoredProgress = false;
     _initialScrollDone = false;
-    _pageKeys.clear();
-    _renderedPageCache.clear();
+    _renderStart = 0;
+    _renderEnd = -1;
     _toolbarVisible = true;
+    final oldData = _lastReaderData;
+    if (oldData != null) {
+      unawaited(
+        _releaseChapterMemory(
+          chapterId: oldWidget.chapterId,
+          pageCount: oldData.pages.length,
+        ),
+      );
+    }
     if (_scroll.hasClients) {
       _scroll.jumpTo(0);
     }
@@ -286,25 +302,43 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       trackBorderColor: const Color(0xff050505),
       child: ListView.builder(
         controller: _scroll,
-        padding: EdgeInsets.only(top: 78, bottom: 48 + readerSettings.pageGap),
-        itemCount: data.pages.length,
-        itemBuilder: (context, index) {
-          final page = data.pages[index];
-          return Padding(
-            key: _pageKeys.putIfAbsent(index, GlobalKey.new),
-            padding: EdgeInsets.only(
-              bottom: index == data.pages.length - 1
-                  ? 0
-                  : readerSettings.pageGap,
-            ),
-            child: _ReaderPageItem(
-              chapterId: widget.chapterId,
-              page: page,
-              zoom: readerSettings.zoom,
-              renderedCache: _renderedPageCache,
-            ),
-          );
+        scrollCacheExtent: const ScrollCacheExtent.pixels(1500),
+        itemExtentBuilder: (index, _) {
+          if (index < 0 || index >= data.pages.length) {
+            return null;
+          }
+          final pageGap = index == data.pages.length - 1
+              ? 0
+              : readerSettings.pageGap;
+          return _pageDisplayHeight(data.pages[index], readerSettings.zoom) +
+              pageGap;
         },
+        padding: EdgeInsets.only(
+          top: _topPadding,
+          bottom: _bottomChromeHeight + readerSettings.pageGap,
+        ),
+        itemCount: data.pages.length,
+        itemBuilder: (context, index) =>
+            _readerPageListItem(data, readerSettings, index),
+      ),
+    );
+  }
+
+  Widget _readerPageListItem(
+    ReaderData data,
+    ReaderSettings readerSettings,
+    int index,
+  ) {
+    final page = data.pages[index];
+    return Padding(
+      key: ValueKey(page.index),
+      padding: EdgeInsets.only(
+        bottom: index == data.pages.length - 1 ? 0 : readerSettings.pageGap,
+      ),
+      child: _ReaderPageItem(
+        chapterId: widget.chapterId,
+        page: page,
+        zoom: readerSettings.zoom,
       ),
     );
   }
@@ -319,13 +353,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _restoredProgress = true;
-    _currentPage = 0;
-    _lastSavedPage = 0;
+    final page = data.initialPage;
+    _currentPage = page;
+    _lastSavedPage = page;
+    _setRenderWindowAround(page, data.pages.length);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_prefetchAround(0));
+      if (!mounted) {
+        return;
+      }
+      _jumpToPage(page, persist: false);
+      unawaited(_prefetchWindow(_renderStart, _renderEnd));
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
           setState(() => _initialScrollDone = true);
+          _updateViewportWindow(persistProgress: false);
         }
       });
     });
@@ -362,79 +403,121 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _ignoreNextScrollUpdate = false;
       return;
     }
-    final page = _pageAtViewportCenter();
-    if (page == _currentPage) {
-      return;
-    }
-    setState(() => _currentPage = page);
-    _scheduleProgressSave();
-    unawaited(_prefetchAround(page));
+    _updateViewportWindow();
   }
 
-  int _pageAtViewportCenter() {
-    if (!_scroll.hasClients) {
+  void _updateViewportWindow({bool persistProgress = true}) {
+    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+    if (data == null || data.pages.isEmpty || !_scroll.hasClients) {
+      return;
+    }
+    final settings = ref.read(readerSettingsProvider);
+    final range = _visiblePageRange(
+      pages: data.pages,
+      zoom: settings.zoom,
+      pageGap: settings.pageGap,
+    );
+    final page = _pageAtViewportCenter(
+      pages: data.pages,
+      zoom: settings.zoom,
+      pageGap: settings.pageGap,
+    );
+    final start = math.max(0, range.first - 2);
+    final end = math.min(data.pages.length - 1, range.last + 2);
+    final pageChanged = page != _currentPage;
+    final windowChanged = start != _renderStart || end != _renderEnd;
+    if (!pageChanged && !windowChanged) {
+      return;
+    }
+    setState(() {
+      _currentPage = page;
+      _renderStart = start;
+      _renderEnd = end;
+    });
+    if (pageChanged && persistProgress) {
+      _scheduleProgressSave();
+    }
+    unawaited(_prefetchWindow(start, end));
+  }
+
+  int _pageAtViewportCenter({
+    required List<bridge.PageInfo> pages,
+    required double zoom,
+    required double pageGap,
+  }) {
+    if (!_scroll.hasClients || pages.isEmpty) {
       return _currentPage;
     }
-    final scrollOffset = _scroll.offset;
-    final viewportHeight = _scroll.position.viewportDimension;
-    final viewportCenter = scrollOffset + viewportHeight / 2;
-    var bestPage = _currentPage;
-    var bestDistance = double.infinity;
+    final viewportCenter =
+        _scroll.offset + _scroll.position.viewportDimension / 2;
+    return _pageForOffset(
+      pages: pages,
+      zoom: zoom,
+      pageGap: pageGap,
+      offset: viewportCenter,
+    );
+  }
 
-    for (final entry in _pageKeys.entries) {
-      final renderObject = entry.value.currentContext?.findRenderObject();
-      if (renderObject is! RenderBox || !renderObject.hasSize) {
-        continue;
-      }
-      final localTop = renderObject.localToGlobal(Offset.zero).dy;
-      final globalTop = localTop + scrollOffset;
-      final globalBottom = globalTop + renderObject.size.height;
-      if (globalBottom <= scrollOffset ||
-          globalTop >= scrollOffset + viewportHeight) {
-        continue;
-      }
-      final pageCenter = (globalTop + globalBottom) / 2;
-      final distance = (pageCenter - viewportCenter).abs();
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestPage = entry.key;
-      }
-      if (distance < viewportHeight * 0.1) {
+  ({int first, int last}) _visiblePageRange({
+    required List<bridge.PageInfo> pages,
+    required double zoom,
+    required double pageGap,
+  }) {
+    if (!_scroll.hasClients || pages.isEmpty) {
+      return (first: _currentPage, last: _currentPage);
+    }
+    final visibleTop = _scroll.offset;
+    final visibleBottom = visibleTop + _scroll.position.viewportDimension;
+    var first = -1;
+    var last = -1;
+    var top = _topPadding;
+    for (var i = 0; i < pages.length; i++) {
+      final bottom = top + _pageDisplayHeight(pages[i], zoom);
+      if (bottom >= visibleTop && top <= visibleBottom) {
+        first = first == -1 ? i : first;
+        last = i;
+      } else if (top > visibleBottom) {
         break;
       }
+      top = bottom + pageGap;
     }
+    if (first == -1) {
+      final page = _pageForOffset(
+        pages: pages,
+        zoom: zoom,
+        pageGap: pageGap,
+        offset: visibleTop,
+      );
+      return (first: page, last: page);
+    }
+    return (first: first, last: last);
+  }
 
-    if (bestDistance > viewportHeight * 0.5) {
-      final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-      if (data != null && data.pages.isNotEmpty) {
-        final pageGap = ref.read(readerSettingsProvider).pageGap;
-        double offset = 78;
-        for (var i = 0; i < data.pages.length; i++) {
-          final pInfo = data.pages[i];
-          final w = pInfo.width ?? 900;
-          final h = pInfo.height ?? 1300;
-          final ratio = (w > 0 && h > 0) ? w / h : 900 / 1300;
-          final displayW = _scroll.position.viewportDimension - 16;
-          final pageHeight = displayW / ratio;
-          final pageBottom = offset + pageHeight;
-          if (pageBottom > scrollOffset &&
-              offset < scrollOffset + viewportHeight) {
-            final pageCenter = (offset + pageBottom) / 2;
-            final distance = (pageCenter - viewportCenter).abs();
-            if (distance < bestDistance) {
-              bestDistance = distance;
-              bestPage = i;
-            }
-          }
-          if (offset > scrollOffset + viewportHeight) {
-            break;
-          }
-          offset = pageBottom + pageGap;
-        }
+  int _pageForOffset({
+    required List<bridge.PageInfo> pages,
+    required double zoom,
+    required double pageGap,
+    required double offset,
+  }) {
+    var top = _topPadding;
+    for (var i = 0; i < pages.length; i++) {
+      final bottom = top + _pageDisplayHeight(pages[i], zoom);
+      if (offset <= bottom || i == pages.length - 1) {
+        return i;
       }
+      top = bottom + pageGap;
     }
+    return pages.length - 1;
+  }
 
-    return bestPage;
+  void _setRenderWindowAround(int page, int pageCount) {
+    if (pageCount <= 0) {
+      _renderStart = 0;
+      _renderEnd = -1;
+      return;
+    }
+    _renderStart = math.max(0, page - 2);
+    _renderEnd = math.min(pageCount - 1, page + 2);
   }
 
   void _scheduleProgressSave() {
@@ -515,24 +598,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.invalidate(filteredComicChaptersProvider(comicPath));
   }
 
-  Future<void> _prefetchAround(int page) async {
+  Future<void> _prefetchWindow(int start, int end) async {
     final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    if (data == null || data.pages.isEmpty) {
+    if (data == null || data.pages.isEmpty || end < start) {
       return;
     }
     if (_prefetchQueue != null && !_prefetchQueue!.isCompleted) {
-      _prefetchQueuedPage = page;
+      _prefetchQueuedStart = start;
+      _prefetchQueuedEnd = end;
       return;
     }
     final completer = Completer<void>();
     _prefetchQueue = completer;
-    _prefetchQueuedPage = null;
+    _prefetchQueuedStart = null;
+    _prefetchQueuedEnd = null;
     try {
-      final start = math.max(0, page - 2);
-      final end = math.min(data.pages.length - 1, page + 2);
+      final clampedStart = math.max(0, start);
+      final clampedEnd = math.min(data.pages.length - 1, end);
       final api = ref.read(comicRdApiProvider);
       final keepPages = Uint32List.fromList([
-        for (var index = start; index <= end; index++) index,
+        for (var index = clampedStart; index <= clampedEnd; index++) index,
       ]);
       await api.evictChapterPages(
         chapterId: widget.chapterId,
@@ -547,9 +632,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     } finally {
       completer.complete();
     }
-    final queued = _prefetchQueuedPage;
-    if (queued != null && mounted) {
-      await _prefetchAround(queued);
+    final queuedStart = _prefetchQueuedStart;
+    final queuedEnd = _prefetchQueuedEnd;
+    if (queuedStart != null && queuedEnd != null && mounted) {
+      await _prefetchWindow(queuedStart, queuedEnd);
     }
   }
 
@@ -588,7 +674,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _close(ReaderData data) async {
     await _saveProgress(immediate: true);
     _invalidateProgressProviders(data, onClose: true);
-    _invalidateRenderedPages(widget.chapterId, data.pages.length);
+    await _releaseChapterMemory(
+      chapterId: widget.chapterId,
+      pageCount: data.pages.length,
+    );
     ref.invalidate(readerDataProvider(widget.chapterId));
     if (!mounted) {
       return;
@@ -604,16 +693,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _switchChapter(int chapterId) async {
     await _saveProgress(immediate: true);
     final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    if (data != null) {
-      _invalidateRenderedPages(widget.chapterId, data.pages.length);
-    }
+    await _releaseChapterMemory(
+      chapterId: widget.chapterId,
+      pageCount: data?.pages.length,
+    );
     ref.invalidate(readerDataProvider(widget.chapterId));
-    ref
-        .read(comicRdApiProvider)
-        .evictChapterPages(chapterId: widget.chapterId, keepPages: []);
     if (mounted) {
       context.go('/reader/$chapterId');
     }
+  }
+
+  Future<void> _releaseChapterMemory({
+    required int chapterId,
+    required int? pageCount,
+  }) async {
+    if (pageCount != null) {
+      _invalidateRenderedPages(chapterId, pageCount);
+    }
+    _renderStart = 0;
+    _renderEnd = -1;
+    await _api.evictChapterPages(chapterId: chapterId, keepPages: []);
   }
 
   void _invalidateRenderedPages(int chapterId, int pageCount) {
@@ -623,8 +722,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
       ref.invalidate(provider);
     }
-    _renderedPageCache.clear();
     PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
   }
 
   void _jumpBy(int delta) {
@@ -637,20 +736,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _jumpToPage(int page, {bool persist = true}) {
-    final generation = ++_jumpGeneration;
-    setState(() => _currentPage = page);
+    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+    final count = data?.pages.length ?? 0;
+    if (count == 0) {
+      return;
+    }
+    _setRenderWindowAround(page, count);
+    setState(() {
+      _currentPage = page;
+    });
     if (persist) {
       _scheduleProgressSave();
     } else {
       _lastSavedPage = page;
     }
-    unawaited(_prefetchAround(page));
+    unawaited(_prefetchWindow(_renderStart, _renderEnd));
     if (_scroll.hasClients) {
-      final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-      final estimatedOffset = _scrollOffsetForPageIndex(
-        page,
-        data?.pages.length ?? 0,
-      );
+      final estimatedOffset = _scrollOffsetForPageIndex(page, data!.pages);
       final targetOffset = estimatedOffset
           .clamp(0, _scroll.position.maxScrollExtent)
           .toDouble();
@@ -660,25 +762,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       } else {
         _ignoreNextScrollUpdate = false;
       }
-      _alignPageAfterLayout(page, generation);
     }
-  }
-
-  void _alignPageAfterLayout(int page, int generation) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _jumpGeneration != generation) {
-        return;
-      }
-      final pageContext = _pageKeys[page]?.currentContext;
-      if (pageContext == null) {
-        return;
-      }
-      Scrollable.ensureVisible(
-        pageContext,
-        duration: Duration.zero,
-        alignment: 0,
-      );
-    });
   }
 
   void _scrollBy(double delta) {
@@ -699,13 +783,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  double _scrollOffsetForPageIndex(int page, int pageCount) {
-    if (!_scroll.hasClients || pageCount <= 1) {
+  double _scrollOffsetForPageIndex(int page, List<bridge.PageInfo> pages) {
+    if (!_scroll.hasClients || pages.isEmpty) {
       return 0;
     }
-    final lastPage = pageCount - 1;
-    final targetPage = page.clamp(0, lastPage).toDouble();
-    return _scroll.position.maxScrollExtent * (targetPage / lastPage);
+    final settings = ref.read(readerSettingsProvider);
+    final target = page.clamp(0, pages.length - 1);
+    var offset = _topPadding;
+    for (var i = 0; i < target; i++) {
+      offset += _pageDisplayHeight(pages[i], settings.zoom);
+      offset += settings.pageGap;
+    }
+    return offset.clamp(0, _scroll.position.maxScrollExtent).toDouble();
+  }
+
+  static double _pageDisplayHeight(bridge.PageInfo page, double zoom) {
+    final width = page.width ?? 900;
+    final height = page.height ?? 1300;
+    if (width <= 0 || height <= 0) {
+      return 1300 * zoom;
+    }
+    return height * zoom;
   }
 
   void _showToolbar() {
@@ -737,42 +835,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 }
 
-class _ReaderPageItem extends ConsumerStatefulWidget {
+class _ReaderPageItem extends ConsumerWidget {
   const _ReaderPageItem({
     required this.chapterId,
     required this.page,
     required this.zoom,
-    required this.renderedCache,
   });
 
   final int chapterId;
   final bridge.PageInfo page;
   final double zoom;
-  final Map<int, bridge.RenderedPage> renderedCache;
 
   @override
-  ConsumerState<_ReaderPageItem> createState() => _ReaderPageItemState();
-}
-
-class _ReaderPageItemState extends ConsumerState<_ReaderPageItem> {
-  @override
-  Widget build(BuildContext context) {
-    final aspectRatio = _aspectRatio(widget.page);
-    final displayWidth = _displayWidth(widget.page, widget.zoom);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final aspectRatio = _aspectRatio(page);
+    final displayWidth = _displayWidth(page, zoom);
     final rendered = ref.watch(
       renderedPageProvider(
-        RenderedPageRequest(
-          chapterId: widget.chapterId,
-          pageIndex: widget.page.index,
-        ),
+        RenderedPageRequest(chapterId: chapterId, pageIndex: page.index),
       ),
     );
-    rendered.whenData((page) => widget.renderedCache[widget.page.index] = page);
-    final cached = widget.renderedCache[widget.page.index];
     return rendered.when(
       data: (page) => Center(
         child: SizedBox(
-          width: page.width == 0 ? null : page.width.toDouble() * widget.zoom,
+          width: page.width == 0 ? null : page.width.toDouble() * zoom,
           child: Image.memory(
             page.bytes,
             gaplessPlayback: true,
@@ -781,40 +867,13 @@ class _ReaderPageItemState extends ConsumerState<_ReaderPageItem> {
           ),
         ),
       ),
-      error: (error, _) => cached != null
-          ? Center(
-              child: SizedBox(
-                width: cached.width == 0
-                    ? null
-                    : cached.width.toDouble() * widget.zoom,
-                child: Image.memory(
-                  cached.bytes,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            )
-          : _PagePlaceholder(
-              aspectRatio: aspectRatio,
-              width: displayWidth,
-              label: error.toString(),
-            ),
-      loading: () => cached != null
-          ? Center(
-              child: SizedBox(
-                width: cached.width == 0
-                    ? null
-                    : cached.width.toDouble() * widget.zoom,
-                child: Image.memory(
-                  cached.bytes,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            )
-          : _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
+      error: (error, _) => _PagePlaceholder(
+        aspectRatio: aspectRatio,
+        width: displayWidth,
+        label: error.toString(),
+      ),
+      loading: () =>
+          _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
     );
   }
 
@@ -868,7 +927,7 @@ class _PagePlaceholder extends StatelessWidget {
                         style: const TextStyle(color: Colors.white),
                       ),
                     )
-                  : const ProgressRing(),
+                  : const SizedBox(),
             ),
           ),
         ),

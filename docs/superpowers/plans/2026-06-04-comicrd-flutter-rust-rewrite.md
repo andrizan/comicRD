@@ -262,12 +262,12 @@ Important data types:
 - [x] Implement keyboard controls matching current behavior.
 - [x] Replace protocol URLs with `renderPageVariant` and `Image.memory`.
 - [x] Use stable aspect-ratio placeholders from `PageInfo` or `RenderedPage` dimensions.
-- [x] Keep only nearby pages active around current page.
+- [x] Load every page entry and width/height metadata from Rust, then render image widgets lazily through `ListView.builder` with stable item extents.
 - [x] Prefetch direction-aware ranges with the existing profile policies:
   - performance: max width 1280, max DPR 1, forward 6, backward 1
   - balanced: max width 1600, max DPR 1.25, forward 5, backward 1
   - quality: max width 2400, max DPR 1.75, forward 4, backward 2
-- [x] Cap Flutter image cache bytes and evict far-page images as the active window moves.
+- [x] Cap Flutter image cache bytes and evict previous chapter images on close/switch.
 
 ### Task 8: Packaging And Desktop Integration
 

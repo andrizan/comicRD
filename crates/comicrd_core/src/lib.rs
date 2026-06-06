@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use walkdir::WalkDir;
 
@@ -579,10 +579,7 @@ impl ComicRdCore {
         render_page_variant_conn(&conn, &self.page_cache, payload)
     }
 
-    pub fn prefetch_pages(
-        &self,
-        payload: PrefetchPagesPayload,
-    ) -> Result<(), String> {
+    pub fn prefetch_pages(&self, payload: PrefetchPagesPayload) -> Result<(), String> {
         for page_index in payload.page_indices {
             let conn = self
                 .conn
@@ -776,10 +773,10 @@ impl ComicRdCore {
                 .map_err(|e| format!("failed replacing existing backup file: {e}"))?;
         }
 
-        let db_bytes = fs::read(&self.db_path)
-            .map_err(|e| format!("failed reading database file: {e}"))?;
-        let zip_file = fs::File::create(output_path)
-            .map_err(|e| format!("failed creating zip file: {e}"))?;
+        let db_bytes =
+            fs::read(&self.db_path).map_err(|e| format!("failed reading database file: {e}"))?;
+        let zip_file =
+            fs::File::create(output_path).map_err(|e| format!("failed creating zip file: {e}"))?;
         let mut zip = zip::ZipWriter::new(zip_file);
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
@@ -803,17 +800,14 @@ impl ComicRdCore {
         }
 
         let temp_dir = std::env::temp_dir().join(format!("comicrd-import-{}", now_ts()));
-        fs::create_dir_all(&temp_dir)
-            .map_err(|e| format!("failed creating temp dir: {e}"))?;
+        fs::create_dir_all(&temp_dir).map_err(|e| format!("failed creating temp dir: {e}"))?;
         let db_bytes = if is_zip_file(input_path) {
             extract_db_from_zip(input_path)?
         } else {
-            fs::read(input_path)
-                .map_err(|e| format!("failed reading backup file: {e}"))?
+            fs::read(input_path).map_err(|e| format!("failed reading backup file: {e}"))?
         };
         let temp_db_path = temp_dir.join("comicrd.db");
-        fs::write(&temp_db_path, &db_bytes)
-            .map_err(|e| format!("failed writing temp db: {e}"))?;
+        fs::write(&temp_db_path, &db_bytes).map_err(|e| format!("failed writing temp db: {e}"))?;
 
         let mut conn_guard = self
             .conn
@@ -862,10 +856,9 @@ fn is_zip_file(path: &Path) -> bool {
 }
 
 fn extract_db_from_zip(zip_path: &Path) -> Result<Vec<u8>, String> {
-    let file = fs::File::open(zip_path)
-        .map_err(|e| format!("failed opening zip file: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("failed reading zip archive: {e}"))?;
+    let file = fs::File::open(zip_path).map_err(|e| format!("failed opening zip file: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("failed reading zip archive: {e}"))?;
     let mut entry = archive
         .by_name("comicrd.db")
         .map_err(|_| "comicrd.db not found in zip archive".to_string())?;

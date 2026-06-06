@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Read;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection};
@@ -252,7 +252,7 @@ fn zip_image_entries(path: &Path) -> Result<Vec<String>, String> {
             }
         }
     }
-    names.sort();
+    names.sort_by(|a, b| natural_compare(a, b));
     Ok(names)
 }
 
@@ -282,7 +282,7 @@ fn rar_image_entries(path: &Path) -> Result<Vec<String>, String> {
         }
     }
 
-    names.sort();
+    names.sort_by(|a, b| natural_compare(a, b));
     Ok(names)
 }
 
@@ -311,17 +311,61 @@ fn rar_image_bytes(path: &Path, name: &str) -> Result<Vec<u8>, String> {
     }
 }
 
-pub(crate) fn image_entries_in_dir(path: &Path) -> Vec<PathBuf> {
+fn ignored_fs_entry(path: &Path) -> bool {
+    path.components().any(|component| {
+        let Some(name) = component.as_os_str().to_str() else {
+            return false;
+        };
+        name.starts_with('.')
+            || name.eq_ignore_ascii_case("__MACOSX")
+            || name.eq_ignore_ascii_case("thumbs.db")
+            || name.eq_ignore_ascii_case("desktop.ini")
+    })
+}
+
+fn image_entries_in_dir_with_depth(path: &Path, max_depth: usize) -> Vec<PathBuf> {
     let mut entries = WalkDir::new(path)
         .min_depth(1)
-        .max_depth(1)
+        .max_depth(max_depth)
         .into_iter()
         .filter_map(|e| e.ok())
         .map(|e| e.into_path())
-        .filter(|p| p.is_file() && is_image(p))
+        .filter(|p| {
+            let relative = p.strip_prefix(path).unwrap_or(p);
+            p.is_file() && !ignored_fs_entry(relative) && is_image(p)
+        })
         .collect::<Vec<_>>();
-    entries.sort();
+    entries.sort_by(|a, b| {
+        let a_name = a.to_string_lossy();
+        let b_name = b.to_string_lossy();
+        natural_compare(&a_name, &b_name)
+    });
     entries
+}
+
+pub(crate) fn image_entries_in_dir(path: &Path) -> Vec<PathBuf> {
+    image_entries_in_dir_with_depth(path, 3)
+}
+
+fn image_entries_in_dir_shallow(path: &Path) -> Vec<PathBuf> {
+    image_entries_in_dir_with_depth(path, 1)
+}
+
+fn image_dimensions_from_path(path: &Path) -> Option<(u32, u32)> {
+    image::ImageReader::open(path)
+        .ok()?
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
+}
+
+fn image_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
 }
 
 pub(crate) fn natural_compare(a: &str, b: &str) -> std::cmp::Ordering {
@@ -372,7 +416,7 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
     let mut chapter_entries = Vec::new();
     let mut chapter_index = 1i64;
 
-    let root_images = image_entries_in_dir(comic_dir);
+    let root_images = image_entries_in_dir_shallow(comic_dir);
     if !root_images.is_empty() {
         chapter_entries.push((
             "Chapter 1".to_string(),
@@ -398,7 +442,7 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
 
     for child in children {
         if child.is_dir() {
-            let mut has_images = false;
+            let has_images = !image_entries_in_dir(&child).is_empty();
             let mut nested_archives = Vec::new();
 
             let mut child_entries = WalkDir::new(&child)
@@ -412,9 +456,7 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
 
             for entry in child_entries {
                 if entry.is_file() {
-                    if is_image(&entry) {
-                        has_images = true;
-                    } else if is_archive(&entry) {
+                    if is_archive(&entry) {
                         nested_archives.push(entry);
                     }
                 }
@@ -523,8 +565,10 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
         let mut stmt = conn
             .prepare(&query)
             .map_err(|e| format!("failed preparing batch progress query: {e}"))?;
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            chapter_keys.iter().map(|k| k as &dyn rusqlite::types::ToSql).collect();
+        let params: Vec<&dyn rusqlite::types::ToSql> = chapter_keys
+            .iter()
+            .map(|k| k as &dyn rusqlite::types::ToSql)
+            .collect();
         let rows = stmt
             .query_map(params.as_slice(), |row| {
                 Ok((
@@ -540,7 +584,10 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
         for row in rows {
             let (key, page_count, is_read, last_page, total_pages, date_modified) =
                 row.map_err(|e| format!("failed reading progress row: {e}"))?;
-            progress_map.insert(key, (page_count, is_read, last_page, total_pages, date_modified));
+            progress_map.insert(
+                key,
+                (page_count, is_read, last_page, total_pages, date_modified),
+            );
         }
     }
 
@@ -550,11 +597,10 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
     {
         let chapter_key = &chapter_keys[i];
         let modified_at = file_modified_ts(Path::new(chapter_path));
-        let (page_count, is_read, last_page, total_pages, date_modified) =
-            progress_map
-                .get(chapter_key.as_str())
-                .copied()
-                .unwrap_or((0, false, 0, 0, modified_at));
+        let (page_count, is_read, last_page, total_pages, date_modified) = progress_map
+            .get(chapter_key.as_str())
+            .copied()
+            .unwrap_or((0, false, 0, 0, modified_at));
         out.push(RawChapter {
             key: chapter_path.clone(),
             title: chapter_title.clone(),
@@ -668,35 +714,52 @@ pub(crate) fn get_chapter_pages_conn(
     chapter_id: i64,
 ) -> Result<Vec<PageInfo>, String> {
     let (source_path, source_type) = chapter_source(conn, chapter_id)?;
-    let names = match source_type.as_str() {
+    let pages = match source_type.as_str() {
         "folder" => image_entries_in_dir(Path::new(&source_path))
             .into_iter()
-            .map(|p| {
-                p.file_name()
-                    .and_then(|v| v.to_str())
-                    .unwrap_or_default()
-                    .to_string()
+            .enumerate()
+            .map(|(index, path)| {
+                let (width, height) = image_dimensions_from_path(&path)
+                    .map(|(width, height)| (Some(width), Some(height)))
+                    .unwrap_or((None, None));
+                PageInfo {
+                    index,
+                    name: path
+                        .file_name()
+                        .and_then(|v| v.to_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    width,
+                    height,
+                }
             })
             .collect::<Vec<_>>(),
-        "zip" | "cbz" | "cbr" | "rar" => archive_image_entries(Path::new(&source_path))?,
+        "zip" | "cbz" | "cbr" | "rar" => archive_image_entries(Path::new(&source_path))?
+            .into_iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let (width, height) = archive_image_bytes(Path::new(&source_path), &name)
+                    .ok()
+                    .and_then(|bytes| image_dimensions_from_bytes(&bytes))
+                    .map(|(width, height)| (Some(width), Some(height)))
+                    .unwrap_or((None, None));
+                PageInfo {
+                    index,
+                    name,
+                    width,
+                    height,
+                }
+            })
+            .collect::<Vec<_>>(),
         other => return Err(format!("unsupported source type: {other}")),
     };
-    let page_count = names.len() as i64;
+    let page_count = pages.len() as i64;
     let modified_at = file_modified_ts(Path::new(&source_path));
     let _ = conn.execute(
         "UPDATE chapters SET page_count = ?1, date_modified = ?2, updated_at = ?3 WHERE id = ?4",
         params![page_count, modified_at, now_ts(), chapter_id],
     );
-    Ok(names
-        .into_iter()
-        .enumerate()
-        .map(|(index, name)| PageInfo {
-            index,
-            name,
-            width: None,
-            height: None,
-        })
-        .collect())
+    Ok(pages)
 }
 
 pub(crate) fn get_chapter_context_conn(

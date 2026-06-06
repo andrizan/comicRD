@@ -83,6 +83,7 @@ Audit mendalam terhadap seluruh codebase comicrd_flutter (Rust core, Flutter UI,
 | I3 | Tidak ada explicit cross-chapter eviction di Rust | `image_pipeline.rs:113` | Tambah `evictChapterPages` saat switch chapter | ✅ |
 | I4 | `initialReaderPageForProgress` selalu return 0 | `reader_state.dart:78` | Implementasi resume dari `progress.lastPage` | ✅ |
 | I5 | Prefetch + evict sequential | `reader_page.dart:461` | Pakai `Future.wait([...])` | ✅ |
+| I6 | Reader terlalu bergantung pada `GlobalKey` dan cache Dart per-item | `reader_page.dart` | Semua `PageInfo` + width/height dimuat upfront dari Rust, folder page discovery max depth 3, image dirender lazy oleh `ListView.builder(scrollCacheExtent: 1500)`, `itemExtentBuilder` menjaga resume/jump tanpa build semua page, placeholder tidak menampilkan spinner permanen | ✅ |
 
 ---
 
@@ -115,10 +116,11 @@ Step  Location                              Action
 ### Memory lifecycle after fix
 
 ```
-Scroll masuk → render page → Arc clone (cheap) → bridge deep copy → Dart Uint8List → Image.memory
-Scroll keluar → provider autoDispose → Dart heap freed
-Ganti chapter → evict old chapter Rust cache + invalidate Dart providers
-Keluar reader → clear imageCache + invalidate semua provider
+Load chapter → ambil semua PageInfo
+ListView.builder membuat item visible/cacheExtent → render page → Arc clone (cheap) → bridge deep copy → Dart Uint8List → Image.memory
+Scroll keluar builder/cacheExtent → provider autoDispose → Dart heap freed
+Ganti chapter → await evict old chapter Rust cache + invalidate Dart providers + clear Flutter imageCache
+Keluar reader → evict old chapter Rust cache + clear imageCache
 ```
 
 ---
@@ -130,8 +132,8 @@ Keluar reader → clear imageCache + invalidate semua provider
 | Fase 1 | 17 | ✅ |
 | Fase 2 | 15 | ✅ |
 | Fase 3 | 21 | ✅ |
-| Fase 4 | 5 | ✅ |
-| **Total** | **58** | ✅ |
+| Fase 4 | 6 | ✅ |
+| **Total** | **59** | ✅ |
 
 ---
 

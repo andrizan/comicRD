@@ -142,8 +142,10 @@ fn batch_comic_counts_from_db(
     let mut stmt = conn
         .prepare(&query)
         .map_err(|e| format!("failed preparing batch comic counts query: {e}"))?;
-    let params: Vec<&dyn rusqlite::types::ToSql> =
-        comic_keys.iter().map(|k| k as &dyn rusqlite::types::ToSql).collect();
+    let params: Vec<&dyn rusqlite::types::ToSql> = comic_keys
+        .iter()
+        .map(|k| k as &dyn rusqlite::types::ToSql)
+        .collect();
     let rows = stmt
         .query_map(params.as_slice(), |row| {
             Ok((
@@ -154,8 +156,11 @@ fn batch_comic_counts_from_db(
             ))
         })
         .map_err(|e| format!("failed querying batch comic counts: {e}"))?;
-    let key_to_idx: std::collections::HashMap<String, usize> =
-        comic_keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
+    let key_to_idx: std::collections::HashMap<String, usize> = comic_keys
+        .iter()
+        .enumerate()
+        .map(|(i, k)| (k.clone(), i))
+        .collect();
     for row in rows {
         let (key, chapter_count, read_count, in_progress_count) =
             row.map_err(|e| format!("failed reading batch comic count row: {e}"))?;
@@ -191,8 +196,10 @@ fn batch_progress_counts_for_chapter_keys(
     let mut stmt = conn
         .prepare(&query)
         .map_err(|e| format!("failed preparing batch progress query: {e}"))?;
-    let params: Vec<&dyn rusqlite::types::ToSql> =
-        chapter_keys.iter().map(|k| k as &dyn rusqlite::types::ToSql).collect();
+    let params: Vec<&dyn rusqlite::types::ToSql> = chapter_keys
+        .iter()
+        .map(|k| k as &dyn rusqlite::types::ToSql)
+        .collect();
     let rows = stmt
         .query_map(params.as_slice(), |row| {
             Ok((
@@ -202,8 +209,11 @@ fn batch_progress_counts_for_chapter_keys(
             ))
         })
         .map_err(|e| format!("failed querying batch progress: {e}"))?;
-    let key_to_idx: std::collections::HashMap<String, usize> =
-        chapter_keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
+    let key_to_idx: std::collections::HashMap<String, usize> = chapter_keys
+        .iter()
+        .enumerate()
+        .map(|(i, k)| (k.clone(), i))
+        .collect();
     for row in rows {
         let (key, is_read, last_page) =
             row.map_err(|e| format!("failed reading batch progress row: {e}"))?;

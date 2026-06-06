@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('starts at first page when saved progress exists', (
+  testWidgets('loads all page entries and lazily renders from saved progress', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -30,12 +30,18 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(api.renderedPageIndices, contains(0));
-    expect(api.prefetchedWindows, contains(equals([0, 1, 2])));
-    expect(api.evictedWindows, contains(equals([0, 1, 2])));
+    expect(api.loadedPageEntries, api.pageCount);
+    expect(api.renderedPageIndices, contains(27));
+    expect(
+      api.renderedPageIndices.toSet(),
+      isNot({for (var index = 0; index < api.pageCount; index++) index}),
+    );
+    expect(find.textContaining('Chapter 28 (28/33) - 28/33'), findsOneWidget);
+    expect(api.prefetchedWindows, contains(equals([25, 26, 27, 28, 29])));
+    expect(api.evictedWindows, contains(equals([25, 26, 27, 28, 29])));
   });
 
-  testWidgets('renders pages around current after scroll settles', (
+  testWidgets('lazy renders only built pages after scroll settles', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -57,13 +63,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     final rendered = api.renderedPageIndices;
+    expect(api.loadedPageEntries, api.pageCount);
     expect(rendered, isNotEmpty);
-    expect(rendered.length, lessThanOrEqualTo(7));
+    expect(rendered.length, lessThan(api.pageCount));
   });
 
-  testWidgets('prefetch window is 5 pages', (
-    tester,
-  ) async {
+  testWidgets('prefetch window is 5 pages', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1200, 800);
     addTearDown(tester.view.resetPhysicalSize);
@@ -88,6 +93,30 @@ void main() {
     }
     expect(api.evictedWindows, isNotEmpty);
   });
+
+  testWidgets('does not show page spinners after lazy renders settle', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(lastPage: 10, pageCount: 14);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byType(ProgressRing), findsNothing);
+  });
 }
 
 class _ReaderFakeComicRdApi extends ComicRdApi {
@@ -99,6 +128,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   final prefetchedWindows = <List<int>>[];
   final evictedWindows = <List<int>>[];
   final savedProgress = <bridge.SaveProgressPayload>[];
+  int loadedPageEntries = 0;
 
   @override
   Future<List<bridge.SettingEntry>> listSettings() async {
@@ -127,7 +157,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 
   @override
   Future<List<bridge.PageInfo>> getChapterPages(int chapterId) async {
-    return [
+    final pages = [
       for (var index = 0; index < pageCount; index++)
         bridge.PageInfo(
           index: index,
@@ -136,6 +166,8 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
           height: 1300,
         ),
     ];
+    loadedPageEntries = pages.length;
+    return pages;
   }
 
   @override
@@ -181,13 +213,71 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 }
 
 const _onePixelPng = [
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-  0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-  0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
-  0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-  0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-  0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a,
+  0x00,
+  0x00,
+  0x00,
+  0x0d,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1f,
+  0x15,
+  0xc4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0a,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9c,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0d,
+  0x0a,
+  0x2d,
+  0xb4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4e,
+  0x44,
+  0xae,
+  0x42,
+  0x60,
+  0x82,
 ];

@@ -76,5 +76,8 @@ int initialReaderPageForProgress({
   required bridge.ReadingProgress? progress,
   required int pageCount,
 }) {
-  return 0;
+  if (progress == null || progress.isRead || pageCount <= 0) {
+    return 0;
+  }
+  return progress.lastPage.clamp(0, pageCount - 1).toInt();
 }

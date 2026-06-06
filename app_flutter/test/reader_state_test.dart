@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('initialReaderPageForProgress', () {
-    test('starts from first page when chapter is in progress', () {
+    test('starts from saved page when chapter is in progress', () {
       final page = initialReaderPageForProgress(
         progress: const bridge.ReadingProgress(
           chapterId: 7,
@@ -15,7 +15,7 @@ void main() {
         pageCount: 33,
       );
 
-      expect(page, 0);
+      expect(page, 11);
     });
 
     test('starts from first page when chapter is already read', () {
@@ -32,7 +32,7 @@ void main() {
       expect(page, 0);
     });
 
-    test('starts from first page when progress points past available pages', () {
+    test('clamps saved page when progress points past available pages', () {
       final page = initialReaderPageForProgress(
         progress: const bridge.ReadingProgress(
           chapterId: 7,
@@ -43,7 +43,7 @@ void main() {
         pageCount: 33,
       );
 
-      expect(page, 0);
+      expect(page, 32);
     });
   });
 }

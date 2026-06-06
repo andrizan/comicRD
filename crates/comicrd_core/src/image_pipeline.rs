@@ -149,9 +149,9 @@ pub(crate) fn mime_for_path(path: &Path) -> &'static str {
 
 fn compute_page_source(source_path: &str, source_type: &str) -> Result<PageSource, String> {
     match source_type {
-        "folder" => Ok(PageSource::Folder(Arc::new(image_entries_in_dir(Path::new(
-            source_path,
-        ))))),
+        "folder" => Ok(PageSource::Folder(Arc::new(image_entries_in_dir(
+            Path::new(source_path),
+        )))),
         "zip" | "cbz" | "cbr" | "rar" => Ok(PageSource::Archive {
             source_path: PathBuf::from(source_path),
             pages: Arc::new(archive_image_entries(Path::new(source_path))?),
