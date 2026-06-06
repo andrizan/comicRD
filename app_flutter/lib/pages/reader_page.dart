@@ -48,6 +48,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Completer<void>? _prefetchQueue;
   int? _prefetchQueuedPage;
   bool _wasReset = false;
+  final _renderedPageCache = <int, bridge.RenderedPage>{};
 
   @override
   void initState() {
@@ -63,6 +64,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _progressTimer?.cancel();
     unawaited(_saveProgressDirect());
     _pageKeys.clear();
+    _renderedPageCache.clear();
     _activeInstances--;
     if (_activeInstances <= 0) {
       _activeInstances = 0;
@@ -89,6 +91,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _restoredProgress = false;
     _initialScrollDone = false;
     _pageKeys.clear();
+    _renderedPageCache.clear();
     _toolbarVisible = true;
     if (_scroll.hasClients) {
       _scroll.jumpTo(0);
@@ -298,6 +301,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               chapterId: widget.chapterId,
               page: page,
               zoom: readerSettings.zoom,
+              renderedCache: _renderedPageCache,
             ),
           );
         },
@@ -619,6 +623,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
       ref.invalidate(provider);
     }
+    _renderedPageCache.clear();
     PaintingBinding.instance.imageCache.clear();
   }
 
@@ -737,19 +742,19 @@ class _ReaderPageItem extends ConsumerStatefulWidget {
     required this.chapterId,
     required this.page,
     required this.zoom,
+    required this.renderedCache,
   });
 
   final int chapterId;
   final bridge.PageInfo page;
   final double zoom;
+  final Map<int, bridge.RenderedPage> renderedCache;
 
   @override
   ConsumerState<_ReaderPageItem> createState() => _ReaderPageItemState();
 }
 
 class _ReaderPageItemState extends ConsumerState<_ReaderPageItem> {
-  bridge.RenderedPage? _lastRendered;
-
   @override
   Widget build(BuildContext context) {
     final aspectRatio = _aspectRatio(widget.page);
@@ -762,8 +767,8 @@ class _ReaderPageItemState extends ConsumerState<_ReaderPageItem> {
         ),
       ),
     );
-    rendered.whenData((page) => _lastRendered = page);
-    final cached = _lastRendered;
+    rendered.whenData((page) => widget.renderedCache[widget.page.index] = page);
+    final cached = widget.renderedCache[widget.page.index];
     return rendered.when(
       data: (page) => Center(
         child: SizedBox(
