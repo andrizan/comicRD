@@ -5,6 +5,8 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <cstdlib>
+
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
@@ -50,6 +52,19 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
     gtk_window_set_title(window, "ComicRD");
+  }
+
+  // Set window icon
+  g_autoptr(GError) icon_error = nullptr;
+  gtk_window_set_icon_from_file(
+      window,
+      "data/comicrd.png",
+      &icon_error);
+  if (icon_error != nullptr) {
+    // Try relative to executable path
+    g_autofree gchar* exe_dir = g_path_get_dirname("/proc/self/exe");
+    g_autofree gchar* icon_path = g_build_filename(exe_dir, "data", "comicrd.png", nullptr);
+    gtk_window_set_icon_from_file(window, icon_path, nullptr);
   }
 
   gtk_window_set_default_size(window, 1280, 720);
