@@ -263,12 +263,43 @@ pub(crate) fn render_page_variant_conn(
     let (bytes, mime) =
         get_or_load_page_bytes(conn, cache, payload.chapter_id, payload.page_index)?;
     let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
-    let cache_key = format!("{}:{}", payload.chapter_id, payload.page_index);
     Ok(RenderedPage {
         bytes: (*bytes).clone(),
         mime: mime.to_string(),
         width,
         height,
-        cache_key,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn mime_for_path_recognizes_extensions() {
+        assert_eq!(mime_for_path(Path::new("image.jpg")), "image/jpeg");
+        assert_eq!(mime_for_path(Path::new("image.jpeg")), "image/jpeg");
+        assert_eq!(mime_for_path(Path::new("image.JPG")), "image/jpeg");
+        assert_eq!(mime_for_path(Path::new("image.png")), "image/png");
+        assert_eq!(mime_for_path(Path::new("image.PNG")), "image/png");
+        assert_eq!(mime_for_path(Path::new("image.webp")), "image/webp");
+        assert_eq!(mime_for_path(Path::new("image.gif")), "image/gif");
+        assert_eq!(mime_for_path(Path::new("image.bmp")), "image/bmp");
+        assert_eq!(mime_for_path(Path::new("image.avif")), "image/avif");
+        assert_eq!(
+            mime_for_path(Path::new("file.txt")),
+            "application/octet-stream"
+        );
+        assert_eq!(
+            mime_for_path(Path::new("noext")),
+            "application/octet-stream"
+        );
+    }
+
+    #[test]
+    fn page_dimensions_returns_none_for_invalid_bytes() {
+        assert!(page_dimensions_from_bytes(&[]).is_none());
+        assert!(page_dimensions_from_bytes(&[0x00, 0x01, 0x02]).is_none());
+    }
 }

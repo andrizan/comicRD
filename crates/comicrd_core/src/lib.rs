@@ -55,20 +55,6 @@ pub struct Library {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Comic {
-    pub id: i64,
-    pub library_id: i64,
-    pub title: String,
-    pub source_path: String,
-    pub source_type: String,
-    pub date_modified: i64,
-    pub updated_at: i64,
-    pub chapter_count: i64,
-    pub read_chapter_count: i64,
-    pub in_progress_chapter_count: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanSummary {
     pub comics: usize,
     pub chapters: usize,
@@ -149,7 +135,6 @@ pub struct ReadingProgress {
     pub last_page: i64,
     pub total_pages: i64,
     pub is_read: bool,
-    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -221,7 +206,6 @@ pub struct RenderedPage {
     pub mime: String,
     pub width: u32,
     pub height: u32,
-    pub cache_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -238,12 +222,11 @@ pub struct LibrarySourceStatus {
 pub struct SettingEntry {
     pub key: String,
     pub value_json: String,
-    pub updated_at: i64,
 }
 
 struct LibraryListCache {
     library_path: String,
-    entries: Vec<PathBuf>,
+    entries: Arc<Vec<PathBuf>>,
     updated_at: Instant,
 }
 
@@ -349,14 +332,15 @@ impl ComicRdCore {
                     .map(|e| e.into_path())
                     .collect::<Vec<_>>();
                 entries.sort();
+                let shared = Arc::new(entries);
                 *cache_guard = Some(LibraryListCache {
                     library_path: library_path.clone(),
-                    entries: entries.clone(),
+                    entries: Arc::clone(&shared),
                     updated_at: Instant::now(),
                 });
-                entries
+                shared
             } else {
-                cache_guard.as_ref().unwrap().entries.clone()
+                Arc::clone(&cache_guard.as_ref().unwrap().entries)
             }
         };
 
@@ -476,14 +460,6 @@ impl ComicRdCore {
         }
     }
 
-    pub fn list_comics(&self, sort_by: SortBy, sort_dir: SortDir) -> Result<Vec<Comic>, String> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| "db lock poisoned".to_string())?;
-        list_comics_conn(&conn, sort_by, sort_dir)
-    }
-
     pub fn list_comic_chapters_raw(
         &self,
         comic_source_path: &str,
@@ -525,7 +501,6 @@ impl ComicRdCore {
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         save_progress_conn(&conn, &payload)?;
-        self.clear_library_list_cache();
         Ok(())
     }
 
@@ -543,17 +518,6 @@ impl ComicRdCore {
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         render_page_variant_conn(&conn, &self.page_cache, payload)
-    }
-
-    pub fn render_page_preview(
-        &self,
-        chapter_id: i64,
-        page_index: usize,
-    ) -> Result<RenderedPage, String> {
-        self.render_page_variant(RenderPagePayload {
-            chapter_id,
-            page_index,
-        })
     }
 
     pub fn prefetch_pages(

@@ -58,10 +58,19 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   ScrollController _restoredScrollController(String key) {
     final offsets = ref.read(scrollOffsetsProvider.notifier);
+    final savedOffset = offsets.offsetFor(key);
     final controller = ScrollController(
-      initialScrollOffset: offsets.offsetFor(key),
+      initialScrollOffset: savedOffset > 0 ? savedOffset : 0,
     );
     controller.addListener(() => _saveScrollOffset(key, controller));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (controller.hasClients) {
+        final maxExtent = controller.position.maxScrollExtent;
+        if (controller.offset > maxExtent && maxExtent >= 0) {
+          controller.jumpTo(maxExtent);
+        }
+      }
+    });
     return controller;
   }
 

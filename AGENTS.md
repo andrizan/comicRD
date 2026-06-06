@@ -53,6 +53,41 @@ Do not reintroduce Tauri, React, WebView, TanStack, Zustand, Tailwind, or Tauri 
 
 `comicrd_core` must stay reusable and must not depend on Flutter, Tauri, or generated bridge code.
 
+## Data Source Rules
+
+### Listing Pustaka: Raw Filesystem is Primary
+
+The library listing (`list_library_comics_raw`) uses **raw filesystem** as the primary source, NOT the database.
+
+- Listing walks the library root directory at **depth 1 only** (shallow walk).
+- **Never traverse subfolders** (chapter directories) during listing. This would cause O(N*M) filesystem operations.
+- Each top-level entry (folder or archive) = one comic in the listing.
+- Chapter counts and read progress are read from the DB **only if already scanned**. If not scanned, return `0/0/0`.
+
+### DB is for Progress, Not Listing
+
+The SQLite database stores:
+- Chapter metadata (after scan)
+- Reading progress (after opening chapters)
+- Bookmarks, favorites, history
+
+The DB is **NOT** used to enumerate comics for the library listing. The filesystem is the source of truth for "what comics exist."
+
+### Scan vs Listing
+
+- **Listing** (tab Pustaka): shallow FS walk + DB progress lookup. Fast, no subfolder traversal.
+- **Scan** (explicit user action): deep FS walk, upserts comics/chapters into DB. Slow, runs in background thread.
+- **Opening a comic**: discovers chapters on-demand, upserts into DB. One-time cost per comic.
+
+### Cache FS Entries
+
+Cache the top-level FS entries in `LibraryListCache` with a 30-second TTL. Invalidate cache on:
+- `scan_libraries()`
+- `add_library()`
+- `import_database_backup()`
+
+Do NOT invalidate cache on `save_progress()` — progress changes don't affect the filesystem structure.
+
 ## Bridge Rules
 
 When public bridge structs or bridge functions change, regenerate FRB output from the repository root:
@@ -78,6 +113,13 @@ app_flutter/lib/api/comicrd_api.dart
 
 Avoid calling generated bridge functions directly from page/widgets/state code.
 
+### Bridge Data Minimization
+
+- Don't send redundant fields across the bridge (e.g., `key` that duplicates `source_path`).
+- Don't send per-item fields that are constant across all items (e.g., `library_path`).
+- Don't send fields that Flutter never reads (e.g., `updated_at` on settings).
+- Remove dead bridge functions and structs promptly.
+
 ## Reader Image Pipeline
 
 The reader image pipeline must keep memory bounded around the current viewport. Cache raw image/page data only for:
@@ -88,12 +130,80 @@ The reader image pipeline must keep memory bounded around the current viewport. 
 
 Do not expand reader raw-image cache or prefetch windows beyond this `2 + viewport + 2` policy unless the user explicitly changes the memory policy.
 
+Use `Arc<Vec<u8>>` for cached image bytes to avoid deep copies on cache hits.
+
+## Flutter State Rules
+
+### Provider Architecture
+
+- `rawLibraryComicsProvider` (FutureProvider): fetches raw comics from Rust. Only watches sort preferences and source status.
+- `filteredLibraryComicsProvider` (sync Provider): filters by query + viewMode. Sync, no async cascade.
+- `libraryComicsProvider` (sync Provider): combines filtered list + pagination state.
+- `libraryPaginationProvider` (Notifier<int>): tracks visible count, independent of filtering.
+
+**Do not** make the filtering provider watch the raw provider's `.future` — this causes async cascade where every query change triggers a loading state.
+
+### Search Debounce
+
+Always debounce search input with a 300ms timer. Do not call `setQuery()` on every keystroke.
+
+### Scroll Offset Management
+
+- Throttle scroll offset saves to 200ms.
+- Clamp initial scroll offset to non-negative.
+- Validate scroll position after layout (post-frame callback) — if offset > maxExtent, jump to maxExtent.
+
+### Tab Rendering
+
+Use conditional rendering (`switch`) instead of `IndexedStack` for tabs. `IndexedStack` keeps all tabs alive in memory simultaneously.
+
+## Testing
+
+### Test Organization
+
+Integration tests are split by concern:
+
+```text
+crates/comicrd_core/tests/
+  library_source.rs     — check_library_source edge cases
+  library_listing.rs    — list_library_comics_raw + caching
+  scan.rs               — scan sync + async
+  chapters.rs           — chapter discovery
+  reader_flow.rs        — open chapter, pages, context, progress
+  image_pipeline.rs     — render page variant, page dimensions
+  cache.rs              — page cache hits, concurrency, eviction
+  bookmarks.rs          — page/comic bookmarks, chapter favorites
+  history.rs            — reading history, comics-with-progress
+  migrations.rs         — DB creation, default settings, legacy migration
+  backup.rs             — export/import database backup
+```
+
+Unit tests are inline in source files:
+
+```text
+src/chapter.rs::tests      — ext_eq, is_archive, natural_compare, etc.
+src/image_pipeline.rs::tests — mime_for_path, page_dimensions
+src/library.rs::tests      — library_source_status_for edge cases
+```
+
+### Test Rules
+
+- Tests that use `list_library_comics_raw` must first call `scan_libraries()` if they expect non-zero counts.
+- Tests that use `list_library_comics_raw` without scanning should expect `0/0/0` counts (shallow FS, no DB data).
+- Don't use dead APIs (e.g., `list_comics()`) in tests — use the production path.
+
 ## Planning
 
 The active migration plan is:
 
 ```text
 docs/superpowers/plans/2026-06-04-comicrd-flutter-rust-rewrite.md
+```
+
+The active audit is:
+
+```text
+docs/superpowers/plans/2026-06-06-memory-performance-audit.md
 ```
 
 Update the plan checklist when a task is actually implemented and verified. Do not mark work complete only because files were edited.

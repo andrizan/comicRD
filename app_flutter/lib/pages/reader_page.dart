@@ -334,7 +334,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!_initialScrollDone) {
       return;
     }
-    _hideToolbar();
+    if (!_ignoreNextScrollUpdate) {
+      _hideToolbar();
+    }
     if (_ignoreNextScrollUpdate) {
       _ignoreNextScrollUpdate = false;
       return;
@@ -352,8 +354,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!_scroll.hasClients) {
       return _currentPage;
     }
+    final scrollOffset = _scroll.offset;
     final viewportHeight = _scroll.position.viewportDimension;
-    final viewportCenter = viewportHeight / 2;
+    final viewportCenter = scrollOffset + viewportHeight / 2;
     var bestPage = _currentPage;
     var bestDistance = double.infinity;
     for (final entry in _pageKeys.entries) {
@@ -361,16 +364,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (renderObject is! RenderBox || !renderObject.hasSize) {
         continue;
       }
-      final position = renderObject.localToGlobal(Offset.zero);
-      final top = position.dy;
-      final bottom = top + renderObject.size.height;
-      if (bottom <= 0 || top >= viewportHeight) {
+      final localTop = renderObject.localToGlobal(Offset.zero).dy;
+      final globalTop = localTop + scrollOffset;
+      final globalBottom = globalTop + renderObject.size.height;
+      if (globalBottom <= scrollOffset || globalTop >= scrollOffset + viewportHeight) {
         continue;
       }
-      final visibleTop = top.clamp(0.0, viewportHeight);
-      final visibleBottom = bottom.clamp(0.0, viewportHeight);
-      final visibleCenter = (visibleTop + visibleBottom) / 2;
-      final distance = (visibleCenter - viewportCenter).abs();
+      final pageCenter = (globalTop + globalBottom) / 2;
+      final distance = (pageCenter - viewportCenter).abs();
       if (distance < bestDistance) {
         bestDistance = distance;
         bestPage = entry.key;
@@ -1079,313 +1080,6 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
   }
 }
 
-// ignore: unused_element
-class _ReaderToolbar extends StatelessWidget {
-  const _ReaderToolbar({
-    required this.text,
-    required this.data,
-    required this.currentPage,
-    required this.pageGap,
-    required this.zoom,
-    required this.fullscreen,
-    required this.onClose,
-    required this.onPreviousPage,
-    required this.onNextPage,
-    required this.onPreviousChapter,
-    required this.onNextChapter,
-    required this.onGapChanged,
-    required this.onZoomChanged,
-    required this.onToggleFullscreen,
-  });
-
-  final AppStrings text;
-  final ReaderData data;
-  final int currentPage;
-  final double pageGap;
-  final double zoom;
-  final bool fullscreen;
-  final VoidCallback onClose;
-  final VoidCallback onPreviousPage;
-  final VoidCallback onNextPage;
-  final VoidCallback? onPreviousChapter;
-  final VoidCallback? onNextChapter;
-  final ValueChanged<double> onGapChanged;
-  final ValueChanged<double> onZoomChanged;
-  final VoidCallback onToggleFullscreen;
-
-  @override
-  Widget build(BuildContext context) {
-    final contextData = data.context;
-    return ColoredBox(
-      color: Colors.black.withValues(alpha: 0.82),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 900;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                Tooltip(
-                  message: text.close,
-                  child: IconButton(
-                    onPressed: onClose,
-                    icon: const Icon(FluentIcons.cancel, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        contextData?.comicTitle ?? text.appName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      Text(
-                        '${contextData?.title ?? text.chapter} - '
-                        '${currentPage + 1}/${data.pages.length}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Tooltip(
-                  message: text.previousChapter,
-                  child: IconButton(
-                    onPressed: onPreviousChapter,
-                    icon: const Icon(FluentIcons.previous, color: Colors.white),
-                  ),
-                ),
-                Tooltip(
-                  message: text.previousPage,
-                  child: IconButton(
-                    onPressed: onPreviousPage,
-                    icon: const Icon(FluentIcons.up, color: Colors.white),
-                  ),
-                ),
-                Tooltip(
-                  message: text.nextPage,
-                  child: IconButton(
-                    onPressed: onNextPage,
-                    icon: const Icon(FluentIcons.down, color: Colors.white),
-                  ),
-                ),
-                Tooltip(
-                  message: text.nextChapter,
-                  child: IconButton(
-                    onPressed: onNextChapter,
-                    icon: const Icon(FluentIcons.next, color: Colors.white),
-                  ),
-                ),
-                if (compact)
-                  Tooltip(
-                    message: text.readerControls,
-                    child: IconButton(
-                      onPressed: () => _showReaderControls(context),
-                      icon: const Icon(
-                        FluentIcons.settings,
-                        color: Colors.white,
-                      ),
-                    ),
-                  )
-                else ...[
-                  _ValueButton(
-                    tooltip: text.gap,
-                    icon: FluentIcons.align_vertical_center,
-                    label: '${pageGap.round()}px',
-                    onDecrease: () => onGapChanged((pageGap - 5).clamp(0, 80)),
-                    onIncrease: () => onGapChanged((pageGap + 5).clamp(0, 80)),
-                  ),
-                  _ValueButton(
-                    tooltip: text.zoom,
-                    icon: FluentIcons.search,
-                    label: '${(zoom * 100).round()}%',
-                    onDecrease: () => onZoomChanged((zoom - 0.1).clamp(0.5, 3)),
-                    onIncrease: () => onZoomChanged((zoom + 0.1).clamp(0.5, 3)),
-                  ),
-                ],
-                Tooltip(
-                  message: text.fullscreen,
-                  child: IconButton(
-                    onPressed: onToggleFullscreen,
-                    icon: Icon(
-                      fullscreen
-                          ? FluentIcons.back_to_window
-                          : FluentIcons.full_screen,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _showReaderControls(BuildContext context) {
-    var sheetGap = pageGap;
-    var sheetZoom = zoom;
-    return showDialog<void>(
-      context: context,
-      builder: (context) {
-        return ContentDialog(
-          title: Text(text.readerControls),
-          content: StatefulBuilder(
-            builder: (context, setSheetState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _SheetValueControl(
-                    label: text.gap,
-                    value: sheetGap,
-                    decimals: 0,
-                    unit: 'px',
-                    onDecrease: () {
-                      final v = (sheetGap - 5).clamp(0, 80).toDouble();
-                      setSheetState(() => sheetGap = v);
-                      onGapChanged(v);
-                    },
-                    onIncrease: () {
-                      final v = (sheetGap + 5).clamp(0, 80).toDouble();
-                      setSheetState(() => sheetGap = v);
-                      onGapChanged(v);
-                    },
-                  ),
-                  _SheetValueControl(
-                    label: text.zoom,
-                    value: sheetZoom * 100,
-                    decimals: 0,
-                    unit: '%',
-                    onDecrease: () {
-                      final v = (sheetZoom - 0.1).clamp(0.5, 3).toDouble();
-                      setSheetState(() => sheetZoom = v);
-                      onZoomChanged(v);
-                    },
-                    onIncrease: () {
-                      final v = (sheetZoom + 0.1).clamp(0.5, 3).toDouble();
-                      setSheetState(() => sheetZoom = v);
-                      onZoomChanged(v);
-                    },
-                  ),
-                ],
-              );
-            },
-          ),
-          actions: [
-            Button(
-              child: Text(text.close),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _ValueButton extends StatelessWidget {
-  const _ValueButton({
-    required this.tooltip,
-    required this.icon,
-    required this.label,
-    required this.onDecrease,
-    required this.onIncrease,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final String label;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Colors.white, size: 16),
-        const SizedBox(width: 2),
-        _iconBtn(FluentIcons.remove, onDecrease),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            label,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
-        ),
-        _iconBtn(FluentIcons.add, onIncrease),
-      ],
-    );
-  }
-
-  Widget _iconBtn(IconData icon, VoidCallback onPressed) {
-    return SizedBox(
-      width: 28,
-      height: 28,
-      child: IconButton(
-        icon: Icon(icon, color: Colors.white),
-        onPressed: onPressed,
-      ),
-    );
-  }
-}
-
-class _SheetValueControl extends StatelessWidget {
-  const _SheetValueControl({
-    required this.label,
-    required this.value,
-    required this.decimals,
-    required this.unit,
-    required this.onDecrease,
-    required this.onIncrease,
-  });
-
-  final String label;
-  final double value;
-  final int decimals;
-  final String unit;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 56,
-          child: Text(label, style: const TextStyle(color: Colors.white)),
-        ),
-        IconButton(
-          icon: const Icon(FluentIcons.remove, color: Colors.white),
-          onPressed: onDecrease,
-        ),
-        SizedBox(
-          width: 56,
-          child: Text(
-            value.toStringAsFixed(decimals) + unit,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white),
-          ),
-        ),
-        IconButton(
-          icon: const Icon(FluentIcons.add, color: Colors.white),
-          onPressed: onIncrease,
-        ),
-      ],
-    );
-  }
-}
-
 class _ReferencePageIndicator extends StatefulWidget {
   const _ReferencePageIndicator({
     required this.currentPage,
@@ -1498,43 +1192,6 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ignore: unused_element
-class _PageIndicator extends StatelessWidget {
-  const _PageIndicator({
-    required this.currentPage,
-    required this.pageCount,
-    required this.onSelected,
-  });
-
-  final int currentPage;
-  final int pageCount;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black.withValues(alpha: 0.82),
-      child: SizedBox(
-        height: 58,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          itemCount: pageCount,
-          separatorBuilder: (_, _) => const SizedBox(width: 6),
-          itemBuilder: (context, index) {
-            final selected = index == currentPage;
-            return ToggleButton(
-              checked: selected,
-              onChanged: (_) => onSelected(index),
-              child: Text('${index + 1}'),
-            );
-          },
         ),
       ),
     );

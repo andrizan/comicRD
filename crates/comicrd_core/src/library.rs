@@ -9,7 +9,7 @@ use crate::chapter::{
     upsert_comic, ChapterUpsert,
 };
 use crate::database::{file_modified_ts, now_ts};
-use crate::{Comic, Library, LibrarySourceStatus, RawComic, ScanSummary, SortBy, SortDir};
+use crate::{Library, LibrarySourceStatus, RawComic, ScanSummary};
 
 pub(crate) fn library_source_status_for(path: &str) -> LibrarySourceStatus {
     if path.is_empty() {
@@ -347,61 +347,54 @@ pub(crate) fn scan_libraries_conn(conn: &mut Connection) -> Result<ScanSummary, 
     })
 }
 
-pub(crate) fn list_comics_conn(
-    conn: &Connection,
-    sort_by: SortBy,
-    sort_dir: SortDir,
-) -> Result<Vec<Comic>, String> {
-    let order_field = match sort_by {
-        SortBy::FolderDate => "c.date_modified",
-        SortBy::Name => "c.title COLLATE NOCASE",
-    };
-    let order_dir = match sort_dir {
-        SortDir::Desc => "DESC",
-        SortDir::Asc => "ASC",
-    };
-    let query = format!(
-        r#"
-    SELECT
-      c.id,
-      c.library_id,
-      c.title,
-      c.source_path,
-      c.source_type,
-      c.date_modified,
-      c.updated_at,
-      COUNT(ch.id) AS chapter_count,
-      SUM(CASE WHEN COALESCE(r.is_read, 0) = 1 THEN 1 ELSE 0 END) AS read_chapter_count,
-      SUM(CASE
-            WHEN COALESCE(r.last_page, 0) > 0 AND COALESCE(r.is_read, 0) = 0 THEN 1
-            ELSE 0
-          END) AS in_progress_chapter_count
-    FROM comics c
-    LEFT JOIN chapters ch ON ch.comic_id = c.id
-    LEFT JOIN reading_progress r ON r.chapter_id = ch.id
-    GROUP BY c.id
-    ORDER BY {order_field} {order_dir}
-    "#
-    );
-    let mut stmt = conn
-        .prepare(&query)
-        .map_err(|e| format!("failed preparing comics query: {e}"))?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(Comic {
-                id: row.get(0)?,
-                library_id: row.get(1)?,
-                title: row.get(2)?,
-                source_path: row.get(3)?,
-                source_type: row.get(4)?,
-                date_modified: row.get(5)?,
-                updated_at: row.get(6)?,
-                chapter_count: row.get(7)?,
-                read_chapter_count: row.get(8)?,
-                in_progress_chapter_count: row.get(9)?,
-            })
-        })
-        .map_err(|e| format!("failed querying comics: {e}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("failed collecting comics: {e}"))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn library_source_status_for_empty_path_is_unconfigured() {
+        let status = library_source_status_for("");
+        assert!(!status.configured);
+        assert_eq!(status.path, "");
+        assert!(!status.exists);
+        assert!(!status.is_dir);
+        assert!(!status.readable);
+        assert!(status.error.is_none());
+    }
+
+    #[test]
+    fn library_source_status_for_missing_path_reports_error() {
+        let status = library_source_status_for("/nonexistent/path/12345");
+        assert!(status.configured);
+        assert!(!status.exists);
+        assert!(!status.is_dir);
+        assert!(!status.readable);
+        assert!(status.error.is_some());
+        assert!(status.error.unwrap().contains("not found"));
+    }
+
+    #[test]
+    fn library_source_status_for_file_reports_not_dir() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let file = temp.path().join("file.txt");
+        std::fs::write(&file, "").expect("write");
+
+        let status = library_source_status_for(&file.to_string_lossy());
+        assert!(status.configured);
+        assert!(status.exists);
+        assert!(!status.is_dir);
+        assert!(!status.readable);
+        assert!(status.error.unwrap().contains("not a directory"));
+    }
+
+    #[test]
+    fn library_source_status_for_valid_dir_is_readable() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let status = library_source_status_for(&temp.path().to_string_lossy());
+        assert!(status.configured);
+        assert!(status.exists);
+        assert!(status.is_dir);
+        assert!(status.readable);
+        assert!(status.error.is_none());
+    }
 }

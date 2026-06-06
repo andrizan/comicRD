@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -27,6 +28,8 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   late final TextEditingController _search;
   late final FocusNode _focusNode;
   bool _didScrollToLastOpened = false;
+  Timer? _searchDebounce;
+  DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -34,20 +37,35 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     final key = ref.read(comicScrollKeyProvider(widget.comicPath));
     final offsets = ref.read(scrollOffsetsProvider.notifier);
     _scroll = ScrollController(initialScrollOffset: offsets.offsetFor(key));
-    _scroll.addListener(() {
-      ref.read(scrollOffsetsProvider.notifier).save(key, _scroll.offset);
-    });
+    _scroll.addListener(_onScroll);
     _search = TextEditingController();
-    _search.addListener(() {
-      ref
-          .read(comicPreferencesProvider.notifier)
-          .setQuery(widget.comicPath, _search.text);
-    });
+    final savedQuery = ref.read(
+      comicPreferencesProvider.select(
+        (state) => state[widget.comicPath]?.query ?? '',
+      ),
+    );
+    if (savedQuery.isNotEmpty) {
+      _search.text = savedQuery;
+    }
     _focusNode = FocusNode(debugLabel: 'ComicPage');
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) {
+      return;
+    }
+    final now = DateTime.now();
+    if (now.difference(_lastScrollSave).inMilliseconds < 200) {
+      return;
+    }
+    _lastScrollSave = now;
+    final key = ref.read(comicScrollKeyProvider(widget.comicPath));
+    ref.read(scrollOffsetsProvider.notifier).save(key, _scroll.offset);
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     if (_scroll.hasClients) {
       final key = ref.read(comicScrollKeyProvider(widget.comicPath));
       ref.read(scrollOffsetsProvider.notifier).save(key, _scroll.offset);
@@ -126,9 +144,15 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                         child: Icon(FluentIcons.search, size: 16),
                       ),
                       placeholder: text.search,
-                      onChanged: (value) => ref
-                          .read(comicPreferencesProvider.notifier)
-                          .setQuery(widget.comicPath, value),
+                      onChanged: (value) {
+                        _searchDebounce?.cancel();
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 300),
+                          () => ref
+                              .read(comicPreferencesProvider.notifier)
+                              .setQuery(widget.comicPath, value),
+                        );
+                      },
                     ),
                   ),
                 ),

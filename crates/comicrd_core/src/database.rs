@@ -246,14 +246,13 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
 
 pub(crate) fn list_settings_conn(conn: &Connection) -> Result<Vec<SettingEntry>, String> {
     let mut stmt = conn
-        .prepare("SELECT key, value_json, updated_at FROM app_settings ORDER BY key")
+        .prepare("SELECT key, value_json FROM app_settings ORDER BY key")
         .map_err(|e| format!("failed preparing settings query: {e}"))?;
     let rows = stmt
         .query_map([], |row| {
             Ok(SettingEntry {
                 key: row.get(0)?,
                 value_json: row.get(1)?,
-                updated_at: row.get(2)?,
             })
         })
         .map_err(|e| format!("failed querying settings: {e}"))?;

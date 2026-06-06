@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::tempdir;
 
 #[test]
-fn list_library_comics_raw_reads_configured_source_folder_and_archive() {
+fn reads_configured_source_folder_and_archive() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -26,13 +26,6 @@ fn list_library_comics_raw_reads_configured_source_folder_and_archive() {
     )
     .expect("set library source");
 
-    let status = core.check_library_source().expect("source status");
-    assert!(status.configured);
-    assert!(status.exists);
-    assert!(status.is_dir);
-    assert!(status.readable);
-    assert_eq!(status.path, library.to_string_lossy());
-
     let comics = core
         .list_library_comics_raw(SortBy::Name, SortDir::Asc)
         .expect("list raw comics");
@@ -51,50 +44,7 @@ fn list_library_comics_raw_reads_configured_source_folder_and_archive() {
 }
 
 #[test]
-fn check_library_source_reports_unconfigured_path() {
-    let temp = tempdir().expect("tempdir");
-    let core = ComicRdCore::open(temp.path()).expect("open core");
-
-    let status = core.check_library_source().expect("source status");
-
-    assert!(!status.configured);
-    assert_eq!(status.path, "");
-    assert!(!status.exists);
-    assert!(!status.is_dir);
-    assert!(!status.readable);
-    assert_eq!(status.error, None);
-}
-
-#[test]
-fn check_library_source_reports_missing_path_as_mount_hint() {
-    let temp = tempdir().expect("tempdir");
-    let app_data = temp.path().join("app-data");
-    let missing_library = temp.path().join("unmounted-library");
-    let core = ComicRdCore::open(&app_data).expect("open core");
-    core.set_setting(
-        "library_source_input",
-        &serde_json::to_string(&missing_library).unwrap(),
-    )
-    .expect("set library source");
-
-    let status = core.check_library_source().expect("source status");
-
-    assert!(status.configured);
-    assert_eq!(status.path, missing_library.to_string_lossy());
-    assert!(!status.exists);
-    assert!(!status.is_dir);
-    assert!(!status.readable);
-    assert_eq!(
-        status.error,
-        Some(format!(
-            "path '{}' not found. On Linux, you may need to mount the partition first.",
-            missing_library.display()
-        ))
-    );
-}
-
-#[test]
-fn list_library_comics_raw_returns_error_when_library_not_configured() {
+fn returns_error_when_library_not_configured() {
     let temp = tempdir().expect("tempdir");
     let core = ComicRdCore::open(temp.path()).expect("open core");
 
@@ -104,7 +54,7 @@ fn list_library_comics_raw_returns_error_when_library_not_configured() {
 }
 
 #[test]
-fn list_library_comics_raw_returns_zero_counts_before_scan() {
+fn returns_zero_counts_before_scan() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -131,7 +81,7 @@ fn list_library_comics_raw_returns_zero_counts_before_scan() {
 }
 
 #[test]
-fn list_library_comics_raw_reads_counts_from_db_after_scan() {
+fn reads_counts_from_db_after_scan() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -164,7 +114,7 @@ fn list_library_comics_raw_reads_counts_from_db_after_scan() {
 }
 
 #[test]
-fn list_library_comics_raw_reflects_progress_after_save() {
+fn reflects_progress_after_save() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -211,7 +161,7 @@ fn list_library_comics_raw_reflects_progress_after_save() {
 }
 
 #[test]
-fn list_library_comics_raw_uses_cache_until_progress_save() {
+fn uses_cache_until_progress_save() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");

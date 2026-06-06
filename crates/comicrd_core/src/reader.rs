@@ -39,7 +39,7 @@ pub(crate) fn get_progress_conn(
 ) -> Result<Option<ReadingProgress>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT chapter_id, last_page, total_pages, is_read, updated_at FROM reading_progress WHERE chapter_id = ?1",
+            "SELECT chapter_id, last_page, total_pages, is_read FROM reading_progress WHERE chapter_id = ?1",
         )
         .map_err(|e| format!("failed preparing progress query: {e}"))?;
     let mut rows = stmt
@@ -63,9 +63,6 @@ pub(crate) fn get_progress_conn(
                 .get::<_, i64>(3)
                 .map_err(|e| format!("invalid progress row: {e}"))?
                 == 1,
-            updated_at: row
-                .get(4)
-                .map_err(|e| format!("invalid progress row: {e}"))?,
         }));
     }
     Ok(None)

@@ -796,7 +796,8 @@ pub(crate) fn get_chapter_context_conn(
 
 #[cfg(test)]
 mod tests {
-    use super::rar_image_bytes;
+    use super::*;
+    use std::path::PathBuf;
 
     const VERSION_RAR: &[u8] = &[
         0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00, 0xcf, 0x90, 0x73, 0x00, 0x00, 0x0d, 0x00, 0x00,
@@ -816,5 +817,84 @@ mod tests {
         let bytes = rar_image_bytes(&archive, "VERSION").expect("read cbr entry");
 
         assert_eq!(bytes, b"unrar-0.4.0");
+    }
+
+    #[test]
+    fn ext_eq_matches_case_insensitive() {
+        assert!(ext_eq(Path::new("image.JPG"), "jpg"));
+        assert!(ext_eq(Path::new("image.Jpeg"), "jpeg"));
+        assert!(ext_eq(Path::new("image.png"), "png"));
+        assert!(!ext_eq(Path::new("image.png"), "jpg"));
+        assert!(!ext_eq(Path::new("noext"), "jpg"));
+    }
+
+    #[test]
+    fn is_archive_recognizes_extensions() {
+        assert!(is_archive(Path::new("comic.cbz")));
+        assert!(is_archive(Path::new("comic.cbr")));
+        assert!(is_archive(Path::new("comic.zip")));
+        assert!(is_archive(Path::new("comic.rar")));
+        assert!(!is_archive(Path::new("comic.cb")));
+        assert!(!is_archive(Path::new("image.png")));
+        assert!(!is_archive(Path::new("folder")));
+    }
+
+    #[test]
+    fn source_type_for_path_returns_extension() {
+        assert_eq!(source_type_for_path(Path::new("comic.cbz")), "cbz");
+        assert_eq!(source_type_for_path(Path::new("comic.cbr")), "cbr");
+        assert_eq!(source_type_for_path(Path::new("comic.zip")), "zip");
+        assert_eq!(source_type_for_path(Path::new("comic.rar")), "rar");
+        assert_eq!(source_type_for_path(Path::new("noext")), "zip");
+        assert_eq!(source_type_for_path(Path::new("noext")), "zip");
+    }
+
+    #[test]
+    fn is_image_recognizes_extensions() {
+        assert!(is_image(Path::new("page.jpg")));
+        assert!(is_image(Path::new("page.jpeg")));
+        assert!(is_image(Path::new("page.png")));
+        assert!(is_image(Path::new("page.webp")));
+        assert!(is_image(Path::new("page.gif")));
+        assert!(is_image(Path::new("page.bmp")));
+        assert!(is_image(Path::new("page.avif")));
+        assert!(!is_image(Path::new("page.txt")));
+        assert!(!is_image(Path::new("page.cbz")));
+    }
+
+    #[test]
+    fn comic_title_for_path_uses_filename() {
+        assert_eq!(
+            comic_title_for_path(Path::new("/library/My Comic")),
+            "My Comic"
+        );
+        assert_eq!(
+            comic_title_for_path(Path::new("/library/Cool Manga.cbz")),
+            "Cool Manga"
+        );
+        assert_eq!(
+            comic_title_for_path(Path::new("/library/sub/folder")),
+            "folder"
+        );
+    }
+
+    #[test]
+    fn natural_compare_orders_numbers_correctly() {
+        assert_eq!(
+            natural_compare("Chapter 2", "Chapter 10"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            natural_compare("Chapter 10", "Chapter 2"),
+            std::cmp::Ordering::Greater
+        );
+        assert_eq!(
+            natural_compare("Chapter 5", "Chapter 5"),
+            std::cmp::Ordering::Equal
+        );
+        assert_eq!(
+            natural_compare("Chapter 1a", "Chapter 1b"),
+            std::cmp::Ordering::Less
+        );
     }
 }

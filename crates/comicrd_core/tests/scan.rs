@@ -40,18 +40,17 @@ fn scan_libraries_upserts_comics_chapters_and_progress_counts() {
     assert_eq!(scan_status.last_summary, Some(summary));
     assert_eq!(scan_status.error, None);
 
-    let comics = core
-        .list_comics(SortBy::Name, SortDir::Asc)
-        .expect("list comics");
-    assert_eq!(comics.len(), 2);
-    assert_eq!(comics[0].library_id, library_id);
-    assert_eq!(comics[0].title, "Comic A");
-    assert_eq!(comics[0].chapter_count, 2);
-    assert_eq!(comics[0].read_chapter_count, 0);
-    assert_eq!(comics[0].in_progress_chapter_count, 0);
-    assert_eq!(comics[1].title, "Comic B");
-    assert_eq!(comics[1].source_type, "cbz");
-    assert_eq!(comics[1].chapter_count, 1);
+    let raw_comics = core
+        .list_library_comics_raw(SortBy::Name, SortDir::Asc)
+        .expect("list raw comics");
+    assert_eq!(raw_comics.len(), 2);
+    assert_eq!(raw_comics[0].title, "Comic A");
+    assert_eq!(raw_comics[0].chapter_count, 2);
+    assert_eq!(raw_comics[0].read_chapter_count, 0);
+    assert_eq!(raw_comics[0].in_progress_chapter_count, 0);
+    assert_eq!(raw_comics[1].title, "Comic B");
+    assert_eq!(raw_comics[1].source_type, "cbz");
+    assert_eq!(raw_comics[1].chapter_count, 1);
 
     let chapter_id = core
         .open_chapter_for_reading(OpenChapterPayload {
@@ -66,12 +65,6 @@ fn scan_libraries_upserts_comics_chapters_and_progress_counts() {
         is_read: false,
     })
     .expect("save progress");
-
-    let comics = core
-        .list_comics(SortBy::Name, SortDir::Asc)
-        .expect("list comics after progress");
-    assert_eq!(comics[0].read_chapter_count, 0);
-    assert_eq!(comics[0].in_progress_chapter_count, 1);
 
     let raw_comics = core
         .list_library_comics_raw(SortBy::Name, SortDir::Asc)
