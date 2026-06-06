@@ -162,6 +162,7 @@ class AppStrings {
     required this.search,
     required this.refresh,
     required this.totalComics,
+    required this.totalChapters,
     required this.showingComics,
     required this.emptyLibrary,
     required this.comic,
@@ -246,6 +247,7 @@ class AppStrings {
   final String search;
   final String refresh;
   final String totalComics;
+  final String totalChapters;
   final String showingComics;
   final String emptyLibrary;
   final String comic;
@@ -328,6 +330,7 @@ class AppStrings {
     search: 'Search',
     refresh: 'Perbarui',
     totalComics: 'Total comics',
+    totalChapters: 'chapters',
     showingComics: 'Showing',
     emptyLibrary: 'No comics found',
     comic: 'Comic',
@@ -404,6 +407,7 @@ class AppStrings {
     search: 'Cari',
     refresh: 'Refresh',
     totalComics: 'Total komik',
+    totalChapters: 'chapter',
     showingComics: 'Menampilkan',
     emptyLibrary: 'Komik tidak ditemukan',
     comic: 'Komik',

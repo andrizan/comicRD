@@ -816,9 +816,10 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final contextData = data.context;
-    final subtitle =
-        '${contextData?.title ?? text.chapter} - '
-        '${currentPage + 1}/${data.pages.length}';
+    final chapterInfo = contextData != null
+        ? '${contextData.title} (${contextData.chapterPosition}/${contextData.chapterTotal})'
+        : (contextData?.title ?? text.chapter);
+    final subtitle = '$chapterInfo - ${currentPage + 1}/${data.pages.length}';
     return _ReaderGlass(
       border: const Border(bottom: BorderSide(color: Color(0x14ffffff))),
       child: Padding(

@@ -191,76 +191,94 @@ class _ComicPageState extends ConsumerState<ComicPage> {
               ],
             ),
             const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  SizedBox(
-                    height: 38,
-                    child: ToggleButton(
-                      checked: preferences.favoritesOnly,
-                      onChanged: (value) => ref
-                          .read(comicPreferencesProvider.notifier)
-                          .setFavoritesOnly(widget.comicPath, value),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(FluentIcons.favorite_star, size: 18),
-                          const SizedBox(width: 4),
-                          Text(text.favorites),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    height: 38,
-                    child: ComboBox<ChapterSortBy>(
-                      value: preferences.sortBy,
-                      items: [
-                        ComboBoxItem(
-                          value: ChapterSortBy.chapterIndex,
-                          child: Text(text.chapter),
+            Row(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          height: 38,
+                          child: ToggleButton(
+                            checked: preferences.favoritesOnly,
+                            onChanged: (value) => ref
+                                .read(comicPreferencesProvider.notifier)
+                                .setFavoritesOnly(widget.comicPath, value),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(FluentIcons.favorite_star, size: 18),
+                                const SizedBox(width: 4),
+                                Text(text.favorites),
+                              ],
+                            ),
+                          ),
                         ),
-                        ComboBoxItem(
-                          value: ChapterSortBy.name,
-                          child: Text(text.name),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 38,
+                          child: ComboBox<ChapterSortBy>(
+                            value: preferences.sortBy,
+                            items: [
+                              ComboBoxItem(
+                                value: ChapterSortBy.chapterIndex,
+                                child: Text(text.chapter),
+                              ),
+                              ComboBoxItem(
+                                value: ChapterSortBy.name,
+                                child: Text(text.name),
+                              ),
+                              ComboBoxItem(
+                                value: ChapterSortBy.folderDate,
+                                child: Text(text.folderDate),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                _setSort(value, preferences.sortDir);
+                              }
+                            },
+                          ),
                         ),
-                        ComboBoxItem(
-                          value: ChapterSortBy.folderDate,
-                          child: Text(text.folderDate),
+                        SizedBox(
+                          height: 38,
+                          child: Tooltip(
+                            message: preferences.sortDir == bridge.SortDir.asc
+                                ? text.ascending
+                                : text.descending,
+                            child: IconButton(
+                              onPressed: () => _setSort(
+                                preferences.sortBy,
+                                preferences.sortDir == bridge.SortDir.asc
+                                    ? bridge.SortDir.desc
+                                    : bridge.SortDir.asc,
+                              ),
+                              icon: Icon(
+                                preferences.sortDir == bridge.SortDir.asc
+                                    ? FluentIcons.sort_up
+                                    : FluentIcons.sort_down,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          _setSort(value, preferences.sortDir);
-                        }
-                      },
                     ),
                   ),
-                  SizedBox(
-                    height: 38,
-                    child: Tooltip(
-                      message: preferences.sortDir == bridge.SortDir.asc
-                          ? text.ascending
-                          : text.descending,
-                      child: IconButton(
-                        onPressed: () => _setSort(
-                          preferences.sortBy,
-                          preferences.sortDir == bridge.SortDir.asc
-                              ? bridge.SortDir.desc
-                              : bridge.SortDir.asc,
-                        ),
-                        icon: Icon(
-                          preferences.sortDir == bridge.SortDir.asc
-                              ? FluentIcons.sort_up
-                              : FluentIcons.sort_down,
-                        ),
-                      ),
+                ),
+                const SizedBox(width: 12),
+                chapters.when(
+                  data: (items) => Text(
+                    '${items.length} ${text.totalChapters}',
+                    style: FluentTheme.of(context).typography.caption?.copyWith(
+                      color: FluentTheme.of(context).resources.textFillColorSecondary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
-              ),
+                  error: (_, _) => const SizedBox.shrink(),
+                  loading: () => const SizedBox.shrink(),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Expanded(
