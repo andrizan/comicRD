@@ -28,11 +28,8 @@ final chapterBookmarksProvider =
       return ref.watch(comicRdApiProvider).listBookmarks(chapterId);
     });
 
-final renderedPageProvider =
-    FutureProvider.family<bridge.RenderedPage, RenderedPageRequest>((
-      ref,
-      request,
-    ) {
+final renderedPageProvider = FutureProvider.autoDispose
+    .family<bridge.RenderedPage, RenderedPageRequest>((ref, request) {
       return ref
           .watch(comicRdApiProvider)
           .renderPageVariant(

@@ -312,23 +312,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _restoredProgress = true;
-    final page = data.initialPage;
-    _currentPage = page;
-    _lastSavedPage = page;
-    final initialOffset = _estimatedOffsetForPage(
-      page,
-      data,
-      ref.read(readerSettingsProvider),
-    );
-    if (!_scroll.hasClients && initialOffset > 0) {
-      _scroll.dispose();
-      _scroll = _createScrollController(initialOffset);
-    }
+    _currentPage = 0;
+    _lastSavedPage = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_prefetchAround(page));
-      if (_scroll.hasClients) {
-        _jumpToPage(page, persist: false);
-      }
+      unawaited(_prefetchAround(0));
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) {
           setState(() => _initialScrollDone = true);
@@ -458,20 +445,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final start = math.max(0, page - 2);
     final end = math.min(data.pages.length - 1, page + 2);
     final api = ref.read(comicRdApiProvider);
-    await api.prefetchPages(
-      bridge.PrefetchPagesPayload(
-        chapterId: widget.chapterId,
-        pageIndices: Uint32List.fromList([
-          for (var index = start; index <= end; index++) index,
-        ]),
+    final keepPages = Uint32List.fromList([
+      for (var index = start; index <= end; index++) index,
+    ]);
+    await Future.wait([
+      api.prefetchPages(
+        bridge.PrefetchPagesPayload(
+          chapterId: widget.chapterId,
+          pageIndices: keepPages,
+        ),
       ),
-    );
-    await api.evictChapterPages(
-      chapterId: widget.chapterId,
-      keepPages: Uint32List.fromList([
-        for (var index = start; index <= end; index++) index,
-      ]),
-    );
+      api.evictChapterPages(chapterId: widget.chapterId, keepPages: keepPages),
+    ]);
   }
 
   void _handleKey(LogicalKeyboardKey key, ReaderData? data) {
@@ -529,6 +514,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _invalidateRenderedPages(widget.chapterId, data.pages.length);
     }
     ref.invalidate(readerDataProvider(widget.chapterId));
+    ref
+        .read(comicRdApiProvider)
+        .evictChapterPages(chapterId: widget.chapterId, keepPages: []);
     if (mounted) {
       context.go('/reader/$chapterId');
     }
@@ -614,30 +602,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         curve: Curves.easeOutCubic,
       ),
     );
-  }
-
-  double _estimatedOffsetForPage(
-    int page,
-    ReaderData data,
-    ReaderSettings settings,
-  ) {
-    const topPadding = 78.0;
-    var offset = topPadding;
-    final target = page.clamp(0, data.pages.length - 1);
-    for (var index = 0; index < target; index++) {
-      offset += _estimatedPageHeight(data.pages[index], settings.zoom);
-      offset += settings.pageGap;
-    }
-    return offset;
-  }
-
-  double _estimatedPageHeight(bridge.PageInfo page, double zoom) {
-    final width = (page.width ?? 900).toDouble();
-    final height = (page.height ?? 1300).toDouble();
-    if (width <= 0 || height <= 0) {
-      return 1300 * zoom;
-    }
-    return height * zoom;
   }
 
   double _scrollOffsetForPageIndex(int page, int pageCount) {

@@ -56,15 +56,15 @@ static void my_application_activate(GApplication* application) {
 
   // Set window icon
   g_autoptr(GError) icon_error = nullptr;
-  gtk_window_set_icon_from_file(
-      window,
-      "data/comicrd.png",
-      &icon_error);
+  gtk_window_set_icon_from_file(window, "data/comicrd.png", &icon_error);
   if (icon_error != nullptr) {
-    // Try relative to executable path
-    g_autofree gchar* exe_dir = g_path_get_dirname("/proc/self/exe");
-    g_autofree gchar* icon_path = g_build_filename(exe_dir, "data", "comicrd.png", nullptr);
-    gtk_window_set_icon_from_file(window, icon_path, nullptr);
+    // Try relative to actual executable path (resolve /proc/self/exe symlink)
+    g_autofree gchar* resolved_exe = realpath("/proc/self/exe", nullptr);
+    if (resolved_exe != nullptr) {
+      g_autofree gchar* exe_dir = g_path_get_dirname(resolved_exe);
+      g_autofree gchar* icon_path = g_build_filename(exe_dir, "data", "comicrd.png", nullptr);
+      gtk_window_set_icon_from_file(window, icon_path, nullptr);
+    }
   }
 
   gtk_window_set_default_size(window, 1280, 720);

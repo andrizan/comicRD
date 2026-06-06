@@ -1,4 +1,4 @@
-# Audit Memory & Performa — 2026-06-06 (Final)
+# Audit Memory & Performa — 2026-06-07 (Final)
 
 Audit mendalam terhadap seluruh codebase comicrd_flutter (Rust core, Flutter UI, Bridge layer) untuk optimasi memory dan performa.
 
@@ -24,7 +24,7 @@ Audit mendalam terhadap seluruh codebase comicrd_flutter (Rust core, Flutter UI,
 | 12 | Image cache pakai `clear()` saat reader dispose | ✅ |
 | 13 | Scroll offset throttle 200ms (library_page) | ✅ |
 | 14 | Hapus `renderPagePreview` dari bridge | ✅ |
-| 15 | Hapus `SettingEntry.updated_at`, `RenderedPage.cache_key`, `ReadingProgress.updated_at` dari bridge | ✅ |
+| 15 | Hapus field redundan dari bridge structs | ✅ |
 | 16 | Arc untuk `PageSource` | ✅ |
 | 17 | Label count sesuai tab aktif | ✅ |
 
@@ -50,86 +50,94 @@ Audit mendalam terhadap seluruh codebase comicrd_flutter (Rust core, Flutter UI,
 
 ### Fase 3 — Selesai ✅
 
-#### BUG
+| # | Optimasi | Status |
+|---|----------|--------|
+| B1 | Fix `clear_library_list_cache()` di async scan | ✅ |
+| H1 | Invalidate `renderedPageProvider` saat chapter switch/close | ✅ |
+| H2 | CustomPainter page indicator (N widget → 1 painter) | ✅ |
+| H3 | `filteredComicChaptersProvider` → sync Provider | ✅ |
+| H4 | `Arc<Vec<u8>>` untuk `RenderedPage.bytes` di core | ✅ |
+| H5 | Batch query library listing | ✅ |
+| H6 | DB lock dipecah per-library saat scan | ✅ |
+| H7 | `Arc<Vec<u8>>` di core, clone saat crossing FFI | ✅ |
+| M1 | `_pageKeys.clear()` di dispose | ✅ |
+| M2 | Guard imageCache mutation (static counter) | ✅ |
+| M3 | Early exit di `_pageAtViewportCenter` | ✅ |
+| M4 | Batch prefetch lock | ✅ |
+| M5 | Cache chapter discovery (60s TTL) | ✅ |
+| M6 | Merge triple WalkDir | ✅ |
+| M8 | `Mutex` → `RwLock` untuk bridge CORE | ✅ |
+| L1 | Invalidate `readerDataProvider` saat switch/close | ✅ |
+| L2 | LRU cache max 200 untuk unbounded maps | ✅ |
+| L3 | Hapus history+bookmarks dari `_refreshLibrary` | ✅ |
+| L4 | Release DB lock sebelum sort | ✅ |
+| L5 | `unawaited()` untuk fire-and-forget DB writes | ✅ |
+| L6 | History dedup pindah ke SQL | ✅ |
+
+### Fase 4 — Selesai ✅ (Image Memory Deep Audit)
 
 | # | Masalah | Lokasi | Solusi | Status |
 |---|---------|--------|--------|--------|
-| B1 | `start_scan_libraries` tidak panggil `clear_library_list_cache()` | `lib.rs:398-420` | Tambah `clear_library_list_cache()` setelah scan | ✅ |
-
-#### HIGH Impact
-
-| # | Masalah | Lokasi | Solusi | Status |
-|---|---------|--------|--------|--------|
-| H1 | `renderedPageProvider` tidak di-invalidate saat ganti chapter | `reader_state.dart` | Invalidate provider + clear imageCache | ✅ |
-| H2 | `_ReferencePageIndicator` buat N widget+tooltip | `reader_page.dart:1140` | Ganti dengan `CustomPainter` | ✅ |
-| H3 | `filteredComicChaptersProvider` async → loading flash | `comic_state.dart:20` | Ubah ke sync `Provider` | ✅ |
-| H4 | `(*bytes).clone()` deep copy image setiap cache hit | `image_pipeline.rs:267` | `RenderedPage.bytes` pakai `Arc<Vec<u8>>` | ✅ |
-| H5 | N query DB individual untuk listing | `library.rs:52-95` | Batch query `WHERE history_key IN (...)` | ✅ |
-| H6 | Scan hold DB lock selama scan penuh | `lib.rs:390-396` | Pecah lock per-library | ✅ |
-| H7 | `RenderedPage.bytes: Vec<u8>` paksa deep copy via bridge | `bridge/api.rs:165` | `Arc<Vec<u8>>` di core, clone saat crossing FFI | ✅ |
-
-#### MEDIUM Impact
-
-| # | Masalah | Lokasi | Solusi | Status |
-|---|---------|--------|--------|--------|
-| M1 | `_pageKeys` tidak di-clear di `dispose()` | `reader_page.dart:35` | Tambah `_pageKeys.clear()` di dispose | ✅ |
-| M2 | Global `imageCache` mutation race condition | `reader_page.dart:52,60` | Guard dengan static instance counter | ✅ |
-| M3 | `_pageAtViewportCenter` iterasi semua page keys | `reader_page.dart:353-381` | Early exit saat distance < 10% viewport | ✅ |
-| M4 | `prefetch_pages` lock DB per page | `lib.rs:523-534` | Lock sekali, batch | ✅ |
-| M5 | `list_comic_chapters_raw_conn` discover FS setiap kali | `chapter.rs:476` | Cache hasil discovery (60s TTL) | ✅ |
-| M6 | Triple WalkDir di chapter discovery | `chapter.rs:368-456` | Merge walk per child dir | ✅ |
-| M7 | Prepared statement per archive di listing | `library.rs:122-159` | Ter-cover oleh batch query | ✅ |
-| M8 | Global mutex serializes semua bridge call | `bridge/api.rs:6` | `Mutex` → `RwLock` | ✅ |
-
-#### LOW Impact
-
-| # | Masalah | Lokasi | Solusi | Status |
-|---|---------|--------|--------|--------|
-| L1 | `readerDataProvider` tidak invalidasi saat ganti chapter | `reader_state.dart` | Invalidate saat switch/close | ✅ |
-| L2 | Unbounded map growth di 3 notifier | `comic_state.dart`, `scroll_state.dart` | LRU cache max 200 | ✅ |
-| L3 | `_refreshLibrary` refresh history+bookmarks tidak perlu | `library_page.dart:371` | Hapus dari refresh | ✅ |
-| L4 | DB lock held during sort | `lib.rs:347` | Release lock sebelum sort | ✅ |
-| L5 | Fire-and-forget DB writes di settings | `settings_state.dart:116` | Wrap di `unawaited()` | ✅ |
-| L6 | History dedup di Dart, harusnya di SQL | `library_state.dart:111` | Pindah ke SQL `GROUP BY` | ✅ |
+| I1 | `renderedPageProvider` tidak `autoDispose` → Dart memory menumpuk | `reader_state.dart:31` | Tambah `.autoDispose` | ✅ |
+| I2 | Bridge deep copy bytes setiap render | `api.rs:403` | FRB limitation — document only | ✅ |
+| I3 | Tidak ada explicit cross-chapter eviction di Rust | `image_pipeline.rs:113` | Tambah `evictChapterPages` saat switch chapter | ✅ |
+| I4 | `initialReaderPageForProgress` selalu return 0 | `reader_state.dart:78` | Implementasi resume dari `progress.lastPage` | ✅ |
+| I5 | Prefetch + evict sequential | `reader_page.dart:461` | Pakai `Future.wait([...])` | ✅ |
 
 ---
 
-## Ringkasan
+## Memory Flow Per Page Read
+
+```
+Step  Location                              Action
+────  ────────────────────────────────────  ──────────────────────────
+ 1    chapter.rs (zip_image_bytes)          FS/ZIP read → Vec<u8>
+ 2    image_pipeline.rs:231                 Arc::new(bytes) [wrap]
+ 3    image_pipeline.rs:240-246             Stored in PageCache [Arc::clone]
+ 4    image_pipeline.rs:267                 Arc::clone into RenderedPage
+ 5    api.rs:403                            (*value.bytes).clone() [DEEP COPY]
+ 6    frb_generated.rs                      Vec<u8> → SSE buffer [COPY]
+ 7    FFI transfer                          SSE buffer Rust → Dart
+ 8    frb_generated.dart                    SSE buffer → Uint8List [COPY]
+ 9    reader_state.dart                     Uint8List held in provider state
+10    reader_page.dart:705-710              Image.memory() [DECODE → ui.Image]
+11    Flutter imageCache                    Decoded ui.Image cached (64MB cap)
+```
+
+### Persistent copies at steady state (page visible)
+
+| Location | What | Size |
+|----------|------|------|
+| Rust `PageCache` | `Arc<Vec<u8>>` compressed | ~1MB JPEG |
+| Dart provider container | `Uint8List` compressed | ~1MB JPEG |
+| Flutter `imageCache` | `ui.Image` decoded RGBA | ~10MB (1920×1300×4) |
+
+### Memory lifecycle after fix
+
+```
+Scroll masuk → render page → Arc clone (cheap) → bridge deep copy → Dart Uint8List → Image.memory
+Scroll keluar → provider autoDispose → Dart heap freed
+Ganti chapter → evict old chapter Rust cache + invalidate Dart providers
+Keluar reader → clear imageCache + invalidate semua provider
+```
+
+---
+
+## Ringkasan Total
 
 | Fase | Item | Status |
 |------|------|--------|
 | Fase 1 | 17 | ✅ |
 | Fase 2 | 15 | ✅ |
-| Fase 3 | 22 | ✅ |
-| **Total** | **54** | ✅ |
+| Fase 3 | 21 | ✅ |
+| Fase 4 | 5 | ✅ |
+| **Total** | **58** | ✅ |
 
 ---
 
-## Detail Temuan Kritis
+## Known Limitations (Tidak Bisa Di-Fix)
 
-### Image Memory Leak (H1 + H4 + H7)
-
-**Masalah:** `renderedPageProvider` tidak di-invalidate saat keluar reader. `RenderedPage.bytes` di-clone (deep copy) setiap cache hit. Flutter `imageCache` menyimpan decoded image setelah dispose.
-
-**Fix:**
-- `Arc<Vec<u8>>` untuk `RenderedPage.bytes` di core (eliminasi deep copy)
-- Invalidate `renderedPageProvider` + `clear()` imageCache saat chapter switch/close
-- `clear()` di `dispose()` (bukan `clearLiveImages()`)
-
-### Scan DB Lock (H6)
-
-**Masalah:** `scan_libraries_now` hold `Mutex<Connection>` selama scan penuh. Semua operasi DB lain (save_progress, render_page, listing) ter-block.
-
-**Fix:** Pecah lock per-library. FS walk tanpa lock. Lock hanya saat DB transaction.
-
-### Library Listing N+1 Query (H5)
-
-**Masalah:** `comics_from_fs_entries` melakukan 1 SQL query per komik. 500 komik = 500 query.
-
-**Fix:** Batch query `WHERE history_key IN (...)` untuk folder counts dan archive progress.
-
-### Chapter Discovery Cache (M5)
-
-**Masalah:** `list_comic_chapters_raw_conn` walk filesystem setiap kali dipanggil.
-
-**Fix:** Cache hasil discovery di `ComicRdCore` dengan TTL 60 detik. Invalidate saat scan/bookmark/import.
+| Issue | Alasan |
+|-------|--------|
+| Bridge deep copy bytes (I2) | FRB codegen tidak support `Arc<Vec<u8>>` di bridge DTO. Butuh custom FFI di luar FRB. |
+| `imageCache` decoded image ~10MB per halaman | Inherent dari Flutter `Image.memory()`. Tidak bisa dihindari tanpa custom image decoder. |

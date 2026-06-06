@@ -13,6 +13,7 @@ import '../state/comic_state.dart';
 import '../state/scroll_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
+import '../utils/date_format.dart';
 
 class ComicPage extends ConsumerStatefulWidget {
   const ComicPage({super.key, required this.comicPath});
@@ -101,9 +102,13 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: (event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.escape) {
+        if (event is! KeyDownEvent) return;
+        if (event.logicalKey == LogicalKeyboardKey.escape) {
           context.go('/');
+        } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _scrollBy(300);
+        } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          _scrollBy(-300);
         }
       },
       child: Padding(
@@ -349,6 +354,19 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     ref.invalidate(filteredComicChaptersProvider(widget.comicPath));
   }
 
+  void _scrollBy(double delta) {
+    if (!_scroll.hasClients) return;
+    final target = (_scroll.offset + delta).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   Future<void> _openChapter(bridge.RawChapter chapter) async {
     final api = ref.read(comicRdApiProvider);
     final chapterId = await api.openChapterForReading(
@@ -538,7 +556,7 @@ class _ChapterList extends StatelessWidget {
                         _ChapterStatusBadge(text: text, chapter: chapter),
                         if (chapter.dateModified > 0)
                           Text(
-                            _formatModifiedDate(chapter.dateModified),
+                            formatModifiedDate(chapter.dateModified),
                             style: FluentTheme.of(context).typography.caption
                                 ?.copyWith(
                                   color: FluentTheme.of(
@@ -641,7 +659,7 @@ class _ChapterGridTile extends StatelessWidget {
                 _ChapterStatusBadge(text: text, chapter: chapter),
                 if (chapter.dateModified > 0)
                   Text(
-                    _formatModifiedDate(chapter.dateModified),
+                    formatModifiedDate(chapter.dateModified),
                     style: FluentTheme.of(context).typography.caption?.copyWith(
                       color: FluentTheme.of(
                         context,
@@ -729,13 +747,4 @@ class _ChapterStatusBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatModifiedDate(int timestamp) {
-  if (timestamp <= 0) return "";
-  final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
-  final day = date.day.toString().padLeft(2, "0");
-  final month = date.month.toString().padLeft(2, "0");
-  final year = date.year;
-  return "$day/$month/$year";
 }

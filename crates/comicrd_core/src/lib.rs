@@ -582,11 +582,11 @@ impl ComicRdCore {
         &self,
         payload: PrefetchPagesPayload,
     ) -> Result<(), String> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| "db lock poisoned".to_string())?;
         for page_index in payload.page_indices {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
             render_page_variant_conn(
                 &conn,
                 &self.page_cache,
@@ -654,8 +654,6 @@ impl ComicRdCore {
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         let id = add_bookmark_conn(&conn, payload)?;
-        self.clear_library_list_cache();
-        self.clear_chapter_discovery_cache();
         Ok(id)
     }
 
@@ -665,8 +663,6 @@ impl ComicRdCore {
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         remove_bookmark_conn(&conn, bookmark_id)?;
-        self.clear_library_list_cache();
-        self.clear_chapter_discovery_cache();
         Ok(())
     }
 
@@ -692,8 +688,6 @@ impl ComicRdCore {
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         let id = add_comic_bookmark_conn(&conn, comic_source_path)?;
-        self.clear_library_list_cache();
-        self.clear_chapter_discovery_cache();
         Ok(id)
     }
 
@@ -703,8 +697,6 @@ impl ComicRdCore {
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         remove_comic_bookmark_conn(&conn, comic_source_path)?;
-        self.clear_library_list_cache();
-        self.clear_chapter_discovery_cache();
         Ok(())
     }
 

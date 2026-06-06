@@ -281,6 +281,10 @@ String _decodeString(String? raw, String fallback) {
   if (raw == null) {
     return fallback;
   }
-  final decoded = jsonDecode(raw);
-  return decoded is String ? decoded : fallback;
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is String ? decoded : fallback;
+  } catch (_) {
+    return fallback;
+  }
 }

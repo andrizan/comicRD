@@ -18,7 +18,7 @@ history, backup/import, and the reader image pipeline.
 - Comic bookmarks and chapter favorites
 - Chapter listing with progress and page counts
 - Vertical reader with keyboard navigation, fullscreen, zoom, and page gap controls
-- Automatic progress restore and progress save
+- Automatic progress save
 - Previous/next chapter navigation
 - Bounded page prefetch/cache around the current viewport
 - SQLite-backed settings, metadata, reading progress, bookmarks, and history

@@ -13,6 +13,7 @@ import '../state/library_state.dart';
 import '../state/scroll_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
+import '../utils/date_format.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -26,6 +27,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   late final ScrollController _libraryScroll;
   late final ScrollController _bookmarksScroll;
   final _search = TextEditingController();
+  final _focusNode = FocusNode(debugLabel: 'LibraryPage');
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -53,6 +55,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     _libraryScroll.dispose();
     _bookmarksScroll.dispose();
     _search.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -86,6 +89,37 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     ref.read(scrollOffsetsProvider.notifier).save(key, controller.offset);
   }
 
+  ScrollController _activeScrollController() {
+    final tab = ref.read(libraryPreferencesProvider).selectedTab;
+    return switch (tab) {
+      LibraryTab.history => _historyScroll,
+      LibraryTab.library => _libraryScroll,
+      LibraryTab.bookmarks => _bookmarksScroll,
+    };
+  }
+
+  void _handleKey(LogicalKeyboardKey key) {
+    if (key == LogicalKeyboardKey.arrowDown) {
+      _scrollBy(300);
+    } else if (key == LogicalKeyboardKey.arrowUp) {
+      _scrollBy(-300);
+    }
+  }
+
+  void _scrollBy(double delta) {
+    final controller = _activeScrollController();
+    if (!controller.hasClients) return;
+    final target = (controller.offset + delta).clamp(
+      0.0,
+      controller.position.maxScrollExtent,
+    );
+    controller.animateTo(
+      target,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
@@ -105,7 +139,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             .map((bookmark) => bookmark.comicSourcePath)
             .toSet() ??
         const <String>{};
-    return ScaffoldPage(
+    return KeyboardListener(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: (event) {
+        if (event is KeyDownEvent) {
+          _handleKey(event.logicalKey);
+        }
+      },
+      child: ScaffoldPage(
       content: Column(
         children: [
           Padding(
@@ -338,6 +380,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -557,7 +600,7 @@ class _ComicList extends StatelessWidget {
                                 ),
                                 if (comic.dateModified > 0)
                                   Text(
-                                    _formatModifiedDate(comic.dateModified),
+                                    formatModifiedDate(comic.dateModified),
                                     style: FluentTheme.of(context)
                                         .typography
                                         .caption
@@ -682,7 +725,7 @@ class _ComicGridTile extends StatelessWidget {
                 ),
                 if (comic.dateModified > 0)
                   Text(
-                    _formatModifiedDate(comic.dateModified),
+                    formatModifiedDate(comic.dateModified),
                     style: FluentTheme.of(context).typography.caption?.copyWith(
                       color: FluentTheme.of(
                         context,
@@ -1130,13 +1173,4 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatModifiedDate(int timestamp) {
-  if (timestamp <= 0) return '';
-  final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
-  final day = date.day.toString().padLeft(2, '0');
-  final month = date.month.toString().padLeft(2, '0');
-  final year = date.year;
-  return '$day/$month/$year';
 }
