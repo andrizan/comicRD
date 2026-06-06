@@ -559,6 +559,7 @@ impl ComicRdCore {
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
         save_progress_conn(&conn, &payload)?;
+        self.clear_library_list_cache();
         Ok(())
     }
 

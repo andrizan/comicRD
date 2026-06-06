@@ -81,12 +81,15 @@ The DB is **NOT** used to enumerate comics for the library listing. The filesyst
 
 ### Cache FS Entries
 
-Cache the top-level FS entries in `LibraryListCache` with a 30-second TTL. Invalidate cache on:
-- `scan_libraries()`
-- `add_library()`
-- `import_database_backup()`
+Cache the top-level FS entries in `LibraryListCache` with a 30-second TTL.
 
-Do NOT invalidate cache on `save_progress()` — progress changes don't affect the filesystem structure.
+**IMPORTANT:** The cache stores BOTH filesystem entries AND database counts (chapter_count, read_chapter_count, in_progress_chapter_count). Any operation that changes DB data that affects counts MUST clear the cache.
+
+Invalidate cache on:
+- `scan_libraries()` — FS structure changes
+- `add_library()` — FS structure changes
+- `import_database_backup()` — DB changes
+- `save_progress()` — DB read/in_progress counts change
 
 ## Bridge Rules
 
