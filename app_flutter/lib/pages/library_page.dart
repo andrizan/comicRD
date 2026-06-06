@@ -492,7 +492,7 @@ class _ComicList extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 220,
-                mainAxisExtent: 184,
+                mainAxisExtent: 196,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
