@@ -373,8 +373,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     await Future.wait<void>([
       ref.refresh(librarySourceStatusProvider.future),
       ref.refresh(rawLibraryComicsProvider.future),
-      ref.refresh(readingHistoryProvider.future),
-      ref.refresh(allBookmarksProvider.future),
     ]);
   }
 

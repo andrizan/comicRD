@@ -1,10 +1,10 @@
-# Audit Memory & Performa — 2026-06-06 (Updated)
+# Audit Memory & Performa — 2026-06-06 (Final)
 
 Audit mendalam terhadap seluruh codebase comicrd_flutter (Rust core, Flutter UI, Bridge layer) untuk optimasi memory dan performa.
 
 ---
 
-## Status: Fase 1 Selesai, Fase 2 Pending
+## Status: Fase 1-2 Selesai, Fase 3 Pending
 
 ### Fase 1 — Selesai ✅
 
@@ -28,173 +28,93 @@ Audit mendalam terhadap seluruh codebase comicrd_flutter (Rust core, Flutter UI,
 | 16 | Arc untuk `PageSource` | ✅ |
 | 17 | Label count sesuai tab aktif | ✅ |
 
+### Fase 2 — Selesai ✅
+
+| # | Optimasi | Status |
+|---|----------|--------|
+| 18 | Hapus `clear_library_list_cache()` dari `save_progress()` | ✅ |
+| 19 | Fix double `setQuery()` + debounce 300ms di comic_page | ✅ |
+| 20 | Hapus `RenderedPage.cache_key` dari core | ✅ |
+| 21 | Hapus `SettingEntry.updated_at` dari core + DB | ✅ |
+| 22 | Hapus `ReadingProgress.updated_at` dari core + DB | ✅ |
+| 23 | `Arc<Vec<PathBuf>>` untuk library cache entries | ✅ |
+| 24 | Hapus dead code `_ReaderToolbar` + 3 helpers (~345 baris) | ✅ |
+| 25 | Hapus `Comic` struct + `list_comics()` + `list_comics_conn()` dari core | ✅ |
+| 26 | Hapus `render_page_preview()` dari core | ✅ |
+| 27 | Test reorganization (24 → 40 test) | ✅ |
+| 28 | Update AGENTS.md dengan rules | ✅ |
+| 29 | Fix scroll position validation (clamp + post-frame) | ✅ |
+| 30 | Fix reader scroll performance (`_pageAtViewportCenter`) | ✅ |
+| 31 | Chapter count label di chapter page + reader page | ✅ |
+| 32 | i18n untuk chapter count label | ✅ |
+
 ---
 
-### Fase 2 — Pending
+### Fase 3 — Pending
 
-#### HIGH Impact (baru ditemukan)
-
-| # | Masalah | Lokasi | Solusi |
-|---|---------|--------|--------|
-| H1 | `save_progress()` clear library_list_cache padahal progress tidak mengubah FS | `lib.rs:528` | Hapus `clear_library_list_cache()` dari `save_progress()` |
-| H2 | Double `setQuery()` di comic_page — listener + onChanged keduanya fire | `comic_page.dart:41-45,129` | Hapus listener, pakai onChanged + debounce |
-
-#### NEW Issues (dari perubahan fase 1)
+#### BUG
 
 | # | Masalah | Lokasi | Solusi |
 |---|---------|--------|--------|
-| N1 | `RenderedPage.cache_key` masih di-compute di core (wasted alloc) | `image_pipeline.rs:266` | Hapus field dari core struct |
-| N2 | `SettingEntry.updated_at` masih di-query dari DB | `database.rs:249` | Hapus dari SELECT |
-| N3 | `ReadingProgress.updated_at` masih di-query dari DB | `reader.rs:42` | Hapus dari SELECT |
-| N4 | Library cache clone `Vec<PathBuf>` di setiap access | `lib.rs:359` | Pakai `Arc<Vec<PathBuf>>` |
+| B1 | `start_scan_libraries` tidak panggil `clear_library_list_cache()` → stale listing setelah async scan | `lib.rs:398-420` | Tambah `clear_library_list_cache()` setelah scan selesai |
 
-#### MEDIUM Impact (sisa)
+#### HIGH Impact
 
 | # | Masalah | Lokasi | Solusi |
 |---|---------|--------|--------|
-| M1 | Dead code: `_ReaderToolbar` + 3 helper widget (~460 baris) | `reader_page.dart:1082-1542` | Hapus |
-| M2 | `Comic` struct + `list_comics()` + `list_comics_conn()` masih di core | `lib.rs:58-69`, `library.rs:350-407` | Hapus atau mark `#[cfg(test)]` |
-| M4 | `pub use comicrd_core::*` leak internal types | `bridge/lib.rs:4` | Hapus |
-| R1 | DB Mutex contention setiap bridge call | `lib.rs:252` | Pertimbangkan `RwLock` |
-| R2 | `prefetch_pages` hold lock across loop | `lib.rs:559-570` | Batch source lookup sekali |
-| R3 | `zip_image_bytes` buka archive ulang per page | `chapter.rs:259` | Cache `ZipArchive` handle |
+| H1 | `renderedPageProvider` tidak di-invalidate saat ganti chapter → image bytes menumpuk | `reader_state.dart` | Invalidate provider chapter lama saat switch/close |
+| H2 | `_ReferencePageIndicator` buat N widget+tooltip (500 page = 500 tooltip) | `reader_page.dart:1140` | Ganti dengan `CustomPainter` atau `Slider` |
+| H3 | `filteredComicChaptersProvider` async → loading flash setiap filter berubah | `comic_state.dart:20` | Ubah ke sync `Provider` seperti library |
+| H4 | `(*bytes).clone()` deep copy image setiap cache hit | `image_pipeline.rs:267` | `RenderedPage.bytes` harus `Arc<Vec<u8>>` |
+| H5 | N query DB individual untuk listing (1 per komik) | `library.rs:52-95` | Batch query `WHERE history_key IN (...)` |
+| H6 | Scan hold DB lock selama scan penuh, block semua operasi | `lib.rs:390-396` | Pecah lock per-library atau pakai connection terpisah |
+| H7 | `RenderedPage.bytes: Vec<u8>` paksa deep copy via bridge | `bridge/api.rs:165` | Ubah ke `Arc<Vec<u8>>` di core, clone saat crossing FFI |
+
+#### MEDIUM Impact
+
+| # | Masalah | Lokasi | Solusi |
+|---|---------|--------|--------|
+| M1 | `_pageKeys` tidak di-clear di `dispose()` | `reader_page.dart:35` | Tambah `_pageKeys.clear()` di dispose |
+| M2 | Global `imageCache` mutation race condition saat route transition | `reader_page.dart:52,60` | Pakai refcount atau guard |
+| M3 | `_pageAtViewportCenter` iterasi semua page keys | `reader_page.dart:353-381` | Binary search atau check page dekat viewport saja |
+| M4 | `prefetch_pages` lock DB per page | `lib.rs:523-534` | Lock sekali, batch |
+| M5 | `list_comic_chapters_raw_conn` discover FS setiap kali | `chapter.rs:476` | Cache hasil discovery |
+| M6 | Triple WalkDir di chapter discovery | `chapter.rs:368-456` | Merge walk |
+| M7 | Prepared statement per archive di listing | `library.rs:122-159` | Prepare sekali, reuse |
+| M8 | Global mutex serializes semua bridge call | `bridge/api.rs:6` | Pakai `RwLock` |
 
 #### LOW Impact
 
 | # | Masalah | Lokasi | Solusi |
 |---|---------|--------|--------|
-| M3 | `render_page_preview()` dead di core | `lib.rs:548` | Hapus |
-| M5 | `image_pipeline_profile` setting dead | `database.rs:232` | Hapus dari defaults |
-| M6 | Chapter search tanpa debounce | `comic_page.dart:129` | Tambah debounce 300ms |
-| M7 | History dedup di Dart, harusnya di SQL | `library_state.dart:113` | Pakai `GROUP BY` di Rust |
-| M8 | Scroll offset save tanpa throttle di comic_page | `comic_page.dart:37` | Tambah throttle 200ms |
-| F1 | Double `ref.watch(readerSettingsProvider)` | `reader_page.dart:95,263` | Hapus watch kedua |
-| F2 | `libraryPaginationProvider.reset()` tidak pernah dipanggil | `library_state.dart:46` | Panggil saat filter berubah |
-| F3 | `_decodeString` dan helper duplicated across files | `comic_state.dart`, `library_state.dart` | Extract ke utility |
-| T2 | Test scan.rs pakai dead `list_comics()` API | `scan.rs:44,71` | Migrate ke `list_library_comics_raw` |
+| L1 | `readerDataProvider` tidak invalidasi saat ganti chapter | `reader_state.dart` | Invalidate saat switch |
+| L2 | Unbounded map growth di `comicPreferencesProvider`, `lastOpenedChapterProvider`, `scrollOffsetsProvider` | `comic_state.dart`, `scroll_state.dart` | LRU cache max 200 |
+| L3 | `_refreshLibrary` refresh history+bookmarks padahal tidak perlu | `library_page.dart:371` | Hapus dari refresh |
+| L4 | DB lock held during sort | `lib.rs:347` | Release lock sebelum sort |
+| L5 | Fire-and-forget DB writes di settings | `settings_state.dart:116` | Wrap di `unawaited()` |
+| L6 | History dedup di Dart, harusnya di SQL | `library_state.dart:111` | Pakai `GROUP BY` di Rust |
 
 ---
 
 ## Ringkasan
 
-| Fase | HIGH | MEDIUM | LOW | Total | Status |
-|------|------|--------|-----|-------|--------|
-| Fase 1 | 12 | 5 | 0 | 17 | ✅ Selesai |
-| Fase 2 | 2 | 6 | 9 | 17 | ⏳ Pending |
-| **Total** | **14** | **11** | **9** | **34** | |
+| Fase | Item | Status |
+|------|------|--------|
+| Fase 1 | 17 | ✅ |
+| Fase 2 | 15 | ✅ |
+| Fase 3 | 17 | ⏳ Pending |
+| **Total** | **49** | |
 
 ---
 
-## Detail Temuan Fase 1 (Selesai)
+## Rekomendasi Eksekusi Fase 3 (urutan ROI)
 
-### 1. Page Cache Clone (HIGH) ✅
-
-`image_pipeline.rs:222` — setiap cache hit, `state.bytes.get(&key).cloned()` clone seluruh `CachedPageBytes` yang berisi `Vec<u8>` (full image 500KB-5MB).
-
-**Fix:** Ubah `CachedPageBytes.bytes` ke `Arc<Vec<u8>>`. Cache hit return `Arc` clone (murah).
-
-### 2. IndexedStack (HIGH) ✅
-
-`library_page.dart:283` — `IndexedStack` keep semua 3 tab alive sekaligus.
-
-**Fix:** Ganti dengan `switch` conditional rendering.
-
-### 3. Search Filter (HIGH) ✅
-
-`library_state.dart:60-70` — `toLowerCase()` dipanggil untuk setiap comic pada setiap ketikan user.
-
-**Fix:** Debounce 300ms di `onChanged`.
-
-### 4. Batch Chapter Query (MEDIUM) ✅
-
-`chapter.rs:486` — `list_comic_chapters_raw_conn` query DB satu per satu per chapter.
-
-**Fix:** Batch query dengan `WHERE history_key IN (...)`.
-
-### 5. Provider Invalidation (MEDIUM) ✅
-
-`reader_page.dart:428-439` — setiap page turn invalidate 4 providers.
-
-**Fix:** Pindah invalidation ke saat reader close.
-
----
-
-## Detail Temuan Fase 2 (Pending)
-
-### H1. save_progress() Unnecessary Cache Clear
-
-`lib.rs:528` — setiap `save_progress()` memanggil `clear_library_list_cache()`. Padahal progress tidak mengubah struktur filesystem. Ini menyebabkan unnecessary FS re-scan jika user kembali ke library page dalam 30 detik.
-
-**Fix:** Hapus `self.clear_library_list_cache()` dari `save_progress()`.
-
-### H2. Double setQuery() di comic_page
-
-`comic_page.dart:41-45` — `_search.addListener()` memanggil `setQuery()`.
-`comic_page.dart:129` — `onChanged` juga memanggil `setQuery()`.
-
-Setiap keystroke fire 2 state update, 2 rebuild.
-
-**Fix:** Hapus `.addListener()`. Tambah debounce 300ms seperti library_page.
-
-### N1. RenderedPage.cache_key Still Computed
-
-`image_pipeline.rs:266` — `format!("{}:{}", payload.chapter_id, payload.page_index)` di-compute setiap page render, padahal field sudah dihapus dari bridge struct.
-
-**Fix:** Hapus `cache_key` dari core `RenderedPage` struct dan stop computing it.
-
-### N2. SettingEntry.updated_at Still Queried
-
-`database.rs:249` — `SELECT key, value_json, updated_at FROM app_settings`. `updated_at` tidak dipakai Flutter.
-
-**Fix:** Hapus `updated_at` dari SELECT dan dari core struct.
-
-### N3. ReadingProgress.updated_at Still Queried
-
-`reader.rs:42` — query masih select `updated_at`. Bridge sudah tidak kirim field ini.
-
-**Fix:** Hapus `updated_at` dari SELECT dan dari core struct.
-
-### N4. Library Cache Vec Clone
-
-`lib.rs:359` — `cache_guard.as_ref().unwrap().entries.clone()` clone seluruh `Vec<PathBuf>` setiap access. Untuk library 500+ komik, ini 500+ heap allocation.
-
-**Fix:** Wrap entries di `Arc<Vec<PathBuf>>`, clone Arc saja (murah).
-
-### M1. Dead Code ~460 Lines
-
-`reader_page.dart:1082-1542` — 4 widget class tidak pernah di-instantiate:
-- `_ReaderToolbar` (212 lines)
-- `_ValueButton` (46 lines)
-- `_SheetValueControl` (45 lines)
-- `_PageIndicator` (35 lines)
-
-**Fix:** Hapus.
-
-### M2. Comic/list_comics Dead in Core
-
-`lib.rs:58-69` — `Comic` struct masih ada.
-`lib.rs:479-485` — `list_comics()` method masih ada.
-`library.rs:350-407` — `list_comics_conn()` masih ada.
-
-Hanya dipakai oleh test `scan.rs`.
-
-**Fix:** Hapus dari production code, update test pakai `list_library_comics_raw`.
-
-### M4. pub use comicrd_core::* Leaks
-
-`bridge/lib.rs:4` — `pub use comicrd_core::*` expose semua internal core types.
-
-**Fix:** Hapus. Bridge punya tipe sendiri di `api.rs`.
-
----
-
-## Estimasi Dampak Fase 2
-
-| Fix | Dampak |
-|-----|--------|
-| H1 | Eliminasi unnecessary FS re-scan setelah reading |
-| H2 | Eliminasi 2x rebuild per keystroke di chapter search |
-| N1-N3 | Eliminasi wasted alloc per page render dan per settings read |
-| N4 | Eliminasi 500+ heap alloc per library view |
-| M1 | -460 baris dead code |
-| M2 | -60 baris dead code + cleaner API surface |
+1. **B1** — Fix bug async scan cache (1 baris, immediate fix)
+2. **H1** — Invalidate renderedPageProvider saat chapter switch (memory leak)
+3. **H3** — Sync filteredComicChaptersProvider (UX fix, loading flash)
+4. **M1** — Clear _pageKeys di dispose (defensive cleanup)
+5. **H5** — Batch query library listing (performance)
+6. **H4+H7** — Arc untuk RenderedPage.bytes (memory + performance)
+7. **H2** — CustomPainter page indicator (widget count)
+8. **M4** — Batch prefetch lock (lock contention)
+9. **M5** — Cache chapter discovery (FS walk)

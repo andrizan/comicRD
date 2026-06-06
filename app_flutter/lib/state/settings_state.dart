@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -115,8 +116,8 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
 
   void _saveToDatabase() {
     final api = ref.read(comicRdApiProvider);
-    api.setSetting('default_zoom', state.zoom.toStringAsFixed(1));
-    api.setSetting('page_gap', state.pageGap.round().toString());
+    unawaited(api.setSetting('default_zoom', state.zoom.toStringAsFixed(1)));
+    unawaited(api.setSetting('page_gap', state.pageGap.round().toString()));
   }
 
   void hydrateFromSettings(Map<String, String> values) {

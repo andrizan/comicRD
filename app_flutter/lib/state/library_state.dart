@@ -109,13 +109,8 @@ final libraryComicsProvider = Provider<LibraryComicsState>((ref) {
 });
 
 final readingHistoryProvider = FutureProvider<List<bridge.ReadingHistoryEntry>>(
-  (ref) async {
-    final entries = await ref.watch(comicRdApiProvider).listReadingHistory();
-    final seen = <String>{};
-    return [
-      for (final entry in entries)
-        if (seen.add(entry.comicSourcePath)) entry,
-    ];
+  (ref) {
+    return ref.watch(comicRdApiProvider).listReadingHistory();
   },
 );
 

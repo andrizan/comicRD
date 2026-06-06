@@ -4,6 +4,7 @@ mod image_pipeline;
 mod library;
 mod reader;
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -200,9 +201,9 @@ pub struct PrefetchPagesPayload {
     pub page_indices: Vec<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedPage {
-    pub bytes: Vec<u8>,
+    pub bytes: Arc<Vec<u8>>,
     pub mime: String,
     pub width: u32,
     pub height: u32,
@@ -230,12 +231,18 @@ struct LibraryListCache {
     updated_at: Instant,
 }
 
+struct ChapterDiscoveryCache {
+    discovered: Vec<(String, String, String, i64)>,
+    updated_at: Instant,
+}
+
 pub struct ComicRdCore {
     db_path: PathBuf,
     conn: Mutex<Connection>,
     page_cache: PageCache,
     scan_state: Mutex<LibraryScanState>,
     library_list_cache: Mutex<Option<LibraryListCache>>,
+    chapter_discovery_cache: Mutex<HashMap<String, ChapterDiscoveryCache>>,
 }
 
 impl ComicRdCore {
@@ -254,6 +261,7 @@ impl ComicRdCore {
             page_cache: PageCache::default(),
             scan_state: Mutex::new(LibraryScanState::default()),
             library_list_cache: Mutex::new(None),
+            chapter_discovery_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -344,12 +352,15 @@ impl ComicRdCore {
             }
         };
 
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| "db lock poisoned".to_string())?;
-        let mut comics = Vec::new();
-        comics_from_fs_entries(&conn, &library_path, &entries, &mut comics)?;
+        let mut comics = {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            let mut comics = Vec::new();
+            comics_from_fs_entries(&conn, &library_path, &entries, &mut comics)?;
+            comics
+        };
         comics.sort_by(|a, b| {
             let ord = match sort_by {
                 SortBy::FolderDate => a.date_modified.cmp(&b.date_modified),
@@ -384,15 +395,52 @@ impl ComicRdCore {
         let result = self.scan_libraries_now();
         self.mark_scan_finished(&result);
         self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
         result
     }
 
     fn scan_libraries_now(&self) -> Result<ScanSummary, String> {
-        let mut conn = self
-            .conn
-            .lock()
-            .map_err(|_| "db lock poisoned".to_string())?;
-        scan_libraries_conn(&mut conn)
+        let libraries = {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            list_libraries_conn(&conn)?
+        };
+
+        let mut comic_count = 0usize;
+        let mut chapter_count = 0usize;
+
+        for lib in libraries {
+            let base = Path::new(&lib.path);
+            if !base.exists() || !base.is_dir() {
+                continue;
+            }
+
+            let mut entries = WalkDir::new(base)
+                .min_depth(1)
+                .max_depth(1)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .map(|e| e.into_path())
+                .collect::<Vec<_>>();
+            entries.sort();
+
+            let mut conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            let (c, ch) = scan_library_entries(&mut conn, lib.id, &lib.path, &entries)?;
+            drop(conn);
+
+            comic_count += c;
+            chapter_count += ch;
+        }
+
+        Ok(ScanSummary {
+            comics: comic_count,
+            chapters: chapter_count,
+        })
     }
 
     pub fn start_scan_libraries(self: &Arc<Self>) -> Result<bool, String> {
@@ -414,6 +462,8 @@ impl ComicRdCore {
         thread::spawn(move || {
             let result = core.scan_libraries_now();
             core.mark_scan_finished(&result);
+            core.clear_library_list_cache();
+            core.clear_chapter_discovery_cache();
         });
 
         Ok(true)
@@ -464,11 +514,19 @@ impl ComicRdCore {
         &self,
         comic_source_path: &str,
     ) -> Result<Vec<RawChapter>, String> {
+        let discovered = match self.get_cached_chapter_discovery(comic_source_path) {
+            Some(cached) => cached,
+            None => {
+                let discovered = discover_chapter_entries_for_comic(comic_source_path)?;
+                self.set_cached_chapter_discovery(comic_source_path, discovered.clone());
+                discovered
+            }
+        };
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        list_comic_chapters_raw_conn(&conn, comic_source_path)
+        list_comic_chapters_raw_conn_with_discovered(&conn, comic_source_path, &discovered)
     }
 
     pub fn open_chapter_for_reading(&self, payload: OpenChapterPayload) -> Result<i64, String> {
@@ -524,11 +582,19 @@ impl ComicRdCore {
         &self,
         payload: PrefetchPagesPayload,
     ) -> Result<(), String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
         for page_index in payload.page_indices {
-            self.render_page_variant(RenderPagePayload {
-                chapter_id: payload.chapter_id,
-                page_index,
-            })?;
+            render_page_variant_conn(
+                &conn,
+                &self.page_cache,
+                RenderPagePayload {
+                    chapter_id: payload.chapter_id,
+                    page_index,
+                },
+            )?;
         }
         Ok(())
     }
@@ -548,6 +614,40 @@ impl ComicRdCore {
         }
     }
 
+    fn get_cached_chapter_discovery(
+        &self,
+        comic_source_path: &str,
+    ) -> Option<Vec<(String, String, String, i64)>> {
+        let cache = self.chapter_discovery_cache.lock().ok()?;
+        let cached = cache.get(comic_source_path)?;
+        if cached.updated_at.elapsed() > Duration::from_secs(60) {
+            return None;
+        }
+        Some(cached.discovered.clone())
+    }
+
+    fn set_cached_chapter_discovery(
+        &self,
+        comic_source_path: &str,
+        discovered: Vec<(String, String, String, i64)>,
+    ) {
+        if let Ok(mut cache) = self.chapter_discovery_cache.lock() {
+            cache.insert(
+                comic_source_path.to_string(),
+                ChapterDiscoveryCache {
+                    discovered,
+                    updated_at: Instant::now(),
+                },
+            );
+        }
+    }
+
+    fn clear_chapter_discovery_cache(&self) {
+        if let Ok(mut cache) = self.chapter_discovery_cache.lock() {
+            cache.clear();
+        }
+    }
+
     pub fn add_bookmark(&self, payload: SaveBookmarkPayload) -> Result<i64, String> {
         let conn = self
             .conn
@@ -555,6 +655,7 @@ impl ComicRdCore {
             .map_err(|_| "db lock poisoned".to_string())?;
         let id = add_bookmark_conn(&conn, payload)?;
         self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
         Ok(id)
     }
 
@@ -565,6 +666,7 @@ impl ComicRdCore {
             .map_err(|_| "db lock poisoned".to_string())?;
         remove_bookmark_conn(&conn, bookmark_id)?;
         self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
         Ok(())
     }
 
@@ -591,6 +693,7 @@ impl ComicRdCore {
             .map_err(|_| "db lock poisoned".to_string())?;
         let id = add_comic_bookmark_conn(&conn, comic_source_path)?;
         self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
         Ok(id)
     }
 
@@ -601,6 +704,7 @@ impl ComicRdCore {
             .map_err(|_| "db lock poisoned".to_string())?;
         remove_comic_bookmark_conn(&conn, comic_source_path)?;
         self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
         Ok(())
     }
 
@@ -723,6 +827,7 @@ impl ComicRdCore {
         run_migrations(&imported_conn)?;
         *conn_guard = imported_conn;
         self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
         Ok(())
     }
 }

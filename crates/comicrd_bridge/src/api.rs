@@ -1,9 +1,9 @@
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use comicrd_core as core;
 
-static CORE: Mutex<Option<Arc<core::ComicRdCore>>> = Mutex::new(None);
+static CORE: RwLock<Option<Arc<core::ComicRdCore>>> = RwLock::new(None);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortBy {
@@ -400,7 +400,7 @@ impl From<PrefetchPagesPayload> for core::PrefetchPagesPayload {
 impl From<core::RenderedPage> for RenderedPage {
     fn from(value: core::RenderedPage) -> Self {
         Self {
-            bytes: value.bytes,
+            bytes: (*value.bytes).clone(),
             mime: value.mime,
             width: value.width,
             height: value.height,
@@ -431,7 +431,7 @@ impl From<core::SettingEntry> for SettingEntry {
 }
 
 fn core() -> Result<Arc<core::ComicRdCore>, String> {
-    CORE.lock()
+    CORE.read()
         .map_err(|_| "core lock poisoned".to_string())?
         .clone()
         .ok_or_else(|| "ComicRD core has not been initialized".to_string())
@@ -439,12 +439,12 @@ fn core() -> Result<Arc<core::ComicRdCore>, String> {
 
 pub fn init_app(app_data_dir: String) -> Result<(), String> {
     let core = core::ComicRdCore::open(PathBuf::from(app_data_dir))?;
-    *CORE.lock().map_err(|_| "core lock poisoned".to_string())? = Some(Arc::new(core));
+    *CORE.write().map_err(|_| "core lock poisoned".to_string())? = Some(Arc::new(core));
     Ok(())
 }
 
 pub fn shutdown_app() -> Result<(), String> {
-    *CORE.lock().map_err(|_| "core lock poisoned".to_string())? = None;
+    *CORE.write().map_err(|_| "core lock poisoned".to_string())? = None;
     Ok(())
 }
 

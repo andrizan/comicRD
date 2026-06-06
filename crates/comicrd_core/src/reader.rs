@@ -236,6 +236,12 @@ pub(crate) fn list_reading_history_conn(
           FROM reading_progress r
           INNER JOIN chapters ch ON ch.id = r.chapter_id
           INNER JOIN comics c ON c.id = ch.comic_id
+          INNER JOIN (
+            SELECT ch2.comic_id, MAX(r2.updated_at) AS max_updated
+            FROM reading_progress r2
+            INNER JOIN chapters ch2 ON ch2.id = r2.chapter_id
+            GROUP BY ch2.comic_id
+          ) latest ON latest.comic_id = c.id AND latest.max_updated = r.updated_at
           ORDER BY r.updated_at DESC
           "#,
         )

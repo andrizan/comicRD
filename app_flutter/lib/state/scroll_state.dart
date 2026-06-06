@@ -6,6 +6,8 @@ final scrollOffsetsProvider =
     );
 
 class ScrollOffsetsNotifier extends Notifier<Map<String, double>> {
+  static const _maxSize = 200;
+
   @override
   Map<String, double> build() => const {};
 
@@ -15,6 +17,13 @@ class ScrollOffsetsNotifier extends Notifier<Map<String, double>> {
     if (state[key] == offset) {
       return;
     }
-    state = {...state, key: offset};
+    final updated = {...state, key: offset};
+    if (updated.length > _maxSize) {
+      final keys = updated.keys.toList();
+      for (var i = 0; i < keys.length - _maxSize; i++) {
+        updated.remove(keys[i]);
+      }
+    }
+    state = updated;
   }
 }

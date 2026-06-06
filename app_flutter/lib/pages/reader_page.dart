@@ -30,6 +30,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 }
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
+  static int _activeInstances = 0;
   late ScrollController _scroll;
   final _focusNode = FocusNode(debugLabel: 'ReaderPage');
   final _pageKeys = <int, GlobalKey>{};
@@ -49,6 +50,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void initState() {
     super.initState();
     _api = ref.read(comicRdApiProvider);
+    _activeInstances++;
     PaintingBinding.instance.imageCache.maximumSizeBytes = 64 * 1024 * 1024;
     _scroll = _createScrollController();
   }
@@ -57,8 +59,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void dispose() {
     _progressTimer?.cancel();
     unawaited(_saveProgressDirect());
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
-    PaintingBinding.instance.imageCache.clearLiveImages();
+    _pageKeys.clear();
+    _activeInstances--;
+    if (_activeInstances <= 0) {
+      _activeInstances = 0;
+      PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
+      PaintingBinding.instance.imageCache.clear();
+    }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scroll.dispose();
     _focusNode.dispose();
@@ -359,6 +366,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final viewportCenter = scrollOffset + viewportHeight / 2;
     var bestPage = _currentPage;
     var bestDistance = double.infinity;
+
     for (final entry in _pageKeys.entries) {
       final renderObject = entry.value.currentContext?.findRenderObject();
       if (renderObject is! RenderBox || !renderObject.hasSize) {
@@ -375,6 +383,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (distance < bestDistance) {
         bestDistance = distance;
         bestPage = entry.key;
+      }
+      if (distance < viewportHeight * 0.1) {
+        break;
       }
     }
     return bestPage;
@@ -497,6 +508,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _close(ReaderData data) async {
     await _saveProgress(immediate: true);
     _invalidateProgressProviders(data, onClose: true);
+    _invalidateRenderedPages(widget.chapterId, data.pages.length);
+    ref.invalidate(readerDataProvider(widget.chapterId));
     if (!mounted) {
       return;
     }
@@ -510,9 +523,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _switchChapter(int chapterId) async {
     await _saveProgress(immediate: true);
+    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+    if (data != null) {
+      _invalidateRenderedPages(widget.chapterId, data.pages.length);
+    }
+    ref.invalidate(readerDataProvider(widget.chapterId));
     if (mounted) {
       context.go('/reader/$chapterId');
     }
+  }
+
+  void _invalidateRenderedPages(int chapterId, int pageCount) {
+    for (var i = 0; i < pageCount; i++) {
+      final provider = renderedPageProvider(
+        RenderedPageRequest(chapterId: chapterId, pageIndex: i),
+      );
+      ref.invalidate(provider);
+    }
+    PaintingBinding.instance.imageCache.clear();
   }
 
   void _jumpBy(int delta) {
@@ -1135,45 +1163,27 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
               Expanded(
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
-                  child: Row(
-                    children: [
-                      for (var index = 0; index < count; index++)
-                        Expanded(
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => widget.onSelected(index),
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: _hovered ? 2 : 1,
-                              ),
-                              child: Tooltip(
-                                message: '${index + 1}',
-                                child: SizedBox.expand(
-                                  key: ValueKey('reader-page-indicator-$index'),
-                                  child: Center(
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 150,
-                                      ),
-                                      curve: Curves.easeOutCubic,
-                                      height: _hovered ? 12 : 4,
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: index <= current
-                                            ? const Color(0xff9aa7b5)
-                                            : Colors.white.withValues(
-                                                alpha: 0.20,
-                                              ),
-                                        borderRadius: BorderRadius.circular(99),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) {
+                          final segmentWidth = constraints.maxWidth / count;
+                          final index = (details.localPosition.dx / segmentWidth)
+                              .floor()
+                              .clamp(0, count - 1);
+                          widget.onSelected(index);
+                        },
+                        child: CustomPaint(
+                          size: Size(constraints.maxWidth, double.infinity),
+                          painter: _PageIndicatorPainter(
+                            current: current,
+                            pageCount: count,
+                            hovered: _hovered,
                           ),
                         ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -1196,5 +1206,47 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
         ),
       ),
     );
+  }
+}
+
+class _PageIndicatorPainter extends CustomPainter {
+  _PageIndicatorPainter({
+    required this.current,
+    required this.pageCount,
+    required this.hovered,
+  });
+
+  final int current;
+  final int pageCount;
+  final bool hovered;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (pageCount <= 0) return;
+    final segmentWidth = size.width / pageCount;
+    final barHeight = hovered ? 12.0 : 4.0;
+    final gap = hovered ? 2.0 : 1.0;
+    final top = (size.height - barHeight) / 2;
+    final filledPaint = Paint()..color = const Color(0xff9aa7b5);
+    final emptyPaint = Paint()..color = Colors.white.withValues(alpha: 0.20);
+    final radius = Radius.circular(99);
+
+    for (var i = 0; i < pageCount; i++) {
+      final left = i * segmentWidth + gap;
+      final right = (i + 1) * segmentWidth - gap;
+      if (right <= left) continue;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTRB(left, top, right, top + barHeight),
+        radius,
+      );
+      canvas.drawRRect(rect, i <= current ? filledPaint : emptyPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PageIndicatorPainter oldDelegate) {
+    return oldDelegate.current != current ||
+        oldDelegate.pageCount != pageCount ||
+        oldDelegate.hovered != hovered;
   }
 }

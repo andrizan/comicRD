@@ -264,7 +264,7 @@ pub(crate) fn render_page_variant_conn(
         get_or_load_page_bytes(conn, cache, payload.chapter_id, payload.page_index)?;
     let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
     Ok(RenderedPage {
-        bytes: (*bytes).clone(),
+        bytes: Arc::clone(&bytes),
         mime: mime.to_string(),
         width,
         height,

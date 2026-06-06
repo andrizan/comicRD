@@ -398,8 +398,29 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
 
     for child in children {
         if child.is_dir() {
-            let images = image_entries_in_dir(&child);
-            if !images.is_empty() {
+            let mut has_images = false;
+            let mut nested_archives = Vec::new();
+
+            let mut child_entries = WalkDir::new(&child)
+                .min_depth(1)
+                .max_depth(1)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .map(|e| e.into_path())
+                .collect::<Vec<_>>();
+            child_entries.sort();
+
+            for entry in child_entries {
+                if entry.is_file() {
+                    if is_image(&entry) {
+                        has_images = true;
+                    } else if is_archive(&entry) {
+                        nested_archives.push(entry);
+                    }
+                }
+            }
+
+            if has_images {
                 chapter_entries.push((
                     child
                         .file_name()
@@ -413,15 +434,6 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
                 chapter_index += 1;
             }
 
-            let mut nested_archives = WalkDir::new(&child)
-                .min_depth(1)
-                .max_depth(1)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .map(|e| e.into_path())
-                .filter(|p| p.is_file() && is_archive(p))
-                .collect::<Vec<_>>();
-            nested_archives.sort();
             for archive in nested_archives {
                 chapter_entries.push((
                     archive
@@ -477,8 +489,16 @@ pub(crate) fn list_comic_chapters_raw_conn(
     conn: &Connection,
     comic_source_path: &str,
 ) -> Result<Vec<RawChapter>, String> {
-    let library_path = get_library_source_setting(conn)?;
     let discovered = discover_chapter_entries_for_comic(comic_source_path)?;
+    list_comic_chapters_raw_conn_with_discovered(conn, comic_source_path, &discovered)
+}
+
+pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
+    conn: &Connection,
+    _comic_source_path: &str,
+    discovered: &[(String, String, String, i64)],
+) -> Result<Vec<RawChapter>, String> {
+    let library_path = get_library_source_setting(conn)?;
 
     let chapter_keys: Vec<String> = discovered
         .iter()
@@ -534,10 +554,10 @@ pub(crate) fn list_comic_chapters_raw_conn(
 
     let mut out = Vec::with_capacity(discovered.len());
     for (i, (chapter_title, chapter_path, _chapter_type, chapter_index)) in
-        discovered.into_iter().enumerate()
+        discovered.iter().enumerate()
     {
         let chapter_key = &chapter_keys[i];
-        let modified_at = file_modified_ts(Path::new(&chapter_path));
+        let modified_at = file_modified_ts(Path::new(chapter_path));
         let (page_count, is_read, last_page, total_pages, date_modified) =
             progress_map
                 .get(chapter_key.as_str())
@@ -545,10 +565,10 @@ pub(crate) fn list_comic_chapters_raw_conn(
                 .unwrap_or((0, false, 0, 0, modified_at));
         out.push(RawChapter {
             key: chapter_path.clone(),
-            title: chapter_title,
-            chapter_index,
+            title: chapter_title.clone(),
+            chapter_index: *chapter_index,
             source_path: chapter_path.clone(),
-            source_type: source_type_for_path(Path::new(&chapter_path)),
+            source_type: source_type_for_path(Path::new(chapter_path)),
             date_modified,
             page_count,
             is_read,

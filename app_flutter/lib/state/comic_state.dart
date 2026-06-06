@@ -18,43 +18,44 @@ final chapterFavoritesProvider = FutureProvider.family<List<String>, String>((
 });
 
 final filteredComicChaptersProvider =
-    FutureProvider.family<List<bridge.RawChapter>, String>((
+    Provider.family<AsyncValue<List<bridge.RawChapter>>, String>((
       ref,
       comicPath,
-    ) async {
+    ) {
+      final chaptersAsync = ref.watch(comicChaptersProvider(comicPath));
+      final favoritesAsync = ref.watch(chapterFavoritesProvider(comicPath));
       final preferences = ref.watch(
         comicPreferencesProvider.select(
           (state) => state[comicPath] ?? const ComicPreferences(),
         ),
       );
-      final chapters = await ref.watch(comicChaptersProvider(comicPath).future);
-      final favorites = (await ref.watch(
-        chapterFavoritesProvider(comicPath).future,
-      )).toSet();
-      final query = preferences.query.trim().toLowerCase();
-      final filtered = chapters.where((chapter) {
-        final matchesQuery =
-            query.isEmpty ||
-            chapter.title.toLowerCase().contains(query) ||
-            chapter.sourcePath.toLowerCase().contains(query);
-        final matchesFavorite =
-            !preferences.favoritesOnly ||
-            favorites.contains(chapter.sourcePath);
-        return matchesQuery && matchesFavorite;
-      }).toList();
-      filtered.sort((a, b) {
-        final order = switch (preferences.sortBy) {
-          ChapterSortBy.name => a.title.toLowerCase().compareTo(
-            b.title.toLowerCase(),
-          ),
-          ChapterSortBy.folderDate => a.dateModified.compareTo(b.dateModified),
-          ChapterSortBy.chapterIndex => a.chapterIndex.compareTo(
-            b.chapterIndex,
-          ),
-        };
-        return preferences.sortDir == bridge.SortDir.asc ? order : -order;
+      return chaptersAsync.whenData((chapters) {
+        final favorites = favoritesAsync.asData?.value.toSet() ?? const {};
+        final query = preferences.query.trim().toLowerCase();
+        final filtered = chapters.where((chapter) {
+          final matchesQuery =
+              query.isEmpty ||
+              chapter.title.toLowerCase().contains(query) ||
+              chapter.sourcePath.toLowerCase().contains(query);
+          final matchesFavorite =
+              !preferences.favoritesOnly ||
+              favorites.contains(chapter.sourcePath);
+          return matchesQuery && matchesFavorite;
+        }).toList();
+        filtered.sort((a, b) {
+          final order = switch (preferences.sortBy) {
+            ChapterSortBy.name => a.title.toLowerCase().compareTo(
+              b.title.toLowerCase(),
+            ),
+            ChapterSortBy.folderDate => a.dateModified.compareTo(b.dateModified),
+            ChapterSortBy.chapterIndex => a.chapterIndex.compareTo(
+              b.chapterIndex,
+            ),
+          };
+          return preferences.sortDir == bridge.SortDir.asc ? order : -order;
+        });
+        return filtered;
       });
-      return filtered;
     });
 
 final comicScrollKeyProvider = Provider.family<String, String>(
@@ -106,6 +107,7 @@ class ComicPreferences {
 }
 
 class ComicPreferencesNotifier extends Notifier<Map<String, ComicPreferences>> {
+  static const _maxSize = 200;
   final _hydratedComics = <String>{};
 
   @override
@@ -128,7 +130,15 @@ class ComicPreferencesNotifier extends Notifier<Map<String, ComicPreferences>> {
   }
 
   void update(String comicPath, ComicPreferences preferences) {
-    state = {...state, comicPath: preferences};
+    final updated = {...state, comicPath: preferences};
+    if (updated.length > _maxSize) {
+      final keys = updated.keys.toList();
+      for (var i = 0; i < keys.length - _maxSize; i++) {
+        updated.remove(keys[i]);
+        _hydratedComics.remove(keys[i]);
+      }
+    }
+    state = updated;
   }
 
   void setQuery(String comicPath, String query) {
@@ -181,12 +191,21 @@ String _decodeString(String? raw, String fallback) {
 }
 
 class LastOpenedChapterNotifier extends Notifier<Map<String, String>> {
+  static const _maxSize = 200;
+
   @override
   Map<String, String> build() => const {};
 
   String? sourcePathFor(String comicPath) => state[comicPath];
 
   void remember(String comicPath, String chapterSourcePath) {
-    state = {...state, comicPath: chapterSourcePath};
+    final updated = {...state, comicPath: chapterSourcePath};
+    if (updated.length > _maxSize) {
+      final keys = updated.keys.toList();
+      for (var i = 0; i < keys.length - _maxSize; i++) {
+        updated.remove(keys[i]);
+      }
+    }
+    state = updated;
   }
 }
