@@ -45,6 +45,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _toolbarVisible = true;
   late final ComicRdApi _api;
   ReaderData? _lastReaderData;
+  Completer<void>? _prefetchQueue;
+  int? _prefetchQueuedPage;
+  bool _wasReset = false;
 
   @override
   void initState() {
@@ -322,6 +325,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
       });
     });
+    unawaited(_saveInitialProgress(data));
+  }
+
+  Future<void> _saveInitialProgress(ReaderData data) async {
+    final progress = data.progress;
+    if (progress != null && !progress.isRead) {
+      return;
+    }
+    _wasReset = true;
+    await ref
+        .read(comicRdApiProvider)
+        .saveProgress(
+          bridge.SaveProgressPayload(
+            chapterId: widget.chapterId,
+            lastPage: 0,
+            totalPages: data.pages.length,
+            isRead: false,
+          ),
+        );
+    _invalidateProgressProviders(data, onClose: false);
   }
 
   void _handleScroll() {
@@ -376,6 +399,38 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         break;
       }
     }
+
+    if (bestDistance > viewportHeight * 0.5) {
+      final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+      if (data != null && data.pages.isNotEmpty) {
+        final pageGap =
+            ref.read(readerSettingsProvider).pageGap;
+        double offset = 78;
+        for (var i = 0; i < data.pages.length; i++) {
+          final pInfo = data.pages[i];
+          final w = pInfo.width ?? 900;
+          final h = pInfo.height ?? 1300;
+          final ratio = (w > 0 && h > 0) ? w / h : 900 / 1300;
+          final displayW = _scroll.position.viewportDimension - 16;
+          final pageHeight = displayW / ratio;
+          final pageBottom = offset + pageHeight;
+          if (pageBottom > scrollOffset &&
+              offset < scrollOffset + viewportHeight) {
+            final pageCenter = (offset + pageBottom) / 2;
+            final distance = (pageCenter - viewportCenter).abs();
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestPage = i;
+            }
+          }
+          if (offset > scrollOffset + viewportHeight) {
+            break;
+          }
+          offset = pageBottom + pageGap;
+        }
+      }
+    }
+
     return bestPage;
   }
 
@@ -392,6 +447,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (data == null || data.pages.isEmpty || _currentPage == _lastSavedPage) {
       return;
     }
+    final isRead = _currentPage >= data.pages.length - 1;
+    if (!_wasReset) {
+      final savedLastPage = data.progress?.lastPage ?? 0;
+      final savedIsRead = data.progress?.isRead ?? false;
+      if (_currentPage <= savedLastPage && !(isRead && !savedIsRead)) {
+        _lastSavedPage = _currentPage;
+        return;
+      }
+    }
+    _wasReset = false;
     _lastSavedPage = _currentPage;
     await ref
         .read(comicRdApiProvider)
@@ -400,7 +465,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             chapterId: widget.chapterId,
             lastPage: _currentPage,
             totalPages: data.pages.length,
-            isRead: _currentPage >= data.pages.length - 1,
+            isRead: isRead,
           ),
         );
     _invalidateProgressProviders(data, onClose: false);
@@ -411,13 +476,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (data == null || data.pages.isEmpty || _currentPage == _lastSavedPage) {
       return;
     }
+    final isRead = _currentPage >= data.pages.length - 1;
+    if (!_wasReset) {
+      final savedLastPage = data.progress?.lastPage ?? 0;
+      final savedIsRead = data.progress?.isRead ?? false;
+      if (_currentPage <= savedLastPage && !(isRead && !savedIsRead)) {
+        _lastSavedPage = _currentPage;
+        return;
+      }
+    }
+    _wasReset = false;
     _lastSavedPage = _currentPage;
     await _api.saveProgress(
       bridge.SaveProgressPayload(
         chapterId: widget.chapterId,
         lastPage: _currentPage,
         totalPages: data.pages.length,
-        isRead: _currentPage >= data.pages.length - 1,
+        isRead: isRead,
       ),
     );
   }
@@ -442,21 +517,37 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (data == null || data.pages.isEmpty) {
       return;
     }
-    final start = math.max(0, page - 2);
-    final end = math.min(data.pages.length - 1, page + 2);
-    final api = ref.read(comicRdApiProvider);
-    final keepPages = Uint32List.fromList([
-      for (var index = start; index <= end; index++) index,
-    ]);
-    await Future.wait([
-      api.prefetchPages(
+    if (_prefetchQueue != null && !_prefetchQueue!.isCompleted) {
+      _prefetchQueuedPage = page;
+      return;
+    }
+    final completer = Completer<void>();
+    _prefetchQueue = completer;
+    _prefetchQueuedPage = null;
+    try {
+      final start = math.max(0, page - 2);
+      final end = math.min(data.pages.length - 1, page + 2);
+      final api = ref.read(comicRdApiProvider);
+      final keepPages = Uint32List.fromList([
+        for (var index = start; index <= end; index++) index,
+      ]);
+      await api.evictChapterPages(
+        chapterId: widget.chapterId,
+        keepPages: keepPages,
+      );
+      await api.prefetchPages(
         bridge.PrefetchPagesPayload(
           chapterId: widget.chapterId,
           pageIndices: keepPages,
         ),
-      ),
-      api.evictChapterPages(chapterId: widget.chapterId, keepPages: keepPages),
-    ]);
+      );
+    } finally {
+      completer.complete();
+    }
+    final queued = _prefetchQueuedPage;
+    if (queued != null && mounted) {
+      await _prefetchAround(queued);
+    }
   }
 
   void _handleKey(LogicalKeyboardKey key, ReaderData? data) {
@@ -642,7 +733,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 }
 
-class _ReaderPageItem extends ConsumerWidget {
+class _ReaderPageItem extends ConsumerStatefulWidget {
   const _ReaderPageItem({
     required this.chapterId,
     required this.page,
@@ -654,18 +745,30 @@ class _ReaderPageItem extends ConsumerWidget {
   final double zoom;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final aspectRatio = _aspectRatio(page);
-    final displayWidth = _displayWidth(page, zoom);
+  ConsumerState<_ReaderPageItem> createState() => _ReaderPageItemState();
+}
+
+class _ReaderPageItemState extends ConsumerState<_ReaderPageItem> {
+  bridge.RenderedPage? _lastRendered;
+
+  @override
+  Widget build(BuildContext context) {
+    final aspectRatio = _aspectRatio(widget.page);
+    final displayWidth = _displayWidth(widget.page, widget.zoom);
     final rendered = ref.watch(
       renderedPageProvider(
-        RenderedPageRequest(chapterId: chapterId, pageIndex: page.index),
+        RenderedPageRequest(
+          chapterId: widget.chapterId,
+          pageIndex: widget.page.index,
+        ),
       ),
     );
+    rendered.whenData((page) => _lastRendered = page);
+    final cached = _lastRendered;
     return rendered.when(
       data: (page) => Center(
         child: SizedBox(
-          width: page.width == 0 ? null : page.width.toDouble() * zoom,
+          width: page.width == 0 ? null : page.width.toDouble() * widget.zoom,
           child: Image.memory(
             page.bytes,
             gaplessPlayback: true,
@@ -674,17 +777,44 @@ class _ReaderPageItem extends ConsumerWidget {
           ),
         ),
       ),
-      error: (error, _) => _PagePlaceholder(
-        aspectRatio: aspectRatio,
-        width: displayWidth,
-        label: error.toString(),
-      ),
-      loading: () =>
-          _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
+      error: (error, _) => cached != null
+          ? Center(
+              child: SizedBox(
+                width: cached.width == 0
+                    ? null
+                    : cached.width.toDouble() * widget.zoom,
+                child: Image.memory(
+                  cached.bytes,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            )
+          : _PagePlaceholder(
+              aspectRatio: aspectRatio,
+              width: displayWidth,
+              label: error.toString(),
+            ),
+      loading: () => cached != null
+          ? Center(
+              child: SizedBox(
+                width: cached.width == 0
+                    ? null
+                    : cached.width.toDouble() * widget.zoom,
+                child: Image.memory(
+                  cached.bytes,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            )
+          : _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
     );
   }
 
-  double _displayWidth(bridge.PageInfo page, double zoom) {
+  static double _displayWidth(bridge.PageInfo page, double zoom) {
     final width = page.width ?? 900;
     if (width <= 0) {
       return 900 * zoom;
@@ -692,7 +822,7 @@ class _ReaderPageItem extends ConsumerWidget {
     return width * zoom;
   }
 
-  double _aspectRatio(bridge.PageInfo page) {
+  static double _aspectRatio(bridge.PageInfo page) {
     final width = page.width ?? 900;
     final height = page.height ?? 1300;
     if (width <= 0 || height <= 0) {
