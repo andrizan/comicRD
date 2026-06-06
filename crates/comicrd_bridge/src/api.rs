@@ -19,11 +19,9 @@ pub enum SortDir {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawComic {
-    pub key: String,
     pub title: String,
     pub source_path: String,
     pub source_type: String,
-    pub library_path: String,
     pub date_modified: i64,
     pub chapter_count: i64,
     pub read_chapter_count: i64,
@@ -36,20 +34,6 @@ pub struct Library {
     pub path: String,
     pub created_at: i64,
     pub updated_at: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Comic {
-    pub id: i64,
-    pub library_id: i64,
-    pub title: String,
-    pub source_path: String,
-    pub source_type: String,
-    pub date_modified: i64,
-    pub updated_at: i64,
-    pub chapter_count: i64,
-    pub read_chapter_count: i64,
-    pub in_progress_chapter_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +53,6 @@ pub struct LibraryScanStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawChapter {
-    pub key: String,
     pub title: String,
     pub chapter_index: i64,
     pub source_path: String,
@@ -112,7 +95,6 @@ pub struct ReadingProgress {
     pub last_page: i64,
     pub total_pages: i64,
     pub is_read: bool,
-    pub updated_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,7 +166,6 @@ pub struct RenderedPage {
     pub mime: String,
     pub width: u32,
     pub height: u32,
-    pub cache_key: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,7 +182,6 @@ pub struct LibrarySourceStatus {
 pub struct SettingEntry {
     pub key: String,
     pub value_json: String,
-    pub updated_at: i64,
 }
 
 impl From<SortBy> for core::SortBy {
@@ -225,11 +205,9 @@ impl From<SortDir> for core::SortDir {
 impl From<core::RawComic> for RawComic {
     fn from(value: core::RawComic) -> Self {
         Self {
-            key: value.key,
             title: value.title,
             source_path: value.source_path,
             source_type: value.source_type,
-            library_path: value.library_path,
             date_modified: value.date_modified,
             chapter_count: value.chapter_count,
             read_chapter_count: value.read_chapter_count,
@@ -245,23 +223,6 @@ impl From<core::Library> for Library {
             path: value.path,
             created_at: value.created_at,
             updated_at: value.updated_at,
-        }
-    }
-}
-
-impl From<core::Comic> for Comic {
-    fn from(value: core::Comic) -> Self {
-        Self {
-            id: value.id,
-            library_id: value.library_id,
-            title: value.title,
-            source_path: value.source_path,
-            source_type: value.source_type,
-            date_modified: value.date_modified,
-            updated_at: value.updated_at,
-            chapter_count: value.chapter_count,
-            read_chapter_count: value.read_chapter_count,
-            in_progress_chapter_count: value.in_progress_chapter_count,
         }
     }
 }
@@ -290,7 +251,6 @@ impl From<core::LibraryScanStatus> for LibraryScanStatus {
 impl From<core::RawChapter> for RawChapter {
     fn from(value: core::RawChapter) -> Self {
         Self {
-            key: value.key,
             title: value.title,
             chapter_index: value.chapter_index,
             source_path: value.source_path,
@@ -342,7 +302,6 @@ impl From<core::ReadingProgress> for ReadingProgress {
             last_page: value.last_page,
             total_pages: value.total_pages,
             is_read: value.is_read,
-            updated_at: value.updated_at,
         }
     }
 }
@@ -445,7 +404,6 @@ impl From<core::RenderedPage> for RenderedPage {
             mime: value.mime,
             width: value.width,
             height: value.height,
-            cache_key: value.cache_key,
         }
     }
 }
@@ -468,7 +426,6 @@ impl From<core::SettingEntry> for SettingEntry {
         Self {
             key: value.key,
             value_json: value.value_json,
-            updated_at: value.updated_at,
         }
     }
 }
@@ -542,14 +499,6 @@ pub fn list_reading_history() -> Result<Vec<ReadingHistoryEntry>, String> {
         .collect())
 }
 
-pub fn list_comics(sort_by: SortBy, sort_dir: SortDir) -> Result<Vec<Comic>, String> {
-    Ok(core()?
-        .list_comics(sort_by.into(), sort_dir.into())?
-        .into_iter()
-        .map(Into::into)
-        .collect())
-}
-
 pub fn list_comic_chapters_raw(comic_source_path: String) -> Result<Vec<RawChapter>, String> {
     Ok(core()?
         .list_comic_chapters_raw(&comic_source_path)?
@@ -576,12 +525,6 @@ pub fn get_chapter_pages(chapter_id: i64) -> Result<Vec<PageInfo>, String> {
 
 pub fn render_page_variant(payload: RenderPagePayload) -> Result<RenderedPage, String> {
     core()?.render_page_variant(payload.into()).map(Into::into)
-}
-
-pub fn render_page_preview(chapter_id: i64, page_index: u32) -> Result<RenderedPage, String> {
-    core()?
-        .render_page_preview(chapter_id, page_index as usize)
-        .map(Into::into)
 }
 
 pub fn prefetch_pages(payload: PrefetchPagesPayload) -> Result<(), String> {

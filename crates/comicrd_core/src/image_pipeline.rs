@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use rusqlite::Connection;
 
@@ -16,16 +16,16 @@ const PAGE_BYTES_CACHE_CAP: usize = 6;
 
 #[derive(Clone)]
 pub(crate) enum PageSource {
-    Folder(Vec<PathBuf>),
+    Folder(Arc<Vec<PathBuf>>),
     Archive {
         source_path: PathBuf,
-        pages: Vec<String>,
+        pages: Arc<Vec<String>>,
     },
 }
 
 #[derive(Clone)]
 struct CachedPageBytes {
-    bytes: Vec<u8>,
+    bytes: Arc<Vec<u8>>,
     mime: &'static str,
 }
 
@@ -149,12 +149,12 @@ pub(crate) fn mime_for_path(path: &Path) -> &'static str {
 
 fn compute_page_source(source_path: &str, source_type: &str) -> Result<PageSource, String> {
     match source_type {
-        "folder" => Ok(PageSource::Folder(image_entries_in_dir(Path::new(
+        "folder" => Ok(PageSource::Folder(Arc::new(image_entries_in_dir(Path::new(
             source_path,
-        )))),
+        ))))),
         "zip" | "cbz" | "cbr" | "rar" => Ok(PageSource::Archive {
             source_path: PathBuf::from(source_path),
-            pages: archive_image_entries(Path::new(source_path))?,
+            pages: Arc::new(archive_image_entries(Path::new(source_path))?),
         }),
         other => Err(format!("unsupported source type: {other}")),
     }
@@ -215,33 +215,36 @@ fn get_or_load_page_bytes(
     cache: &PageCache,
     chapter_id: i64,
     page_index: usize,
-) -> Result<(Vec<u8>, &'static str), String> {
+) -> Result<(Arc<Vec<u8>>, &'static str), String> {
     let key = (chapter_id, page_index);
     {
         let mut state = cache.lock_state()?;
-        if let Some(cached) = state.bytes.get(&key).cloned() {
+        if let Some(cached) = state.bytes.get(&key) {
+            let result = (Arc::clone(&cached.bytes), cached.mime);
             state.stats.page_bytes_cache_hits += 1;
             state.touch_bytes(key);
-            return Ok((cached.bytes, cached.mime));
+            return Ok(result);
         }
     }
     let source = get_or_load_page_source(conn, cache, chapter_id)?;
     let (bytes, mime) = read_page_bytes(&source, page_index)?;
+    let shared = Arc::new(bytes);
     let mut state = cache.lock_state()?;
-    if let Some(cached) = state.bytes.get(&key).cloned() {
+    if let Some(cached) = state.bytes.get(&key) {
+        let result = (Arc::clone(&cached.bytes), cached.mime);
         state.stats.page_bytes_cache_hits += 1;
         state.touch_bytes(key);
-        return Ok((cached.bytes, cached.mime));
+        return Ok(result);
     }
     state.stats.page_bytes_loads += 1;
     state.remember_bytes(
         key,
         CachedPageBytes {
-            bytes: bytes.clone(),
+            bytes: Arc::clone(&shared),
             mime,
         },
     );
-    Ok((bytes, mime))
+    Ok((shared, mime))
 }
 
 pub(crate) fn page_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
@@ -262,7 +265,7 @@ pub(crate) fn render_page_variant_conn(
     let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
     let cache_key = format!("{}:{}", payload.chapter_id, payload.page_index);
     Ok(RenderedPage {
-        bytes,
+        bytes: (*bytes).clone(),
         mime: mime.to_string(),
         width,
         height,

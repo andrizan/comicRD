@@ -103,10 +103,10 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   @override
   Future<List<bridge.SettingEntry>> listSettings() async {
     return const [
-      bridge.SettingEntry(key: 'default_zoom', valueJson: '1', updatedAt: 0),
-      bridge.SettingEntry(key: 'page_gap', valueJson: '10', updatedAt: 0),
-      bridge.SettingEntry(key: 'app_theme', valueJson: '"dark"', updatedAt: 0),
-      bridge.SettingEntry(key: 'app_locale', valueJson: '"en"', updatedAt: 0),
+      bridge.SettingEntry(key: 'default_zoom', valueJson: '1'),
+      bridge.SettingEntry(key: 'page_gap', valueJson: '10'),
+      bridge.SettingEntry(key: 'app_theme', valueJson: '"dark"'),
+      bridge.SettingEntry(key: 'app_locale', valueJson: '"en"'),
     ];
   }
 
@@ -145,7 +145,6 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       lastPage: lastPage,
       totalPages: pageCount,
       isRead: false,
-      updatedAt: 0,
     );
   }
 
@@ -159,7 +158,6 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       mime: 'image/png',
       width: 900,
       height: 1300,
-      cacheKey: 'page-${payload.pageIndex}',
     );
   }
 

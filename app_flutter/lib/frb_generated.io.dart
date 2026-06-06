@@ -63,9 +63,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChapterContext dco_decode_chapter_context(dynamic raw);
 
   @protected
-  Comic dco_decode_comic(dynamic raw);
-
-  @protected
   ComicBookmark dco_decode_comic_bookmark(dynamic raw);
 
   @protected
@@ -88,9 +85,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Bookmark> dco_decode_list_bookmark(dynamic raw);
-
-  @protected
-  List<Comic> dco_decode_list_comic(dynamic raw);
 
   @protected
   List<ComicBookmark> dco_decode_list_comic_bookmark(dynamic raw);
@@ -251,9 +245,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChapterContext sse_decode_chapter_context(SseDeserializer deserializer);
 
   @protected
-  Comic sse_decode_comic(SseDeserializer deserializer);
-
-  @protected
   ComicBookmark sse_decode_comic_bookmark(SseDeserializer deserializer);
 
   @protected
@@ -280,9 +271,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Bookmark> sse_decode_list_bookmark(SseDeserializer deserializer);
-
-  @protected
-  List<Comic> sse_decode_list_comic(SseDeserializer deserializer);
 
   @protected
   List<ComicBookmark> sse_decode_list_comic_bookmark(
@@ -483,9 +471,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_comic(Comic self, SseSerializer serializer);
-
-  @protected
   void sse_encode_comic_bookmark(ComicBookmark self, SseSerializer serializer);
 
   @protected
@@ -514,9 +499,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_bookmark(List<Bookmark> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_comic(List<Comic> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_comic_bookmark(

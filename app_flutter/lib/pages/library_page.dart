@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:fluent_ui/fluent_ui.dart';
@@ -25,6 +26,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   late final ScrollController _libraryScroll;
   late final ScrollController _bookmarksScroll;
   final _search = TextEditingController();
+  Timer? _searchDebounce;
+  DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -42,6 +45,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _saveScrollOffset('library:history', _historyScroll);
     _saveScrollOffset('library:library', _libraryScroll);
     _saveScrollOffset('library:bookmarks', _bookmarksScroll);
@@ -65,6 +69,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     if (!controller.hasClients) {
       return;
     }
+    final now = DateTime.now();
+    if (now.difference(_lastScrollSave).inMilliseconds < 200) {
+      return;
+    }
+    _lastScrollSave = now;
     ref.read(scrollOffsetsProvider.notifier).save(key, controller.offset);
   }
 
@@ -80,9 +89,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final preferences = ref.watch(libraryPreferencesProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
     final history = ref.watch(readingHistoryProvider);
-    final rawComics = ref.watch(rawLibraryComicsProvider);
     final comicsState = ref.watch(libraryComicsProvider);
-    final visibleComics = comicsState.items.sublist(0, comicsState.visibleCount);
     final bookmarks = ref.watch(allBookmarksProvider);
     final bookmarkedPaths =
         bookmarks.asData?.value
@@ -106,9 +113,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         child: Icon(FluentIcons.search, size: 16),
                       ),
                       placeholder: text.search,
-                      onChanged: (value) => ref
-                          .read(libraryPreferencesProvider.notifier)
-                          .setQuery(value),
+                      onChanged: (value) {
+                        _searchDebounce?.cancel();
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 300),
+                          () => ref
+                              .read(libraryPreferencesProvider.notifier)
+                              .setQuery(value),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -238,10 +251,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                _ComicCountLabel(
+                _TabCountLabel(
                   text: text,
-                  visibleComics: visibleComics,
-                  totalComics: rawComics,
+                  selectedTab: preferences.selectedTab,
+                  visibleComics: comicsState.visibleCount,
+                  totalComics: comicsState.filteredTotal,
+                  historyCount: history.asData?.value.length ?? 0,
+                  bookmarksCount: bookmarks.asData?.value.length ?? 0,
                 ),
               ],
             ),
@@ -280,37 +296,36 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             loading: () => const SizedBox.shrink(),
           ),
           Expanded(
-            child: IndexedStack(
-              index: preferences.selectedTab.index,
-              children: [
-                _HistoryList(
-                  history: history,
-                  displayMode: preferences.displayMode,
-                  controller: _historyScroll,
-                  emptyLabel: text.emptyLibrary,
-                ),
-                _ComicList(
-                  text: text,
-                  comics: visibleComics,
-                  hasMore: comicsState.hasMore,
-                  onLoadMore: () => ref.read(libraryPaginationProvider.notifier).loadMore(),
-                  displayMode: preferences.displayMode,
-                  bookmarkedPaths: bookmarkedPaths,
-                  controller: _libraryScroll,
-                  emptyLabel: text.emptyLibrary,
-                  onToggleBookmark: _toggleComicBookmark,
-                  onCopyTitle: _copyComicTitle,
-                  onCopyPath: _copyComicPath,
-                  onOpenFolder: _openContainingFolder,
-                ),
-                _BookmarkList(
-                  bookmarks: bookmarks,
-                  displayMode: preferences.displayMode,
-                  controller: _bookmarksScroll,
-                  emptyLabel: text.emptyLibrary,
-                ),
-              ],
-            ),
+            child: switch (preferences.selectedTab) {
+              LibraryTab.history => _HistoryList(
+                history: history,
+                displayMode: preferences.displayMode,
+                controller: _historyScroll,
+                emptyLabel: text.emptyLibrary,
+              ),
+              LibraryTab.library => _ComicList(
+                text: text,
+                comics: comicsState.items,
+                visibleCount: comicsState.visibleCount,
+                hasMore: comicsState.hasMore,
+                onLoadMore: () =>
+                    ref.read(libraryPaginationProvider.notifier).loadMore(),
+                displayMode: preferences.displayMode,
+                bookmarkedPaths: bookmarkedPaths,
+                controller: _libraryScroll,
+                emptyLabel: text.emptyLibrary,
+                onToggleBookmark: _toggleComicBookmark,
+                onCopyTitle: _copyComicTitle,
+                onCopyPath: _copyComicPath,
+                onOpenFolder: _openContainingFolder,
+              ),
+              LibraryTab.bookmarks => _BookmarkList(
+                bookmarks: bookmarks,
+                displayMode: preferences.displayMode,
+                controller: _bookmarksScroll,
+                emptyLabel: text.emptyLibrary,
+              ),
+            },
           ),
         ],
       ),
@@ -380,47 +395,40 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 }
 
-class _ComicCountLabel extends StatelessWidget {
-  const _ComicCountLabel({
+class _TabCountLabel extends StatelessWidget {
+  const _TabCountLabel({
     required this.text,
+    required this.selectedTab,
     required this.visibleComics,
     required this.totalComics,
+    required this.historyCount,
+    required this.bookmarksCount,
   });
 
   final AppStrings text;
-  final List<bridge.RawComic> visibleComics;
-  final AsyncValue<List<bridge.RawComic>> totalComics;
+  final LibraryTab selectedTab;
+  final int visibleComics;
+  final int totalComics;
+  final int historyCount;
+  final int bookmarksCount;
 
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    final total = totalComics.asData?.value.length;
-    final visible = visibleComics.length;
-    final isLoading = totalComics.isLoading;
-
-    final label = switch ((visible, total)) {
-      (final int visibleCount, final int totalCount)
-          when visibleCount != totalCount =>
-        '${text.showingComics} $visibleCount/$totalCount',
-      (final int _, final int totalCount) => '${text.totalComics}: $totalCount',
-      _ => text.totalComics,
+    final label = switch (selectedTab) {
+      LibraryTab.history => '${text.totalComics}: $historyCount',
+      LibraryTab.library when visibleComics != totalComics =>
+        '${text.showingComics} $visibleComics/$totalComics',
+      LibraryTab.library => '${text.totalComics}: $totalComics',
+      LibraryTab.bookmarks => '${text.totalComics}: $bookmarksCount',
     };
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (isLoading) ...[
-          const SizedBox(width: 16, height: 16, child: ProgressRing()),
-          const SizedBox(width: 8),
-        ],
-        Text(
-          label,
-          style: theme.typography.caption?.copyWith(
-            color: theme.resources.textFillColorSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+    return Text(
+      label,
+      style: theme.typography.caption?.copyWith(
+        color: theme.resources.textFillColorSecondary,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }
@@ -429,6 +437,7 @@ class _ComicList extends StatelessWidget {
   const _ComicList({
     required this.text,
     required this.comics,
+    required this.visibleCount,
     required this.hasMore,
     required this.onLoadMore,
     required this.displayMode,
@@ -443,6 +452,7 @@ class _ComicList extends StatelessWidget {
 
   final AppStrings text;
   final List<bridge.RawComic> comics;
+  final int visibleCount;
   final bool hasMore;
   final VoidCallback onLoadMore;
   final LibraryDisplayMode displayMode;
@@ -457,7 +467,7 @@ class _ComicList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (comics.isEmpty) {
+    if (visibleCount == 0) {
       return _EmptyState(label: emptyLabel);
     }
     return NotificationListener<ScrollNotification>(
@@ -472,107 +482,103 @@ class _ComicList extends StatelessWidget {
       child: displayMode == LibraryDisplayMode.grid
           ? GridView.builder(
               controller: controller,
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisExtent: 184,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemCount: comics.length,
-                  itemBuilder: (context, index) {
-                    final comic = comics[index];
-                    final bookmarked =
-                        bookmarkedPaths.contains(comic.sourcePath);
-                    return _ComicGridTile(
-                      text: text,
-                      comic: comic,
-                      bookmarked: bookmarked,
-                      onOpen: () => context
-                          .go('/comic/${encodeRoutePath(comic.sourcePath)}'),
-                      onToggleBookmark: () =>
-                          onToggleBookmark(comic, bookmarked),
-                      onCopyTitle: () => onCopyTitle(comic),
-                      onCopyPath: () => onCopyPath(comic),
-                      onOpenFolder: () => onOpenFolder(comic),
-                    );
-                  },
-                )
-              : ListView.separated(
-                  controller: controller,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: comics.length,
-                  separatorBuilder: (_, _) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final comic = comics[index];
-                    final bookmarked =
-                        bookmarkedPaths.contains(comic.sourcePath);
-                    return HoverButton(
-                      onPressed: () => context
-                          .go('/comic/${encodeRoutePath(comic.sourcePath)}'),
-                      builder: (context, states) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: states.isHovered
-                                ? FluentTheme.of(context)
-                                    .resources
-                                    .cardBackgroundFillColorSecondary
-                                : null,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(FluentIcons.folder_open, size: 20),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(comic.title),
-                                    Text(
-                                      comic.sourcePath,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: FluentTheme.of(context)
-                                          .typography
-                                          .caption,
-                                    ),
-                                  ],
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220,
+                mainAxisExtent: 184,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: visibleCount,
+              itemBuilder: (context, index) {
+                final comic = comics[index];
+                final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
+                return _ComicGridTile(
+                  text: text,
+                  comic: comic,
+                  bookmarked: bookmarked,
+                  onOpen: () =>
+                      context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
+                  onToggleBookmark: () => onToggleBookmark(comic, bookmarked),
+                  onCopyTitle: () => onCopyTitle(comic),
+                  onCopyPath: () => onCopyPath(comic),
+                  onOpenFolder: () => onOpenFolder(comic),
+                );
+              },
+            )
+          : ListView.separated(
+              controller: controller,
+              padding: const EdgeInsets.all(16),
+              itemCount: visibleCount,
+              separatorBuilder: (_, _) => const Divider(),
+              itemBuilder: (context, index) {
+                final comic = comics[index];
+                final bookmarked = bookmarkedPaths.contains(comic.sourcePath);
+                return HoverButton(
+                  onPressed: () =>
+                      context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
+                  builder: (context, states) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: states.isHovered
+                            ? FluentTheme.of(
+                                context,
+                              ).resources.cardBackgroundFillColorSecondary
+                            : null,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(FluentIcons.folder_open, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(comic.title),
+                                Text(
+                                  comic.sourcePath,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: FluentTheme.of(
+                                    context,
+                                  ).typography.caption,
                                 ),
-                              ),
-                              _ReadStatusBadge(
-                                text: text,
-                                readCount: comic.readChapterCount,
-                                totalCount: comic.chapterCount,
-                                inProgressCount: comic.inProgressChapterCount,
-                              ),
-                              const SizedBox(width: 8),
-                              if (bookmarked) ...[
-                                _BookmarkMarker(text: text),
-                                const SizedBox(width: 8),
                               ],
-                              _ComicActionsButton(
-                                text: text,
-                                bookmarked: bookmarked,
-                                onToggleBookmark: () =>
-                                    onToggleBookmark(comic, bookmarked),
-                                onCopyTitle: () => onCopyTitle(comic),
-                                onCopyPath: () => onCopyPath(comic),
-                                onOpenFolder: () => onOpenFolder(comic),
-                              ),
-                            ],
+                            ),
                           ),
-                        );
-                      },
+                          _ReadStatusBadge(
+                            text: text,
+                            readCount: comic.readChapterCount,
+                            totalCount: comic.chapterCount,
+                            inProgressCount: comic.inProgressChapterCount,
+                          ),
+                          const SizedBox(width: 8),
+                          if (bookmarked) ...[
+                            _BookmarkMarker(text: text),
+                            const SizedBox(width: 8),
+                          ],
+                          _ComicActionsButton(
+                            text: text,
+                            bookmarked: bookmarked,
+                            onToggleBookmark: () =>
+                                onToggleBookmark(comic, bookmarked),
+                            onCopyTitle: () => onCopyTitle(comic),
+                            onCopyPath: () => onCopyPath(comic),
+                            onOpenFolder: () => onOpenFolder(comic),
+                          ),
+                        ],
+                      ),
                     );
                   },
-                ),
-        );
+                );
+              },
+            ),
+    );
   }
 }
 

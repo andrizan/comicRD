@@ -58,7 +58,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _progressTimer?.cancel();
     unawaited(_saveProgressDirect());
     PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
-    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scroll.dispose();
     _focusNode.dispose();
@@ -346,9 +346,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     setState(() => _currentPage = page);
     _scheduleProgressSave();
     unawaited(_prefetchAround(page));
-    if (page % 2 == 0) {
-      PaintingBinding.instance.imageCache.clearLiveImages();
-    }
   }
 
   int _pageAtViewportCenter() {
@@ -406,7 +403,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             isRead: _currentPage >= data.pages.length - 1,
           ),
         );
-    _invalidateProgressProviders(data);
+    _invalidateProgressProviders(data, onClose: false);
   }
 
   Future<void> _saveProgressDirect() async {
@@ -425,12 +422,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  void _invalidateProgressProviders(ReaderData data) {
+  void _invalidateProgressProviders(ReaderData data, {required bool onClose}) {
     final comicPath = data.context?.comicSourcePath;
-    ref.invalidate(comicsWithProgressProvider);
-    ref.invalidate(rawLibraryComicsProvider);
-    ref.invalidate(libraryComicsProvider);
-    ref.invalidate(readingHistoryProvider);
+    if (onClose) {
+      ref.invalidate(comicsWithProgressProvider);
+      ref.invalidate(rawLibraryComicsProvider);
+      ref.invalidate(libraryComicsProvider);
+      ref.invalidate(readingHistoryProvider);
+    }
     if (comicPath == null || comicPath.isEmpty) {
       return;
     }
@@ -496,7 +495,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _close(ReaderData data) async {
     await _saveProgress(immediate: true);
-    _invalidateProgressProviders(data);
+    _invalidateProgressProviders(data, onClose: true);
     if (!mounted) {
       return;
     }

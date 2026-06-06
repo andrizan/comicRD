@@ -11,7 +11,6 @@ void main() {
           lastPage: 11,
           totalPages: 33,
           isRead: false,
-          updatedAt: 0,
         ),
         pageCount: 33,
       );
@@ -26,7 +25,6 @@ void main() {
           lastPage: 32,
           totalPages: 33,
           isRead: true,
-          updatedAt: 0,
         ),
         pageCount: 33,
       );
@@ -41,7 +39,6 @@ void main() {
           lastPage: 99,
           totalPages: 100,
           isRead: false,
-          updatedAt: 0,
         ),
         pageCount: 33,
       );

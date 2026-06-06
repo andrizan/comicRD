@@ -55,6 +55,7 @@ pub(crate) fn comics_from_fs_entries(
     entries: &[std::path::PathBuf],
     comics: &mut Vec<RawComic>,
 ) -> Result<(), String> {
+    comics.reserve(entries.len());
     for entry in entries {
         if entry.is_dir() {
             let source_path = entry.to_string_lossy().to_string();

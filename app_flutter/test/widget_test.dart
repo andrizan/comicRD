@@ -85,17 +85,15 @@ class _FakeComicRdApi extends ComicRdApi {
       bridge.SettingEntry(
         key: 'library_source_input',
         valueJson: '""',
-        updatedAt: 0,
       ),
-      bridge.SettingEntry(key: 'default_zoom', valueJson: '1', updatedAt: 0),
-      bridge.SettingEntry(key: 'page_gap', valueJson: '10', updatedAt: 0),
+      bridge.SettingEntry(key: 'default_zoom', valueJson: '1'),
+      bridge.SettingEntry(key: 'page_gap', valueJson: '10'),
       bridge.SettingEntry(
         key: 'image_pipeline_profile',
         valueJson: '"balanced"',
-        updatedAt: 0,
       ),
-      bridge.SettingEntry(key: 'app_theme', valueJson: '"light"', updatedAt: 0),
-      bridge.SettingEntry(key: 'app_locale', valueJson: '"en"', updatedAt: 0),
+      bridge.SettingEntry(key: 'app_theme', valueJson: '"light"'),
+      bridge.SettingEntry(key: 'app_locale', valueJson: '"en"'),
     ];
   }
 
@@ -120,33 +118,10 @@ class _FakeComicRdApi extends ComicRdApi {
   }) async {
     return const [
       bridge.RawComic(
-        key: '/library/Demo Comic',
-        title: 'Demo Comic',
-        sourcePath: '/library/Demo Comic',
-        sourceType: 'folder',
-        libraryPath: '/library',
-        dateModified: 0,
-        chapterCount: 0,
-        readChapterCount: 0,
-        inProgressChapterCount: 0,
-      ),
-    ];
-  }
-
-  @override
-  Future<List<bridge.Comic>> listComics({
-    required bridge.SortBy sortBy,
-    required bridge.SortDir sortDir,
-  }) async {
-    return const [
-      bridge.Comic(
-        id: 1,
-        libraryId: 1,
         title: 'Demo Comic',
         sourcePath: '/library/Demo Comic',
         sourceType: 'folder',
         dateModified: 0,
-        updatedAt: 0,
         chapterCount: 0,
         readChapterCount: 0,
         inProgressChapterCount: 0,
@@ -175,7 +150,6 @@ class _FakeComicRdApi extends ComicRdApi {
   ) async {
     return const [
       bridge.RawChapter(
-        key: '/library/Demo Comic/Chapter 1',
         title: 'Chapter 1',
         chapterIndex: 1,
         sourcePath: '/library/Demo Comic/Chapter 1',
@@ -215,14 +189,6 @@ class _MissingSourceApi extends _FakeComicRdApi {
     required bridge.SortDir sortDir,
   }) {
     return Completer<List<bridge.RawComic>>().future;
-  }
-
-  @override
-  Future<List<bridge.Comic>> listComics({
-    required bridge.SortBy sortBy,
-    required bridge.SortDir sortDir,
-  }) {
-    return Completer<List<bridge.Comic>>().future;
   }
 
   @override
@@ -269,36 +235,24 @@ class _PartiallyIndexedSourceApi extends _FakeComicRdApi {
   }) async {
     return const [
       bridge.RawComic(
-        key: '/run/media/andrizan/HDD_Hobby/Komik/8Kaijuu',
         title: '8Kaijuu',
         sourcePath: '/run/media/andrizan/HDD_Hobby/Komik/8Kaijuu',
         sourceType: 'folder',
-        libraryPath: '/run/media/andrizan/HDD_Hobby/Komik',
         dateModified: 2,
         chapterCount: 151,
         readChapterCount: 0,
         inProgressChapterCount: 0,
       ),
       bridge.RawComic(
-        key: '/run/media/andrizan/HDD_Hobby/Komik/Other Comic',
         title: 'Other Comic',
         sourcePath: '/run/media/andrizan/HDD_Hobby/Komik/Other Comic',
         sourceType: 'folder',
-        libraryPath: '/run/media/andrizan/HDD_Hobby/Komik',
         dateModified: 1,
         chapterCount: 20,
         readChapterCount: 0,
         inProgressChapterCount: 0,
       ),
     ];
-  }
-
-  @override
-  Future<List<bridge.Comic>> listComics({
-    required bridge.SortBy sortBy,
-    required bridge.SortDir sortDir,
-  }) {
-    throw StateError('library catalog must come from filesystem, not database');
   }
 }
 
@@ -312,11 +266,9 @@ class _PercentPathApi extends _PartiallyIndexedSourceApi {
   }) async {
     return const [
       bridge.RawComic(
-        key: '/library/100% Comic #1 [A+B] %20?x=y&z',
         title: '100% Comic #1 [A+B] %20?x=y&z',
         sourcePath: '/library/100% Comic #1 [A+B] %20?x=y&z',
         sourceType: 'folder',
-        libraryPath: '/library',
         dateModified: 0,
         chapterCount: 1,
         readChapterCount: 0,
@@ -334,7 +286,6 @@ class _PercentPathApi extends _PartiallyIndexedSourceApi {
     }
     return const [
       bridge.RawChapter(
-        key: '/library/100% Comic #1 [A+B] %20?x=y&z/Chapter 1',
         title: 'Chapter 1',
         chapterIndex: 1,
         sourcePath: '/library/100% Comic #1 [A+B] %20?x=y&z/Chapter 1',

@@ -479,38 +479,70 @@ pub(crate) fn list_comic_chapters_raw_conn(
 ) -> Result<Vec<RawChapter>, String> {
     let library_path = get_library_source_setting(conn)?;
     let discovered = discover_chapter_entries_for_comic(comic_source_path)?;
-    let mut out = Vec::with_capacity(discovered.len());
 
-    for (chapter_title, chapter_path, _chapter_type, chapter_index) in discovered {
-        let chapter_key = chapter_history_key(&library_path, &chapter_path, chapter_index);
-        let progress = conn
-            .query_row(
-                r#"
-        SELECT c.page_count,
-               COALESCE(r.is_read, 0),
-               COALESCE(r.last_page, 0),
-               COALESCE(r.total_pages, c.page_count),
-               c.date_modified
-        FROM chapters c
-        LEFT JOIN reading_progress r ON r.chapter_id = c.id
-        WHERE c.history_key = ?1
-        LIMIT 1
-        "#,
-                params![chapter_key],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, i64>(1)? == 1,
-                        row.get::<_, i64>(2)?,
-                        row.get::<_, i64>(3)?,
-                        row.get::<_, i64>(4)?,
-                    ))
-                },
-            )
-            .ok();
+    let chapter_keys: Vec<String> = discovered
+        .iter()
+        .map(|(_, chapter_path, _, chapter_index)| {
+            chapter_history_key(&library_path, chapter_path, *chapter_index)
+        })
+        .collect();
+
+    let mut progress_map = std::collections::HashMap::new();
+    if !chapter_keys.is_empty() {
+        let placeholders: String = chapter_keys
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let query = format!(
+            r#"
+            SELECT c.history_key,
+                   c.page_count,
+                   COALESCE(r.is_read, 0),
+                   COALESCE(r.last_page, 0),
+                   COALESCE(r.total_pages, c.page_count),
+                   c.date_modified
+            FROM chapters c
+            LEFT JOIN reading_progress r ON r.chapter_id = c.id
+            WHERE c.history_key IN ({placeholders})
+            "#
+        );
+        let mut stmt = conn
+            .prepare(&query)
+            .map_err(|e| format!("failed preparing batch progress query: {e}"))?;
+        let params: Vec<&dyn rusqlite::types::ToSql> =
+            chapter_keys.iter().map(|k| k as &dyn rusqlite::types::ToSql).collect();
+        let rows = stmt
+            .query_map(params.as_slice(), |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)? == 1,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                ))
+            })
+            .map_err(|e| format!("failed querying batch progress: {e}"))?;
+        for row in rows {
+            let (key, page_count, is_read, last_page, total_pages, date_modified) =
+                row.map_err(|e| format!("failed reading progress row: {e}"))?;
+            progress_map.insert(key, (page_count, is_read, last_page, total_pages, date_modified));
+        }
+    }
+
+    let mut out = Vec::with_capacity(discovered.len());
+    for (i, (chapter_title, chapter_path, _chapter_type, chapter_index)) in
+        discovered.into_iter().enumerate()
+    {
+        let chapter_key = &chapter_keys[i];
         let modified_at = file_modified_ts(Path::new(&chapter_path));
         let (page_count, is_read, last_page, total_pages, date_modified) =
-            progress.unwrap_or((0, false, 0, 0, modified_at));
+            progress_map
+                .get(chapter_key.as_str())
+                .copied()
+                .unwrap_or((0, false, 0, 0, modified_at));
         out.push(RawChapter {
             key: chapter_path.clone(),
             title: chapter_title,

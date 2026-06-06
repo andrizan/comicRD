@@ -42,11 +42,6 @@ class ComicRdApi {
   Future<List<bridge.ReadingHistoryEntry>> listReadingHistory() =>
       bridge.listReadingHistory();
 
-  Future<List<bridge.Comic>> listComics({
-    required bridge.SortBy sortBy,
-    required bridge.SortDir sortDir,
-  }) => bridge.listComics(sortBy: sortBy, sortDir: sortDir);
-
   Future<List<bridge.RawChapter>> listComicChaptersRaw(
     String comicSourcePath,
   ) => bridge.listComicChaptersRaw(comicSourcePath: comicSourcePath);
@@ -63,11 +58,6 @@ class ComicRdApi {
   Future<bridge.RenderedPage> renderPageVariant(
     bridge.RenderPagePayload payload,
   ) => bridge.renderPageVariant(payload: payload);
-
-  Future<bridge.RenderedPage> renderPagePreview({
-    required int chapterId,
-    required int pageIndex,
-  }) => bridge.renderPagePreview(chapterId: chapterId, pageIndex: pageIndex);
 
   Future<void> prefetchPages(bridge.PrefetchPagesPayload payload) =>
       bridge.prefetchPages(payload: payload);

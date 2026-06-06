@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `core`, `open_path`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<void> initApp({required String appDataDir}) =>
     RustLib.instance.api.crateApiInitApp(appDataDir: appDataDir);
@@ -46,11 +46,6 @@ Future<List<String>> listComicsWithProgress() =>
 Future<List<ReadingHistoryEntry>> listReadingHistory() =>
     RustLib.instance.api.crateApiListReadingHistory();
 
-Future<List<Comic>> listComics({
-  required SortBy sortBy,
-  required SortDir sortDir,
-}) => RustLib.instance.api.crateApiListComics(sortBy: sortBy, sortDir: sortDir);
-
 Future<List<RawChapter>> listComicChaptersRaw({
   required String comicSourcePath,
 }) => RustLib.instance.api.crateApiListComicChaptersRaw(
@@ -69,14 +64,6 @@ Future<List<PageInfo>> getChapterPages({required PlatformInt64 chapterId}) =>
 
 Future<RenderedPage> renderPageVariant({required RenderPagePayload payload}) =>
     RustLib.instance.api.crateApiRenderPageVariant(payload: payload);
-
-Future<RenderedPage> renderPagePreview({
-  required PlatformInt64 chapterId,
-  required int pageIndex,
-}) => RustLib.instance.api.crateApiRenderPagePreview(
-  chapterId: chapterId,
-  pageIndex: pageIndex,
-);
 
 Future<void> prefetchPages({required PrefetchPagesPayload payload}) =>
     RustLib.instance.api.crateApiPrefetchPages(payload: payload);
@@ -258,61 +245,6 @@ class ChapterContext {
           prevChapterTitle == other.prevChapterTitle &&
           nextChapterId == other.nextChapterId &&
           nextChapterTitle == other.nextChapterTitle;
-}
-
-class Comic {
-  final PlatformInt64 id;
-  final PlatformInt64 libraryId;
-  final String title;
-  final String sourcePath;
-  final String sourceType;
-  final PlatformInt64 dateModified;
-  final PlatformInt64 updatedAt;
-  final PlatformInt64 chapterCount;
-  final PlatformInt64 readChapterCount;
-  final PlatformInt64 inProgressChapterCount;
-
-  const Comic({
-    required this.id,
-    required this.libraryId,
-    required this.title,
-    required this.sourcePath,
-    required this.sourceType,
-    required this.dateModified,
-    required this.updatedAt,
-    required this.chapterCount,
-    required this.readChapterCount,
-    required this.inProgressChapterCount,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      libraryId.hashCode ^
-      title.hashCode ^
-      sourcePath.hashCode ^
-      sourceType.hashCode ^
-      dateModified.hashCode ^
-      updatedAt.hashCode ^
-      chapterCount.hashCode ^
-      readChapterCount.hashCode ^
-      inProgressChapterCount.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is Comic &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          libraryId == other.libraryId &&
-          title == other.title &&
-          sourcePath == other.sourcePath &&
-          sourceType == other.sourceType &&
-          dateModified == other.dateModified &&
-          updatedAt == other.updatedAt &&
-          chapterCount == other.chapterCount &&
-          readChapterCount == other.readChapterCount &&
-          inProgressChapterCount == other.inProgressChapterCount;
 }
 
 class ComicBookmark {
@@ -519,7 +451,6 @@ class PrefetchPagesPayload {
 }
 
 class RawChapter {
-  final String key;
   final String title;
   final PlatformInt64 chapterIndex;
   final String sourcePath;
@@ -531,7 +462,6 @@ class RawChapter {
   final PlatformInt64 totalPages;
 
   const RawChapter({
-    required this.key,
     required this.title,
     required this.chapterIndex,
     required this.sourcePath,
@@ -545,7 +475,6 @@ class RawChapter {
 
   @override
   int get hashCode =>
-      key.hashCode ^
       title.hashCode ^
       chapterIndex.hashCode ^
       sourcePath.hashCode ^
@@ -561,7 +490,6 @@ class RawChapter {
       identical(this, other) ||
       other is RawChapter &&
           runtimeType == other.runtimeType &&
-          key == other.key &&
           title == other.title &&
           chapterIndex == other.chapterIndex &&
           sourcePath == other.sourcePath &&
@@ -574,22 +502,18 @@ class RawChapter {
 }
 
 class RawComic {
-  final String key;
   final String title;
   final String sourcePath;
   final String sourceType;
-  final String libraryPath;
   final PlatformInt64 dateModified;
   final PlatformInt64 chapterCount;
   final PlatformInt64 readChapterCount;
   final PlatformInt64 inProgressChapterCount;
 
   const RawComic({
-    required this.key,
     required this.title,
     required this.sourcePath,
     required this.sourceType,
-    required this.libraryPath,
     required this.dateModified,
     required this.chapterCount,
     required this.readChapterCount,
@@ -598,11 +522,9 @@ class RawComic {
 
   @override
   int get hashCode =>
-      key.hashCode ^
       title.hashCode ^
       sourcePath.hashCode ^
       sourceType.hashCode ^
-      libraryPath.hashCode ^
       dateModified.hashCode ^
       chapterCount.hashCode ^
       readChapterCount.hashCode ^
@@ -613,11 +535,9 @@ class RawComic {
       identical(this, other) ||
       other is RawComic &&
           runtimeType == other.runtimeType &&
-          key == other.key &&
           title == other.title &&
           sourcePath == other.sourcePath &&
           sourceType == other.sourceType &&
-          libraryPath == other.libraryPath &&
           dateModified == other.dateModified &&
           chapterCount == other.chapterCount &&
           readChapterCount == other.readChapterCount &&
@@ -680,14 +600,12 @@ class ReadingProgress {
   final PlatformInt64 lastPage;
   final PlatformInt64 totalPages;
   final bool isRead;
-  final PlatformInt64 updatedAt;
 
   const ReadingProgress({
     required this.chapterId,
     required this.lastPage,
     required this.totalPages,
     required this.isRead,
-    required this.updatedAt,
   });
 
   @override
@@ -695,8 +613,7 @@ class ReadingProgress {
       chapterId.hashCode ^
       lastPage.hashCode ^
       totalPages.hashCode ^
-      isRead.hashCode ^
-      updatedAt.hashCode;
+      isRead.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -706,8 +623,7 @@ class ReadingProgress {
           chapterId == other.chapterId &&
           lastPage == other.lastPage &&
           totalPages == other.totalPages &&
-          isRead == other.isRead &&
-          updatedAt == other.updatedAt;
+          isRead == other.isRead;
 }
 
 class RenderPagePayload {
@@ -733,23 +649,17 @@ class RenderedPage {
   final String mime;
   final int width;
   final int height;
-  final String cacheKey;
 
   const RenderedPage({
     required this.bytes,
     required this.mime,
     required this.width,
     required this.height,
-    required this.cacheKey,
   });
 
   @override
   int get hashCode =>
-      bytes.hashCode ^
-      mime.hashCode ^
-      width.hashCode ^
-      height.hashCode ^
-      cacheKey.hashCode;
+      bytes.hashCode ^ mime.hashCode ^ width.hashCode ^ height.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -759,8 +669,7 @@ class RenderedPage {
           bytes == other.bytes &&
           mime == other.mime &&
           width == other.width &&
-          height == other.height &&
-          cacheKey == other.cacheKey;
+          height == other.height;
 }
 
 class SaveBookmarkPayload {
@@ -839,16 +748,11 @@ class ScanSummary {
 class SettingEntry {
   final String key;
   final String valueJson;
-  final PlatformInt64 updatedAt;
 
-  const SettingEntry({
-    required this.key,
-    required this.valueJson,
-    required this.updatedAt,
-  });
+  const SettingEntry({required this.key, required this.valueJson});
 
   @override
-  int get hashCode => key.hashCode ^ valueJson.hashCode ^ updatedAt.hashCode;
+  int get hashCode => key.hashCode ^ valueJson.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -856,8 +760,7 @@ class SettingEntry {
       other is SettingEntry &&
           runtimeType == other.runtimeType &&
           key == other.key &&
-          valueJson == other.valueJson &&
-          updatedAt == other.updatedAt;
+          valueJson == other.valueJson;
 }
 
 enum SortBy { name, folderDate }
