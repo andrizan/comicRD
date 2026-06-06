@@ -1,7 +1,6 @@
 use std::path::Path;
 
-use rusqlite::{params, Connection, OptionalExtension};
-use walkdir::WalkDir;
+use rusqlite::{params, Connection};
 
 use crate::chapter::{
     chapter_history_key, chapter_snapshot_by_history_key, comic_history_key, comic_title_for_path,
@@ -9,7 +8,7 @@ use crate::chapter::{
     upsert_comic, ChapterUpsert,
 };
 use crate::database::{file_modified_ts, now_ts};
-use crate::{Library, LibrarySourceStatus, RawComic, ScanSummary};
+use crate::{Library, LibrarySourceStatus, RawComic};
 
 pub(crate) fn library_source_status_for(path: &str) -> LibrarySourceStatus {
     if path.is_empty() {
@@ -110,70 +109,6 @@ pub(crate) fn comics_from_fs_entries(
         }
     }
     Ok(())
-}
-
-fn comic_counts_from_db(
-    conn: &Connection,
-    comic_history_key: &str,
-) -> Result<(i64, i64, i64), String> {
-    let result = conn
-        .query_row(
-            r#"
-            SELECT
-                COUNT(ch.id),
-                COALESCE(SUM(CASE WHEN COALESCE(r.is_read, 0) = 1 THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN COALESCE(r.last_page, 0) > 0 AND COALESCE(r.is_read, 0) = 0 THEN 1 ELSE 0 END), 0)
-            FROM comics c
-            LEFT JOIN chapters ch ON ch.comic_id = c.id
-            LEFT JOIN reading_progress r ON r.chapter_id = ch.id
-            WHERE c.history_key = ?1
-            "#,
-            params![comic_history_key],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?)),
-        )
-        .optional()
-        .map_err(|e| format!("failed querying comic counts: {e}"))?;
-
-    Ok(result.unwrap_or((0, 0, 0)))
-}
-
-fn progress_counts_for_chapter_keys(
-    conn: &Connection,
-    chapter_keys: &[String],
-) -> Result<(i64, i64), String> {
-    if chapter_keys.is_empty() {
-        return Ok((0, 0));
-    }
-
-    let mut stmt = conn
-        .prepare(
-            r#"
-            SELECT COALESCE(r.is_read, 0), COALESCE(r.last_page, 0)
-            FROM chapters ch
-            LEFT JOIN reading_progress r ON r.chapter_id = ch.id
-            WHERE ch.history_key = ?1
-            "#,
-        )
-        .map_err(|e| format!("failed preparing raw progress query: {e}"))?;
-
-    let mut read_count = 0;
-    let mut in_progress_count = 0;
-    for chapter_key in chapter_keys {
-        let progress = stmt
-            .query_row(params![chapter_key], |row| {
-                Ok((row.get::<_, bool>(0)?, row.get::<_, i64>(1)?))
-            })
-            .optional()
-            .map_err(|e| format!("failed querying raw progress: {e}"))?;
-        if let Some((is_read, last_page)) = progress {
-            if is_read {
-                read_count += 1;
-            } else if last_page > 0 {
-                in_progress_count += 1;
-            }
-        }
-    }
-    Ok((read_count, in_progress_count))
 }
 
 fn batch_comic_counts_from_db(
@@ -372,49 +307,6 @@ pub(crate) fn scan_comic_dir(
     }
 
     Ok((1, chapter_count))
-}
-
-pub(crate) fn scan_libraries_conn(conn: &mut Connection) -> Result<ScanSummary, String> {
-    let libraries: Vec<(i64, String)> = {
-        let mut stmt = conn
-            .prepare("SELECT id, path FROM libraries ORDER BY id")
-            .map_err(|e| format!("failed preparing libraries query: {e}"))?;
-        let rows = stmt
-            .query_map([], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-            })
-            .map_err(|e| format!("failed querying libraries: {e}"))?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("invalid library row: {e}"))?
-    };
-
-    let mut comic_count = 0usize;
-    let mut chapter_count = 0usize;
-
-    for (library_id, library_path) in libraries {
-        let base = Path::new(&library_path);
-        if !base.exists() || !base.is_dir() {
-            continue;
-        }
-
-        let mut entries = WalkDir::new(base)
-            .min_depth(1)
-            .max_depth(1)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .map(|e| e.into_path())
-            .collect::<Vec<_>>();
-        entries.sort();
-
-        let (c, ch) = scan_library_entries(conn, library_id, &library_path, &entries)?;
-        comic_count += c;
-        chapter_count += ch;
-    }
-
-    Ok(ScanSummary {
-        comics: comic_count,
-        chapters: chapter_count,
-    })
 }
 
 pub(crate) fn scan_library_entries(

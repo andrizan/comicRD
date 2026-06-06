@@ -375,7 +375,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       final localTop = renderObject.localToGlobal(Offset.zero).dy;
       final globalTop = localTop + scrollOffset;
       final globalBottom = globalTop + renderObject.size.height;
-      if (globalBottom <= scrollOffset || globalTop >= scrollOffset + viewportHeight) {
+      if (globalBottom <= scrollOffset ||
+          globalTop >= scrollOffset + viewportHeight) {
         continue;
       }
       final pageCenter = (globalTop + globalBottom) / 2;
@@ -1169,9 +1170,10 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                         behavior: HitTestBehavior.opaque,
                         onTapDown: (details) {
                           final segmentWidth = constraints.maxWidth / count;
-                          final index = (details.localPosition.dx / segmentWidth)
-                              .floor()
-                              .clamp(0, count - 1);
+                          final index =
+                              (details.localPosition.dx / segmentWidth)
+                                  .floor()
+                                  .clamp(0, count - 1);
                           widget.onSelected(index);
                         },
                         child: CustomPaint(

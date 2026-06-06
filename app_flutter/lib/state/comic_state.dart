@@ -47,7 +47,9 @@ final filteredComicChaptersProvider =
             ChapterSortBy.name => a.title.toLowerCase().compareTo(
               b.title.toLowerCase(),
             ),
-            ChapterSortBy.folderDate => a.dateModified.compareTo(b.dateModified),
+            ChapterSortBy.folderDate => a.dateModified.compareTo(
+              b.dateModified,
+            ),
             ChapterSortBy.chapterIndex => a.chapterIndex.compareTo(
               b.chapterIndex,
             ),

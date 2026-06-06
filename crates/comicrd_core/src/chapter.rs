@@ -485,14 +485,6 @@ pub(crate) fn discover_chapter_entries_for_comic(
     Err("comic source tidak valid".to_string())
 }
 
-pub(crate) fn list_comic_chapters_raw_conn(
-    conn: &Connection,
-    comic_source_path: &str,
-) -> Result<Vec<RawChapter>, String> {
-    let discovered = discover_chapter_entries_for_comic(comic_source_path)?;
-    list_comic_chapters_raw_conn_with_discovered(conn, comic_source_path, &discovered)
-}
-
 pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
     conn: &Connection,
     _comic_source_path: &str,

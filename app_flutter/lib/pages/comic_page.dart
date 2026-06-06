@@ -271,7 +271,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                   data: (items) => Text(
                     '${items.length} ${text.totalChapters}',
                     style: FluentTheme.of(context).typography.caption?.copyWith(
-                      color: FluentTheme.of(context).resources.textFillColorSecondary,
+                      color: FluentTheme.of(
+                        context,
+                      ).resources.textFillColorSecondary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -533,10 +535,7 @@ class _ChapterList extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(chapter.title),
-                        Text(
-                          _chapterStatus(chapter, text),
-                          style: FluentTheme.of(context).typography.caption,
-                        ),
+                        _ChapterStatusBadge(text: text, chapter: chapter),
                       ],
                     ),
                   ),
@@ -547,11 +546,7 @@ class _ChapterList extends StatelessWidget {
                         icon: const Icon(FluentIcons.folder_open, size: 20),
                         onPressed: () => onOpenFolder(chapter),
                       ),
-                      Icon(
-                        chapter.isRead
-                            ? FluentIcons.check_mark
-                            : FluentIcons.chevron_right,
-                      ),
+                      const Icon(FluentIcons.chevron_right),
                     ],
                   ),
                 ],
@@ -633,12 +628,7 @@ class _ChapterGridTile extends StatelessWidget {
                   style: FluentTheme.of(context).typography.bodyStrong,
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  _chapterStatus(chapter, text),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: FluentTheme.of(context).typography.caption,
-                ),
+                _ChapterStatusBadge(text: text, chapter: chapter),
               ],
             ),
           );
@@ -648,16 +638,76 @@ class _ChapterGridTile extends StatelessWidget {
   }
 }
 
-String _chapterStatus(bridge.RawChapter chapter, AppStrings text) {
-  if (chapter.isRead) {
-    return text.read;
+class _ChapterStatusBadge extends StatelessWidget {
+  const _ChapterStatusBadge({required this.text, required this.chapter});
+
+  final AppStrings text;
+  final bridge.RawChapter chapter;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    if (chapter.isRead) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: theme.accentColor.withAlpha(40),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          text.read,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: theme.accentColor,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+    if (chapter.lastPage > 0) {
+      final total = chapter.totalPages > 0
+          ? chapter.totalPages
+          : chapter.pageCount;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: theme.accentColor.withAlpha(30),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          '${text.reading} ${chapter.lastPage + 1}/$total',
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: theme.accentColor,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+    final unit = chapter.pageCount == 1 ? text.page : text.pages;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.resources.cardBackgroundFillColorSecondary,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '${text.unread} - ${chapter.pageCount} $unit',
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: theme.resources.textFillColorSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
   }
-  if (chapter.lastPage > 0) {
-    final total = chapter.totalPages > 0
-        ? chapter.totalPages
-        : chapter.pageCount;
-    return '${text.reading} ${chapter.lastPage + 1}/$total';
-  }
-  final unit = chapter.pageCount == 1 ? text.page : text.pages;
-  return '${text.unread} - ${chapter.pageCount} $unit';
 }
