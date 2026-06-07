@@ -11,16 +11,18 @@ history, backup/import, and the reader image pipeline.
 - Fast library listing from the top-level filesystem entries
 - Explicit full library scan with foreground and background scan APIs
 - Folder comics plus ZIP/CBZ and RAR/CBR archive support
+- Folder chapter pages can be discovered in nested image directories up to depth 3
 - JPEG, PNG, WebP, GIF, BMP, and AVIF page image support
 - Library, history, and bookmark tabs
 - Grid and list library display modes
 - Search, sort by name/date, and unread/reading filters
 - Comic bookmarks and chapter favorites
 - Chapter listing with progress and page counts
-- Vertical reader with keyboard navigation, fullscreen, zoom, and page gap controls
+- Vertical/webtoon reader with keyboard navigation, fullscreen, zoom, and page gap controls
+- Stable reader scroll/progress from Rust-provided page width/height metadata
 - Automatic progress save
 - Previous/next chapter navigation
-- Bounded page prefetch/cache around the current viewport
+- On-demand page byte loading with bounded prefetch/cache around the current viewport
 - SQLite-backed settings, metadata, reading progress, bookmarks, and history
 - Database backup export/import
 - Linux packaging scripts, GitHub release assets, and AUR publishing support
@@ -320,17 +322,47 @@ are throttled and restored through local state providers.
 
 ## Reader Image Pipeline
 
-The reader fetches raw page bytes through Rust and displays them in Flutter. Rust
-does not resize pages; it detects MIME type and reads dimensions from the image
-headers.
+The vertical reader uses a metadata-first, bytes-on-demand pipeline:
+
+```text
+Open chapter
+↓
+Rust lists every page entry and probes width/height metadata
+↓
+Flutter builds a ListView.builder from the full page count
+↓
+Each page reserves stable space using the Rust width/height metadata
+↓
+When Flutter builds a page item, it requests only that page's bytes from Rust
+↓
+Rust reads folder/ZIP/RAR page bytes on demand and returns them through the bridge
+```
+
+The reader does not load every image byte in a chapter into Dart memory. Flutter
+uses `ListView.builder` with `scrollCacheExtent` and `itemExtentBuilder`; Rust
+provides page dimensions so scrollbar, resume, current-page tracking, and
+progress remain stable even before the image bytes finish loading.
+
+Format handling:
+
+- folder chapters are scanned for image pages up to depth 3, ignoring hidden and
+  system files such as `__MACOSX`, `thumbs.db`, and `desktop.ini`
+- ZIP/CBZ chapters are listed from archive entries and page bytes are read by
+  entry name on demand
+- RAR/CBR chapters use the Rust `unrar` backend and read matching entries on
+  demand
+- image names are natural-sorted, so `2.png` comes before `10.png`
 
 Memory is bounded around the current viewport:
 
+- Flutter/Riverpod only keeps rendered page providers alive while page widgets
+  are built or inside the scroll cache extent
 - Flutter prefetches pages from `current - 2` through `current + 2`
 - Flutter asks Rust to evict other raw pages for that chapter
 - Rust caches up to 2 page sources
 - Rust caches up to 6 raw page byte entries
-- cached page bytes use `Arc<Vec<u8>>` to avoid deep copies on cache hits
+- cached page bytes use `Arc<Vec<u8>>` to avoid deep copies on cache hits inside
+  Rust
 
 ## Bridge Workflow
 

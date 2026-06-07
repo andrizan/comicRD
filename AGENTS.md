@@ -125,15 +125,37 @@ Avoid calling generated bridge functions directly from page/widgets/state code.
 
 ## Reader Image Pipeline
 
-The reader image pipeline must keep memory bounded around the current viewport. Cache raw image/page data only for:
+The vertical/webtoon reader must use a metadata-first, bytes-on-demand pipeline.
 
-- 2 images before the viewport
-- the image currently in the viewport
-- 2 images after the viewport
+### Reader Contract
 
-Do not expand reader raw-image cache or prefetch windows beyond this `2 + viewport + 2` policy unless the user explicitly changes the memory policy.
+- Rust must provide the full page list for an opened chapter up front: `index`, `name`, and best-effort `width`/`height`.
+- Rust must natural-sort page entries (`2.png` before `10.png`).
+- Folder chapter page discovery may recurse to max depth 3, but library listing must remain depth 1.
+- Ignore hidden/system entries such as dotfiles, `__MACOSX`, `thumbs.db`, and `desktop.ini`.
+- Flutter must build the reader with `ListView.builder`, not `Column`, `ListView(children: [...])`, or any eager all-page widget tree.
+- Flutter must use Rust-provided width/height for stable placeholders and item extents (`itemExtentBuilder`) so scrollbar, resume, progress, and current-page tracking do not depend on image decode timing.
+- Flutter must request image bytes only when a page item is built or prefetched. Do not load all image bytes for a chapter into Dart memory.
+- `renderPageVariant(chapterId, pageIndex)` is the current on-demand page-byte API. It should read only the requested page bytes and return dimensions/mime/bytes for that page.
+- Keep `renderedPageProvider` auto-disposed so Dart page bytes are released when page widgets leave the builder/cache extent.
 
-Use `Arc<Vec<u8>>` for cached image bytes to avoid deep copies on cache hits.
+### Format Rules
+
+- Folder pages: read metadata up front, then read only the requested page file on demand.
+- ZIP/CBZ pages: list archive entries up front, then read only the requested entry on demand.
+- RAR/CBR pages: current implementation uses the Rust `unrar` backend and reads matching entries on demand. Do not switch to loading all RAR entries into memory.
+- If CBR is changed to temp extraction later, use a bounded temp session folder and delete it on reader close.
+
+### Cache And Prefetch Policy
+
+The reader image pipeline must keep raw image/page data bounded around the current viewport:
+
+- Prefetch/keep only a small range around the current page. The current policy is `current - 2` through `current + 2`.
+- Flutter must ask Rust to evict other raw pages for the chapter as the active range changes and on reader close/chapter switch.
+- Rust caches up to 2 page sources and 6 raw page byte entries.
+- Use `Arc<Vec<u8>>` for cached image bytes to avoid deep copies on Rust cache hits.
+
+Do not expand reader raw-image cache, Flutter provider retention, or prefetch windows beyond this policy unless the user explicitly changes the memory policy.
 
 ## Flutter State Rules
 
