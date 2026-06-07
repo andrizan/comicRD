@@ -90,6 +90,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
     final text = stringsFor(settings.localeCode);
     return NavigationView(
       titleBar: TitleBar(
+        isBackButtonVisible: false,
         title: Text(
           text.appName,
           style: const TextStyle(

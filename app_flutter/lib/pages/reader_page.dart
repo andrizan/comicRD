@@ -683,9 +683,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     final comicPath = data.context?.comicSourcePath;
+    final chapterPath = data.context?.chapterSourcePath;
     if (comicPath == null || comicPath.isEmpty) {
       context.go('/');
     } else {
+      if (chapterPath != null && chapterPath.isNotEmpty) {
+        ref
+            .read(lastOpenedChapterProvider.notifier)
+            .remember(comicPath, chapterPath);
+      }
       context.go('/comic/${encodeRoutePath(comicPath)}');
     }
   }

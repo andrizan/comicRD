@@ -28,9 +28,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   late final ScrollController _scroll;
   late final TextEditingController _search;
   late final FocusNode _focusNode;
-  bool _didScrollToLastOpened = false;
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _lastAutoScrollSignature;
 
   @override
   void initState() {
@@ -97,6 +97,14 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     final favorites = ref.watch(chapterFavoritesProvider(widget.comicPath));
     final favoritePaths = favorites.asData?.value.toSet() ?? const <String>{};
     final title = widget.comicPath.split(RegExp(r'[/\\]')).last;
+
+    ref.listen(lastOpenedChapterProvider, (prev, next) {
+      final prevChapter = prev?[widget.comicPath];
+      final nextChapter = next[widget.comicPath];
+      if (nextChapter != null && nextChapter != prevChapter) {
+        _scrollToChapter(nextChapter);
+      }
+    });
 
     return KeyboardListener(
       focusNode: _focusNode,
@@ -291,7 +299,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
             Expanded(
               child: chapters.when(
                 data: (items) {
-                  _scrollToLastOpened(items, preferences.displayMode);
+                  _restoreLastOpenedChapter();
                   return _ChapterList(
                     text: text,
                     chapters: items,
@@ -405,39 +413,80 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     await ref.read(comicRdApiProvider).openContainingFolder(chapter.sourcePath);
   }
 
-  void _scrollToLastOpened(
-    List<bridge.RawChapter> chapters,
-    ChapterDisplayMode displayMode,
-  ) {
-    if (_didScrollToLastOpened || _scroll.initialScrollOffset > 0) {
-      return;
-    }
-    final lastSourcePath = ref
-        .read(lastOpenedChapterProvider.notifier)
-        .sourcePathFor(widget.comicPath);
-    if (lastSourcePath == null) {
-      return;
-    }
-    final index = chapters.indexWhere(
-      (chapter) => chapter.sourcePath == lastSourcePath,
+  void _scrollToChapter(String chapterSourcePath) {
+    final chapters = ref.read(filteredComicChaptersProvider(widget.comicPath));
+    final preferences = ref.read(
+      comicPreferencesProvider.select(
+        (state) => state[widget.comicPath] ?? const ComicPreferences(),
+      ),
     );
-    if (index < 0) {
+    final items = chapters.asData?.value;
+    if (items == null) return;
+    final index = items.indexWhere(
+      (chapter) => chapter.sourcePath == chapterSourcePath,
+    );
+    if (index < 0) return;
+    final signature = [
+      chapterSourcePath,
+      preferences.displayMode.name,
+      preferences.sortBy.name,
+      preferences.sortDir.name,
+      preferences.query,
+      preferences.favoritesOnly,
+      items.length,
+      index,
+    ].join('|');
+    if (_lastAutoScrollSignature == signature) {
       return;
     }
-    _didScrollToLastOpened = true;
+    _lastAutoScrollSignature = signature;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) {
-        return;
-      }
-      final row = displayMode == ChapterDisplayMode.grid ? index ~/ 3 : index;
-      final offset =
-          row * (displayMode == ChapterDisplayMode.grid ? 152.0 : 73.0);
+      if (!_scroll.hasClients) return;
+      final offset = _chapterScrollOffset(
+        index: index,
+        itemCount: items.length,
+        displayMode: preferences.displayMode,
+      );
       _scroll.animateTo(
         offset.clamp(0, _scroll.position.maxScrollExtent).toDouble(),
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
     });
+  }
+
+  double _chapterScrollOffset({
+    required int index,
+    required int itemCount,
+    required ChapterDisplayMode displayMode,
+  }) {
+    final position = _scroll.position;
+    final totalExtent = position.maxScrollExtent + position.viewportDimension;
+    if (itemCount <= 0 || totalExtent <= 0) {
+      return 0;
+    }
+    if (displayMode == ChapterDisplayMode.list) {
+      return index * _chapterListItemExtent;
+    }
+
+    final estimatedRows =
+        ((totalExtent + _chapterGridMainAxisSpacing) /
+                (_chapterGridMainAxisExtent + _chapterGridMainAxisSpacing))
+            .round()
+            .clamp(1, itemCount);
+    final columns = (itemCount / estimatedRows).ceil().clamp(1, itemCount);
+    final row = index ~/ columns;
+    return row * (totalExtent / estimatedRows);
+  }
+
+  void _restoreLastOpenedChapter() {
+    final chapterSourcePath = ref
+        .read(lastOpenedChapterProvider.notifier)
+        .sourcePathFor(widget.comicPath);
+    if (chapterSourcePath == null) {
+      return;
+    }
+    _scrollToChapter(chapterSourcePath);
   }
 }
 
@@ -514,10 +563,10 @@ class _ChapterList extends StatelessWidget {
         },
       );
     }
-    return ListView.separated(
+    return ListView.builder(
       controller: controller,
+      itemExtent: _chapterListItemExtent,
       itemCount: chapters.length,
-      separatorBuilder: (_, _) => const Divider(),
       itemBuilder: (context, index) {
         final chapter = chapters[index];
         final favorite = favorites.contains(chapter.sourcePath);
@@ -532,6 +581,13 @@ class _ChapterList extends StatelessWidget {
                         context,
                       ).resources.cardBackgroundFillColorSecondary
                     : null,
+                border: Border(
+                  bottom: BorderSide(
+                    color: FluentTheme.of(
+                      context,
+                    ).resources.dividerStrokeColorDefault,
+                  ),
+                ),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
@@ -553,7 +609,6 @@ class _ChapterList extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(chapter.title),
-                        _ChapterStatusBadge(text: text, chapter: chapter),
                         if (chapter.dateModified > 0)
                           Text(
                             formatModifiedDate(chapter.dateModified),
@@ -567,6 +622,8 @@ class _ChapterList extends StatelessWidget {
                       ],
                     ),
                   ),
+                  _ChapterStatusBadge(text: text, chapter: chapter),
+                  const SizedBox(width: 8),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -586,6 +643,10 @@ class _ChapterList extends StatelessWidget {
     );
   }
 }
+
+const double _chapterListItemExtent = 66;
+const double _chapterGridMainAxisExtent = 160;
+const double _chapterGridMainAxisSpacing = 12;
 
 class _ChapterGridTile extends StatelessWidget {
   const _ChapterGridTile({

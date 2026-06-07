@@ -1,12 +1,13 @@
-import 'dart:typed_data';
-
 import 'package:comicrd_flutter/api/comicrd_api.dart';
 import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/reader_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
+import 'package:comicrd_flutter/state/comic_state.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets('loads all page entries and lazily renders from saved progress', (
@@ -116,6 +117,55 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.byType(ProgressRing), findsNothing);
+  });
+
+  testWidgets('closing reader remembers the active chapter for list restore', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(lastPage: 0, pageCount: 3);
+    final container = ProviderContainer(
+      overrides: [comicRdApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    final router = GoRouter(
+      initialLocation: '/reader/7',
+      routes: [
+        GoRoute(
+          path: '/reader/:chapterId',
+          builder: (context, state) => const ReaderPage(chapterId: 7),
+        ),
+        GoRoute(
+          path: '/comic/:comicPath',
+          builder: (context, state) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: FluentApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(
+      container.read(
+        lastOpenedChapterProvider,
+      )['/library/Kaichou wa Maid-sama!'],
+      '/library/Kaichou wa Maid-sama!/Chapter 28',
+    );
   });
 }
 
