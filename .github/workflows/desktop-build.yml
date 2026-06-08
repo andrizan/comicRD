@@ -146,9 +146,13 @@ jobs:
 
       - name: Install native AVIF dependencies
         run: |
-          choco install pkgconfiglite -y
-          vcpkg install dav1d:x64-windows
-          echo "PKG_CONFIG_PATH=$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\pkgconfig" >> $env:GITHUB_ENV
+          choco install meson nasm pkgconfiglite -y
+          git clone --depth 1 --branch 1.5.3 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
+          cd $env:RUNNER_TEMP\dav1d-build
+          meson setup build --prefix=$env:RUNNER_TEMP\dav1d-install --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
+          meson compile -C build
+          meson install -C build
+          echo "PKG_CONFIG_PATH=$env:RUNNER_TEMP\dav1d-install\lib\pkgconfig" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: Fetch Flutter dependencies
