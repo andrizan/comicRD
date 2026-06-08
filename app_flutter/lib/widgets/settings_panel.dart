@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../state/api_state.dart';
 import '../state/library_state.dart';
@@ -37,7 +38,34 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     final readerSettings = ref.watch(readerSettingsProvider);
     final text = stringsFor(appSettings.localeCode);
     return ContentDialog(
-      title: Text(text.settings),
+      title: Row(
+        children: [
+          Text(text.settings),
+          const SizedBox(width: 12),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox.shrink();
+              final info = snapshot.data!;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: FluentTheme.of(context).accentColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'v${info.version}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: FluentTheme.of(context).accentColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       content: settings.when(
         data: (values) {
           _initialize(values, appSettings);
