@@ -81,14 +81,49 @@ sudo pacman -U dist/arch/comicrd-bin-1.0.0-1-x86_64.pkg.tar.zst
 Linux build dependencies on Arch/CachyOS:
 
 ```bash
-sudo pacman -S --needed base-devel clang cmake gtk3 ninja pkgconf
+sudo pacman -S --needed base-devel clang cmake dav1d gtk3 ninja pkgconf
 ```
 
 Linux build dependencies on Ubuntu:
 
 ```bash
-sudo apt-get install -y build-essential clang cmake libgtk-3-dev ninja-build pkg-config
+sudo apt-get install -y build-essential clang cmake libdav1d-dev libgtk-3-dev ninja-build pkg-config
 ```
+
+macOS build dependencies:
+
+```bash
+brew install dav1d pkg-config
+export PKG_CONFIG_PATH="$(brew --prefix dav1d)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+```
+
+Windows build dependencies, from a Windows host with Visual Studio desktop
+build tools:
+
+**Option A — vcpkg:**
+
+```powershell
+scoop install vcpkg pkg-config
+vcpkg install dav1d:x64-windows
+$env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT\installed\x64-windows\lib\pkgconfig"
+setx PKG_CONFIG_PATH "$env:VCPKG_ROOT\installed\x64-windows\lib\pkgconfig"
+```
+
+Di GitHub Actions, vcpkg sudah tersedia otomatis via `$env:VCPKG_INSTALLATION_ROOT`.
+
+**Option B — meson (build from source):**
+
+```powershell
+scoop install meson nasm
+git clone --depth 1 --branch 1.5.0 https://code.videolan.org/videolan/dav1d.git C:\Users\<you>\dav1d-build
+meson setup build --prefix=C:/Users/<you>/dav1d-install --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
+meson compile -C build
+meson install -C build
+setx PKG_CONFIG_PATH "C:\Users\<you>\dav1d-install\lib\pkgconfig"
+```
+
+After `setx`, open a **new terminal** so the variable takes effect. In the
+current terminal, run `$env:PKG_CONFIG_PATH = "C:\Users\<you>\dav1d-install\lib\pkgconfig"` instead.
 
 Install the bridge generator and helper tooling:
 
@@ -198,6 +233,11 @@ Windows, from a Windows host with Visual Studio desktop build tools:
 ```bash
 flutter build windows --release
 ```
+
+Windows AVIF support is native and requires the `dav1d` vcpkg package above.
+The Windows Flutter build calls `scripts/build-native-bridge.ps1`, which also
+uses `VCPKG_INSTALLATION_ROOT` or `VCPKG_ROOT` to populate `PKG_CONFIG_PATH`
+when vcpkg is available.
 
 macOS, from a macOS host with Xcode:
 
