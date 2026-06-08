@@ -145,8 +145,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install native AVIF dependencies
+        run: choco install meson nasm pkgconfiglite -y
+
+      - name: Build and install dav1d
         run: |
-          choco install meson nasm pkgconfiglite -y
           git clone --depth 1 --branch 1.5.3 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
           cd $env:RUNNER_TEMP\dav1d-build
           meson setup build --prefix=$env:RUNNER_TEMP\dav1d-install --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
