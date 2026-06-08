@@ -147,16 +147,35 @@ jobs:
       - name: Install native AVIF dependencies
         run: |
           choco install nasm pkgconfiglite -y
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja -y
+          }
           pip install meson
 
       - name: Build and install dav1d
         run: |
+          $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvarsPath = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+          cmd /c "call `"$vcvarsPath`" && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') {
+              [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+            }
+          }
+          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
           git clone --depth 1 --branch 1.5.3 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
           cd $env:RUNNER_TEMP\dav1d-build
-          meson setup build --prefix=$env:RUNNER_TEMP\dav1d-install --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
+          meson setup build --prefix=$prefix --buildtype release --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
           meson compile -C build
           meson install -C build
-          echo "PKG_CONFIG_PATH=$env:RUNNER_TEMP\dav1d-install\lib\pkgconfig" >> $env:GITHUB_ENV
+          $env:PKG_CONFIG_PATH = "$prefix/lib/pkgconfig"
+          pkg-config --exists dav1d
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "pkg-config could not find dav1d"
+            exit 1
+          }
+          pkg-config --modversion dav1d
+          pkg-config --libs dav1d
+          echo "PKG_CONFIG_PATH=$env:PKG_CONFIG_PATH" >> $env:GITHUB_ENV
         shell: pwsh
 
       - name: Fetch Flutter dependencies
@@ -165,9 +184,7 @@ jobs:
 
       - name: Build Windows release
         working-directory: app_flutter
-        run: |
-          flutter pub get
-          flutter build windows --release
+        run: flutter build windows --release
 
       - name: Archive Windows bundle
         shell: pwsh
