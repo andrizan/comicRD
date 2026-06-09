@@ -76,9 +76,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (_activeInstances <= 0) {
       _activeInstances = 0;
       PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
-      PaintingBinding.instance.imageCache.clear();
-      PaintingBinding.instance.imageCache.clearLiveImages();
     }
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _scroll.dispose();
     _focusNode.dispose();

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../bridge_generated.dart' as bridge;
 import 'api_state.dart';
 
-final readerDataProvider = FutureProvider.family<ReaderData, int>((
+final readerDataProvider = FutureProvider.autoDispose.family<ReaderData, int>((
   ref,
   chapterId,
 ) async {
