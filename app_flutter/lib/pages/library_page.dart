@@ -30,6 +30,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   final _focusNode = FocusNode(debugLabel: 'LibraryPage');
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _refreshedOnMount = false;
 
   @override
   void initState() {
@@ -42,6 +43,24 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     );
     if (savedQuery.isNotEmpty) {
       _search.text = savedQuery;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_refreshedOnMount) {
+      _refreshedOnMount = true;
+      Future.microtask(() {
+        if (mounted) {
+          // ignore: unused_result
+          ref.refresh(rawLibraryComicsProvider.future);
+          // ignore: unused_result
+          ref.refresh(comicsWithProgressProvider.future);
+          // ignore: unused_result
+          ref.refresh(readingHistoryProvider.future);
+        }
+      });
     }
   }
 
@@ -778,7 +797,7 @@ class _ReadStatusBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
-          text.read,
+          '${text.read} $readCount/$totalCount',
           maxLines: 1,
           softWrap: false,
           overflow: TextOverflow.ellipsis,
@@ -790,7 +809,7 @@ class _ReadStatusBadge extends StatelessWidget {
         ),
       );
     }
-    if (inProgressCount > 0) {
+    if (readCount > 0 || inProgressCount > 0) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(

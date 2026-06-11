@@ -161,6 +161,114 @@ fn reflects_progress_after_save() {
 }
 
 #[test]
+fn reflects_read_count_after_marking_chapter_read() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter_1 = comic.join("Chapter 1");
+    let chapter_2 = comic.join("Chapter 2");
+    fs::create_dir_all(&chapter_1).expect("chapter 1");
+    fs::create_dir_all(&chapter_2).expect("chapter 2");
+    fs::write(chapter_1.join("001.png"), b"").expect("page 1");
+    fs::write(chapter_2.join("001.png"), b"").expect("page 2");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+    core.scan_libraries().expect("scan libraries");
+
+    let chapter_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter_1.to_string_lossy().to_string(),
+        })
+        .expect("open chapter");
+    core.save_progress(SaveProgressPayload {
+        chapter_id,
+        last_page: 2,
+        total_pages: 3,
+        is_read: true,
+    })
+    .expect("save progress");
+
+    let comics = core
+        .list_library_comics_raw(SortBy::Name, SortDir::Asc)
+        .expect("list raw comics after read");
+    assert_eq!(comics.len(), 1);
+    assert_eq!(comics[0].chapter_count, 2);
+    assert_eq!(comics[0].read_chapter_count, 1);
+    assert_eq!(comics[0].in_progress_chapter_count, 0);
+}
+
+#[test]
+fn reflects_all_chapters_read() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter_1 = comic.join("Chapter 1");
+    let chapter_2 = comic.join("Chapter 2");
+    fs::create_dir_all(&chapter_1).expect("chapter 1");
+    fs::create_dir_all(&chapter_2).expect("chapter 2");
+    fs::write(chapter_1.join("001.png"), b"").expect("page 1");
+    fs::write(chapter_2.join("001.png"), b"").expect("page 2");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+    core.scan_libraries().expect("scan libraries");
+
+    // Mark chapter 1 as read
+    let ch1_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter_1.to_string_lossy().to_string(),
+        })
+        .expect("open chapter 1");
+    core.save_progress(SaveProgressPayload {
+        chapter_id: ch1_id,
+        last_page: 2,
+        total_pages: 3,
+        is_read: true,
+    })
+    .expect("save progress ch1");
+
+    // Mark chapter 2 as read
+    let ch2_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter_2.to_string_lossy().to_string(),
+        })
+        .expect("open chapter 2");
+    core.save_progress(SaveProgressPayload {
+        chapter_id: ch2_id,
+        last_page: 2,
+        total_pages: 3,
+        is_read: true,
+    })
+    .expect("save progress ch2");
+
+    let comics = core
+        .list_library_comics_raw(SortBy::Name, SortDir::Asc)
+        .expect("list raw comics after all read");
+    assert_eq!(comics.len(), 1);
+    assert_eq!(comics[0].chapter_count, 2);
+    assert_eq!(comics[0].read_chapter_count, 2);
+    assert_eq!(comics[0].in_progress_chapter_count, 0);
+}
+
+#[test]
 fn uses_cache_until_progress_save() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");

@@ -135,7 +135,9 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     final api = ref.read(comicRdApiProvider);
     unawaited(api.setSetting('default_zoom', state.zoom.toStringAsFixed(1)));
     unawaited(api.setSetting('page_gap', state.pageGap.round().toString()));
-    unawaited(api.setSetting('unlimited_scroll', state.unlimitedScroll.toString()));
+    unawaited(
+      api.setSetting('unlimited_scroll', state.unlimitedScroll.toString()),
+    );
   }
 
   void hydrateFromSettings(Map<String, String> values) {

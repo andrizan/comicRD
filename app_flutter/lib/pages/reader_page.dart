@@ -593,20 +593,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _saveProgressDirect() async {
     final data = _lastReaderData;
-    if (data == null || data.pages.isEmpty || _currentPage == _lastSavedPage) {
+    if (data == null || data.pages.isEmpty) {
       return;
     }
     final isRead = _currentPage >= data.pages.length - 1;
-    if (!_wasReset) {
-      final savedLastPage = data.progress?.lastPage ?? 0;
-      final savedIsRead = data.progress?.isRead ?? false;
-      if (_currentPage <= savedLastPage && !(isRead && !savedIsRead)) {
-        _lastSavedPage = _currentPage;
-        return;
-      }
-    }
-    _wasReset = false;
-    _lastSavedPage = _currentPage;
     await _api.saveProgress(
       bridge.SaveProgressPayload(
         chapterId: widget.chapterId,
@@ -706,7 +696,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _close(ReaderData data) async {
-    await _saveProgress(immediate: true);
+    await _saveProgressDirect();
     _invalidateProgressProviders(data, onClose: true);
     await _releaseChapterMemory(
       chapterId: widget.chapterId,
@@ -731,7 +721,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _switchChapter(int chapterId) async {
-    await _saveProgress(immediate: true);
+    await _saveProgressDirect();
     final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
     await _releaseChapterMemory(
       chapterId: widget.chapterId,
