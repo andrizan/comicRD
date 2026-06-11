@@ -91,13 +91,25 @@ final readerSettingsProvider =
     );
 
 class ReaderSettings {
-  const ReaderSettings({this.zoom = 1.0, this.pageGap = 20.0});
+  const ReaderSettings({
+    this.zoom = 1.0,
+    this.pageGap = 20.0,
+    this.unlimitedScroll = false,
+  });
 
   final double zoom;
   final double pageGap;
+  final bool unlimitedScroll;
 
-  ReaderSettings copyWith({double? zoom, double? pageGap}) =>
-      ReaderSettings(zoom: zoom ?? this.zoom, pageGap: pageGap ?? this.pageGap);
+  ReaderSettings copyWith({
+    double? zoom,
+    double? pageGap,
+    bool? unlimitedScroll,
+  }) => ReaderSettings(
+    zoom: zoom ?? this.zoom,
+    pageGap: pageGap ?? this.pageGap,
+    unlimitedScroll: unlimitedScroll ?? this.unlimitedScroll,
+  );
 }
 
 class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
@@ -114,19 +126,37 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     _saveToDatabase();
   }
 
+  void setUnlimitedScroll(bool value) {
+    state = state.copyWith(unlimitedScroll: value);
+    _saveToDatabase();
+  }
+
   void _saveToDatabase() {
     final api = ref.read(comicRdApiProvider);
     unawaited(api.setSetting('default_zoom', state.zoom.toStringAsFixed(1)));
     unawaited(api.setSetting('page_gap', state.pageGap.round().toString()));
+    unawaited(api.setSetting('unlimited_scroll', state.unlimitedScroll.toString()));
   }
 
   void hydrateFromSettings(Map<String, String> values) {
     final zoom = _decodeDouble(values['default_zoom'], 1.0);
     final gap = _decodeDouble(values['page_gap'], 20.0);
+    final unlimitedScroll = _decodeBool(values['unlimited_scroll'], false);
     state = ReaderSettings(
       zoom: zoom.clamp(0.5, 3.0),
       pageGap: gap.clamp(0, 80),
+      unlimitedScroll: unlimitedScroll,
     );
+  }
+
+  bool _decodeBool(String? raw, bool fallback) {
+    if (raw == null) return fallback;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is bool) return decoded;
+      if (decoded is String) return decoded.toLowerCase() == 'true';
+    } catch (_) {}
+    return fallback;
   }
 
   double _decodeDouble(String? raw, double fallback) {
@@ -182,6 +212,7 @@ class AppStrings {
     required this.gap,
     required this.zoom,
     required this.fullscreen,
+    required this.unlimitedScroll,
     // Chapter status
     required this.read,
     required this.reading,
@@ -268,6 +299,7 @@ class AppStrings {
   final String gap;
   final String zoom;
   final String fullscreen;
+  final String unlimitedScroll;
   // Chapter status
   final String read;
   final String reading;
@@ -350,6 +382,7 @@ class AppStrings {
     gap: 'Gap',
     zoom: 'Zoom',
     fullscreen: 'Fullscreen',
+    unlimitedScroll: 'Unlimited Scroll',
     read: 'Read',
     reading: 'Reading',
     unread: 'Unread',
@@ -428,6 +461,7 @@ class AppStrings {
     gap: 'Jarak',
     zoom: 'Perbesar',
     fullscreen: 'Layar penuh',
+    unlimitedScroll: 'Scroll Tanpa Batas',
     read: 'Dibaca',
     reading: 'Sedang dibaca',
     unread: 'Belum dibaca',

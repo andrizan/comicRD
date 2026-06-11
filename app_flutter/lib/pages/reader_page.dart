@@ -187,6 +187,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             pageGap: readerSettings.pageGap,
                             zoom: readerSettings.zoom,
                             fullscreen: _fullscreen,
+                            unlimitedScroll: readerSettings.unlimitedScroll,
                             onClose: () => _close(data),
                             onPreviousPage: () => _jumpBy(-1),
                             onNextPage: () => _jumpBy(1),
@@ -212,6 +213,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                   .setZoom(zoom);
                             },
                             onToggleFullscreen: _toggleFullscreen,
+                            onToggleUnlimitedScroll: () {
+                              ref
+                                  .read(readerSettingsProvider.notifier)
+                                  .setUnlimitedScroll(
+                                    !readerSettings.unlimitedScroll,
+                                  );
+                            },
                           ),
                         ),
                       ),
@@ -404,6 +412,32 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _updateViewportWindow();
+    _checkAutoAdvanceChapter();
+  }
+
+  void _checkAutoAdvanceChapter() {
+    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+    if (data == null || data.pages.isEmpty) {
+      return;
+    }
+    final settings = ref.read(readerSettingsProvider);
+    if (!settings.unlimitedScroll) {
+      return;
+    }
+    final nextChapterId = data.context?.nextChapterId;
+    if (nextChapterId == null) {
+      return;
+    }
+    if (!_scroll.hasClients) {
+      return;
+    }
+    final maxExtent = _scroll.position.maxScrollExtent;
+    final currentOffset = _scroll.position.pixels;
+    final viewportDimension = _scroll.position.viewportDimension;
+    final isAtEnd = currentOffset >= maxExtent - viewportDimension * 0.1;
+    if (isAtEnd && _currentPage >= data.pages.length - 1) {
+      _switchChapter(nextChapterId);
+    }
   }
 
   void _updateViewportWindow({bool persistProgress = true}) {
@@ -980,6 +1014,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.pageGap,
     required this.zoom,
     required this.fullscreen,
+    required this.unlimitedScroll,
     required this.onClose,
     required this.onPreviousPage,
     required this.onNextPage,
@@ -988,6 +1023,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.onGapChanged,
     required this.onZoomChanged,
     required this.onToggleFullscreen,
+    required this.onToggleUnlimitedScroll,
   });
 
   final AppStrings text;
@@ -996,6 +1032,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final double pageGap;
   final double zoom;
   final bool fullscreen;
+  final bool unlimitedScroll;
   final VoidCallback onClose;
   final VoidCallback onPreviousPage;
   final VoidCallback onNextPage;
@@ -1004,6 +1041,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final ValueChanged<double> onGapChanged;
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onToggleFullscreen;
+  final VoidCallback onToggleUnlimitedScroll;
 
   @override
   Widget build(BuildContext context) {
@@ -1111,6 +1149,12 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                           : FluentIcons.full_screen,
                       active: fullscreen,
                       onPressed: onToggleFullscreen,
+                    ),
+                    _ReferenceReaderIconButton(
+                      tooltip: text.unlimitedScroll,
+                      icon: FluentIcons.scroll_up_down,
+                      active: unlimitedScroll,
+                      onPressed: onToggleUnlimitedScroll,
                     ),
                   ],
                 ),
