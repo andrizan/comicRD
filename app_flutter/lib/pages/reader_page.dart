@@ -155,6 +155,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
     final reader = ref.watch(readerDataProvider(widget.chapterId));
+    final comicPath = reader.asData?.value.context?.comicSourcePath ?? '';
+    final chapterSourcePath =
+        reader.asData?.value.context?.chapterSourcePath ?? '';
+    final favorites = ref.watch(chapterFavoritesProvider(comicPath));
+    final isFavorited =
+        favorites.asData?.value.contains(chapterSourcePath) ?? false;
     return KeyboardListener(
       autofocus: true,
       focusNode: _focusNode,
@@ -219,6 +225,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             zoom: readerSettings.zoom,
                             fullscreen: _fullscreen,
                             unlimitedScroll: readerSettings.unlimitedScroll,
+                            isFavorited: isFavorited,
                             onClose: () => _close(data),
                             onPreviousPage: () => _jumpBy(-1),
                             onNextPage: () => _jumpBy(1),
@@ -251,6 +258,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                     !readerSettings.unlimitedScroll,
                                   );
                             },
+                            onToggleFavorite: () =>
+                                _toggleFavorite(chapterSourcePath, comicPath),
                           ),
                         ),
                       ),
@@ -958,6 +967,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       setState(() {});
     }
   }
+
+  Future<void> _toggleFavorite(
+    String chapterSourcePath,
+    String comicSourcePath,
+  ) async {
+    if (chapterSourcePath.isEmpty || comicSourcePath.isEmpty) {
+      return;
+    }
+    final api = ref.read(comicRdApiProvider);
+    final favorites =
+        ref.read(chapterFavoritesProvider(comicSourcePath)).asData?.value ?? [];
+    final isFavorited = favorites.contains(chapterSourcePath);
+    if (isFavorited) {
+      await api.removeChapterFavorite(chapterSourcePath);
+    } else {
+      await api.addChapterFavorite(
+        chapterSourcePath: chapterSourcePath,
+        comicSourcePath: comicSourcePath,
+      );
+    }
+    ref.invalidate(chapterFavoritesProvider(comicSourcePath));
+  }
 }
 
 class _ReaderPageItem extends ConsumerWidget {
@@ -1100,6 +1131,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.zoom,
     required this.fullscreen,
     required this.unlimitedScroll,
+    required this.isFavorited,
     required this.onClose,
     required this.onPreviousPage,
     required this.onNextPage,
@@ -1109,6 +1141,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.onZoomChanged,
     required this.onToggleFullscreen,
     required this.onToggleUnlimitedScroll,
+    required this.onToggleFavorite,
   });
 
   final AppStrings text;
@@ -1118,6 +1151,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final double zoom;
   final bool fullscreen;
   final bool unlimitedScroll;
+  final bool isFavorited;
   final VoidCallback onClose;
   final VoidCallback onPreviousPage;
   final VoidCallback onNextPage;
@@ -1127,6 +1161,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onToggleFullscreen;
   final VoidCallback onToggleUnlimitedScroll;
+  final VoidCallback onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -1205,6 +1240,16 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       tooltip: text.nextChapter,
                       icon: FluentIcons.next,
                       onPressed: onNextChapter,
+                    ),
+                    _ReferenceReaderIconButton(
+                      tooltip: isFavorited
+                          ? text.removeFavorite
+                          : text.addFavorite,
+                      icon: isFavorited
+                          ? FluentIcons.favorite_star_fill
+                          : FluentIcons.favorite_star,
+                      active: isFavorited,
+                      onPressed: onToggleFavorite,
                     ),
                     const SizedBox(width: 4),
                     _ReaderControlChip(
