@@ -473,7 +473,7 @@ class AppStrings {
     chapter: 'Chapter',
     name: 'Nama',
     folderDate: 'Tanggal folder',
-    ascending: 'Menaik',
+    ascending: 'Naik',
     descending: 'Menurun',
     all: 'Semua',
     progress: 'Progres',
