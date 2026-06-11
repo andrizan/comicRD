@@ -29,11 +29,13 @@ history, backup/import, and the reader image pipeline.
 
 ## Status
 
-ComicRD is under active development. The main Flutter/Rust application flows are
-implemented, including library listing, scan, chapter discovery, reader flow,
-progress, bookmarks, history, settings, and backup/import. Linux packaging is
-available. Windows and macOS build targets are present, but should be smoke
-tested on their native platforms before release claims.
+ComicRD is in a slower maintenance phase. The main Flutter/Rust application
+flows are implemented, including library listing, scan, chapter discovery,
+reader flow, progress, bookmarks, history, settings, and backup/import. New work
+is mostly focused on fixes, dependency updates, packaging, and platform
+verification. Linux packaging is available. The application has been smoke
+tested directly on Windows and Linux. The macOS build target is present, but
+still needs a native macOS smoke test before release claims for that platform.
 
 ## Release 1.1.0
 

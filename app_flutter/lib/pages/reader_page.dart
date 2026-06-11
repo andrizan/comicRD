@@ -37,6 +37,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   late ScrollController _scroll;
   final _focusNode = FocusNode(debugLabel: 'ReaderPage');
   Timer? _progressTimer;
+  Timer? _initialScrollTimer;
   int _currentPage = 0;
   int _lastSavedPage = -1;
   bool _ignoreNextScrollUpdate = false;
@@ -67,6 +68,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void dispose() {
     _progressTimer?.cancel();
+    _initialScrollTimer?.cancel();
     final data = _lastReaderData;
     final chapterId = _lastReaderChapterId;
     if (data != null && chapterId != null) {
@@ -99,6 +101,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _progressTimer?.cancel();
+    _initialScrollTimer?.cancel();
+    _initialScrollTimer = null;
     _currentPage = 0;
     _lastSavedPage = -1;
     _ignoreNextScrollUpdate = false;
@@ -115,12 +119,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _lastReaderData = null;
       _lastReaderChapterId = null;
     }
-    ref.invalidate(readerDataProvider(oldWidget.chapterId));
+    final oldChapterId = oldWidget.chapterId;
+    final oldPageCount = oldData?.pages.length;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(readerDataProvider(oldChapterId));
+      if (oldPageCount != null) {
+        _invalidateRenderedPages(oldChapterId, oldPageCount);
+      }
+    });
     if (oldData != null) {
       unawaited(
         _releaseChapterMemory(
-          chapterId: oldWidget.chapterId,
+          chapterId: oldChapterId,
           pageCount: oldData.pages.length,
+          invalidateRenderedPages: false,
         ),
       );
     }
@@ -389,12 +404,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       }
       _jumpToPage(page, persist: false);
       unawaited(_prefetchWindow(_renderStart, _renderEnd));
-      Future.delayed(const Duration(milliseconds: 300), () {
+      _initialScrollTimer?.cancel();
+      late final Timer timer;
+      timer = Timer(const Duration(milliseconds: 300), () {
+        if (identical(_initialScrollTimer, timer)) {
+          _initialScrollTimer = null;
+        }
         if (_isReaderCurrent(chapterId, generation)) {
           setState(() => _initialScrollDone = true);
           _updateViewportWindow(persistProgress: false);
         }
       });
+      _initialScrollTimer = timer;
     });
     unawaited(
       _saveInitialProgress(data, chapterId: chapterId, generation: generation),
@@ -793,6 +814,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     bool invalidateRenderedPages = true,
   }) async {
     _readerGeneration++;
+    _initialScrollTimer?.cancel();
+    _initialScrollTimer = null;
     _prefetchQueuedStart = null;
     _prefetchQueuedEnd = null;
     final pendingPrefetch = _prefetchQueue;
