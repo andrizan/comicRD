@@ -26,8 +26,7 @@ fn scan_libraries_upserts_comics_chapters_and_progress_counts() {
         &serde_json::to_string(&library).unwrap(),
     )
     .expect("set library source");
-    let library_id = core
-        .add_library(&library.to_string_lossy())
+    core.add_library(&library.to_string_lossy())
         .expect("add library");
 
     let summary = core.scan_libraries().expect("scan libraries");

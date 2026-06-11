@@ -42,24 +42,13 @@ pub(crate) struct PageCache {
     state: Mutex<PageCacheState>,
 }
 
+#[derive(Default)]
 struct PageCacheState {
     sources: HashMap<i64, PageSource>,
     source_order: VecDeque<i64>,
     bytes: HashMap<(i64, usize), CachedPageBytes>,
     bytes_order: VecDeque<(i64, usize)>,
     pub(crate) stats: CacheStats,
-}
-
-impl Default for PageCacheState {
-    fn default() -> Self {
-        Self {
-            sources: HashMap::new(),
-            source_order: VecDeque::new(),
-            bytes: HashMap::new(),
-            bytes_order: VecDeque::new(),
-            stats: CacheStats::default(),
-        }
-    }
 }
 
 impl PageCacheState {
@@ -121,6 +110,10 @@ impl PageCache {
             for key in keys_to_remove {
                 state.bytes.remove(&key);
                 state.bytes_order.retain(|k| *k != key);
+            }
+            if keep_pages.is_empty() {
+                state.sources.remove(&chapter_id);
+                state.source_order.retain(|key| *key != chapter_id);
             }
         }
     }

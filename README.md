@@ -35,6 +35,19 @@ progress, bookmarks, history, settings, and backup/import. Linux packaging is
 available. Windows and macOS build targets are present, but should be smoke
 tested on their native platforms before release claims.
 
+## Release 1.1.0
+
+This release focuses on reader memory lifecycle and page navigation polish:
+
+- Reader chapter switch/close now waits for active prefetch work before final
+  eviction, preventing previous chapter bytes from being re-cached after cleanup.
+- `evictChapterPages(chapterId, [])` releases both raw page bytes and page source
+  metadata for the chapter.
+- Reader progress bar hover now shows a page-number tooltip positioned above the
+  hovered segment.
+- Regression coverage was added for reader cache release, prefetch cleanup, and
+  progress bar tooltip behavior.
+
 ## Install
 
 ### Arch Linux / CachyOS
@@ -55,8 +68,8 @@ Download the Linux tarball from GitHub Releases, extract it, and run the bundled
 executable:
 
 ```bash
-tar -xzf comicrd-1.0.0-linux-x86_64.tar.gz
-./comicrd-1.0.0-linux-x86_64/opt/comicrd/ComicRD
+tar -xzf comicrd-1.1.0-linux-x86_64.tar.gz
+./comicrd-1.1.0-linux-x86_64/opt/comicrd/ComicRD
 ```
 
 ### Local Pacman Package
@@ -64,8 +77,8 @@ tar -xzf comicrd-1.0.0-linux-x86_64.tar.gz
 On Arch-based systems, a local install package can be created from source:
 
 ```bash
-./scripts/package-arch-local.sh 1.0.0
-sudo pacman -U dist/arch/comicrd-bin-1.0.0-1-x86_64.pkg.tar.zst
+./scripts/package-arch-local.sh 1.1.0
+sudo pacman -U dist/arch/comicrd-bin-1.1.0-1-x86_64.pkg.tar.zst
 ```
 
 ## Build From Source
@@ -248,15 +261,15 @@ flutter build macos --release
 Create the Linux release tarball used by GitHub Releases and AUR:
 
 ```bash
-./scripts/package-linux.sh 1.0.0
-./scripts/package-linux.sh 1.0.0a1
+./scripts/package-linux.sh 1.1.0
+./scripts/package-linux.sh 1.1.0a1
 ```
 
 The output is written to:
 
 ```text
-dist/comicrd-1.0.0-linux-x86_64.tar.gz
-dist/comicrd-1.0.0a1-linux-x86_64.tar.gz
+dist/comicrd-1.1.0-linux-x86_64.tar.gz
+dist/comicrd-1.1.0a1-linux-x86_64.tar.gz
 ```
 
 ## Repository Layout
@@ -447,29 +460,6 @@ flutter test
 
 Run Rust tests for core or bridge changes. Run Flutter analyzer/tests for Dart,
 Flutter UI, generated bridge, routing, state, or pubspec changes.
-
-## Release
-
-GitHub Actions builds release assets from version tags:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Use `vX.Y.Zsuffix` for Arch-compatible prerelease tags that should also publish
-to AUR, for example `v1.0.0a1`. Tags with underscore or hyphen prerelease
-suffixes, such as `v1.0.0_a1` or `v1.0.0-a1`, create GitHub prereleases but are
-not published to AUR. Arch accepts underscores in `pkgver`, but `1.0.0_a1`
-sorts newer than `1.0.0`, so it is not safe for prereleases in the stable
-`comicrd-bin` package.
-
-The `Desktop Build` workflow:
-
-- runs Rust and Flutter checks
-- builds Linux, Windows, and macOS bundles
-- uploads release assets to GitHub Releases
-- publishes `comicrd-bin` to AUR from the Linux tarball
 
 ## License
 

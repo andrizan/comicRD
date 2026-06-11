@@ -84,6 +84,7 @@ Audit mendalam terhadap seluruh codebase comicrd_flutter (Rust core, Flutter UI,
 | I4 | `initialReaderPageForProgress` selalu return 0 | `reader_state.dart:78` | Implementasi resume dari `progress.lastPage` | ✅ |
 | I5 | Prefetch + evict sequential | `reader_page.dart:461` | Pakai `Future.wait([...])` | ✅ |
 | I6 | Reader terlalu bergantung pada `GlobalKey` dan cache Dart per-item | `reader_page.dart` | Semua `PageInfo` + width/height dimuat upfront dari Rust, folder page discovery max depth 3, image dirender lazy oleh `ListView.builder(scrollCacheExtent: 1500)`, `itemExtentBuilder` menjaga resume/jump tanpa build semua page, placeholder tidak menampilkan spinner permanen | ✅ |
+| I7 | Prefetch lama bisa lanjut setelah ganti chapter dan mengisi cache lagi; evict kosong belum membuang `PageSource` | `reader_page.dart`, `image_pipeline.rs:113` | Tambah generation guard + chapterId capture, tunggu prefetch aktif sebelum evict final, dan `evictChapterPages(chapterId, [])` membuang raw bytes + page source | ✅ |
 
 ---
 
@@ -119,8 +120,8 @@ Step  Location                              Action
 Load chapter → ambil semua PageInfo
 ListView.builder membuat item visible/cacheExtent → render page → Arc clone (cheap) → bridge deep copy → Dart Uint8List → Image.memory
 Scroll keluar builder/cacheExtent → provider autoDispose → Dart heap freed
-Ganti chapter → await evict old chapter Rust cache + invalidate Dart providers + clear Flutter imageCache
-Keluar reader → evict old chapter Rust cache + clear imageCache
+Ganti chapter → cancel queued prefetch + await prefetch aktif lama → invalidate Dart providers + evict raw bytes dan PageSource chapter lama + clear Flutter imageCache
+Keluar reader → await prefetch aktif lama → evict raw bytes dan PageSource chapter lama + clear imageCache
 ```
 
 ---
@@ -132,8 +133,8 @@ Keluar reader → evict old chapter Rust cache + clear imageCache
 | Fase 1 | 17 | ✅ |
 | Fase 2 | 15 | ✅ |
 | Fase 3 | 21 | ✅ |
-| Fase 4 | 6 | ✅ |
-| **Total** | **59** | ✅ |
+| Fase 4 | 7 | ✅ |
+| **Total** | **60** | ✅ |
 
 ---
 

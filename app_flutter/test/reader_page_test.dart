@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:comicrd_flutter/api/comicrd_api.dart';
 import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/reader_page.dart';
@@ -95,6 +98,58 @@ void main() {
     expect(api.evictedWindows, isNotEmpty);
   });
 
+  testWidgets('shows hovered page number tooltip on progress bar', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(lastPage: 0, pageCount: 9);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final progressBar = find.byWidgetPredicate(
+      (widget) =>
+          widget is CustomPaint &&
+          widget.painter.runtimeType.toString() == '_PageIndicatorPainter',
+    );
+    expect(progressBar, findsOneWidget);
+
+    final rect = tester.getRect(progressBar);
+    final hoverPoint = Offset(rect.left + rect.width * 4.5 / 9, rect.center.dy);
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      pointer: 1,
+    );
+    await gesture.addPointer(location: Offset.zero);
+    await tester.pump();
+    await gesture.moveTo(hoverPoint);
+    await tester.pumpAndSettle(const Duration(milliseconds: 1500));
+
+    expect(find.text('5'), findsOneWidget);
+    final tooltipBox = find.byWidgetPredicate((widget) {
+      final decoration = widget is DecoratedBox ? widget.decoration : null;
+      return decoration is BoxDecoration &&
+          decoration.color == const Color(0xff222831);
+    });
+    expect(tooltipBox, findsOneWidget);
+    final tooltipRect = tester.getRect(tooltipBox);
+    expect(tooltipRect.bottom, lessThanOrEqualTo(rect.top - 4));
+
+    await gesture.removePointer();
+  });
+
   testWidgets('does not show page spinners after lazy renders settle', (
     tester,
   ) async {
@@ -167,17 +222,84 @@ void main() {
       '/library/Kaichou wa Maid-sama!/Chapter 28',
     );
   });
+
+  testWidgets('switching chapter waits for pending prefetch before cleanup', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final prefetchGate = Completer<void>();
+    final api = _ReaderFakeComicRdApi(
+      lastPage: 0,
+      pageCount: 6,
+      nextChapterIds: const {7: 8},
+      prefetchGate: prefetchGate,
+    );
+    final router = GoRouter(
+      initialLocation: '/reader/7',
+      routes: [
+        GoRoute(
+          path: '/reader/:chapterId',
+          builder: (context, state) => ReaderPage(
+            chapterId: int.parse(state.pathParameters['chapterId']!),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: FluentApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(api.events, contains('prefetch-start-7'));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(api.loadedChapterIds, isNot(contains(8)));
+    expect(api.events.where((event) => event == 'evict-7-[]'), isEmpty);
+
+    prefetchGate.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(api.loadedChapterIds, contains(8));
+    final prefetchComplete = api.events.indexOf('prefetch-complete-7');
+    final finalEvict = api.events.indexOf('evict-7-[]');
+    expect(prefetchComplete, isNonNegative);
+    expect(finalEvict, greaterThan(prefetchComplete));
+  });
 }
 
 class _ReaderFakeComicRdApi extends ComicRdApi {
-  _ReaderFakeComicRdApi({required this.lastPage, required this.pageCount});
+  _ReaderFakeComicRdApi({
+    required this.lastPage,
+    required this.pageCount,
+    this.nextChapterIds = const {},
+    this.prefetchGate,
+  });
 
   final int lastPage;
   final int pageCount;
+  final Map<int, int> nextChapterIds;
+  final Completer<void>? prefetchGate;
   final renderedPageIndices = <int>[];
   final prefetchedWindows = <List<int>>[];
   final evictedWindows = <List<int>>[];
   final savedProgress = <bridge.SaveProgressPayload>[];
+  final loadedChapterIds = <int>[];
+  final events = <String>[];
+  bool _prefetchGateUsed = false;
   int loadedPageEntries = 0;
 
   @override
@@ -202,11 +324,13 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       chapterIndex: 28,
       chapterPosition: 28,
       chapterTotal: 33,
+      nextChapterId: nextChapterIds[chapterId],
     );
   }
 
   @override
   Future<List<bridge.PageInfo>> getChapterPages(int chapterId) async {
+    loadedChapterIds.add(chapterId);
     final pages = [
       for (var index = 0; index < pageCount; index++)
         bridge.PageInfo(
@@ -245,6 +369,13 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 
   @override
   Future<void> prefetchPages(bridge.PrefetchPagesPayload payload) async {
+    events.add('prefetch-start-${payload.chapterId}');
+    final gate = prefetchGate;
+    if (gate != null && !_prefetchGateUsed && payload.chapterId == 7) {
+      _prefetchGateUsed = true;
+      await gate.future;
+    }
+    events.add('prefetch-complete-${payload.chapterId}');
     prefetchedWindows.add(payload.pageIndices.toList());
   }
 
@@ -253,6 +384,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     required int chapterId,
     required List<int> keepPages,
   }) async {
+    events.add('evict-$chapterId-[${keepPages.join(',')}]');
     evictedWindows.add(keepPages.toList());
   }
 

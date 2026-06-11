@@ -46,12 +46,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _toolbarVisible = true;
   late final ComicRdApi _api;
   ReaderData? _lastReaderData;
+  int? _lastReaderChapterId;
   Completer<void>? _prefetchQueue;
   int? _prefetchQueuedStart;
   int? _prefetchQueuedEnd;
   bool _wasReset = false;
   int _renderStart = 0;
   int _renderEnd = -1;
+  int _readerGeneration = 0;
 
   @override
   void initState() {
@@ -65,11 +67,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void dispose() {
     _progressTimer?.cancel();
-    unawaited(_saveProgressDirect());
     final data = _lastReaderData;
-    if (data != null) {
+    final chapterId = _lastReaderChapterId;
+    if (data != null && chapterId != null) {
+      unawaited(_saveProgressDirect(chapterId: chapterId, data: data));
       unawaited(
-        _api.evictChapterPages(chapterId: widget.chapterId, keepPages: []),
+        _releaseChapterMemory(
+          chapterId: chapterId,
+          pageCount: data.pages.length,
+          invalidateRenderedPages: false,
+        ),
       );
     }
     _activeInstances--;
@@ -97,10 +104,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _ignoreNextScrollUpdate = false;
     _restoredProgress = false;
     _initialScrollDone = false;
+    _wasReset = false;
     _renderStart = 0;
     _renderEnd = -1;
     _toolbarVisible = true;
-    final oldData = _lastReaderData;
+    final oldData = _lastReaderChapterId == oldWidget.chapterId
+        ? _lastReaderData
+        : null;
+    if (_lastReaderChapterId == oldWidget.chapterId) {
+      _lastReaderData = null;
+      _lastReaderChapterId = null;
+    }
+    ref.invalidate(readerDataProvider(oldWidget.chapterId));
     if (oldData != null) {
       unawaited(
         _releaseChapterMemory(
@@ -138,6 +153,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         child: reader.when(
           data: (data) {
             _lastReaderData = data;
+            _lastReaderChapterId = widget.chapterId;
             _restoreProgress(data);
             return Stack(
               children: [
@@ -361,42 +377,51 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _restoredProgress = true;
+    final chapterId = widget.chapterId;
+    final generation = _readerGeneration;
     final page = data.initialPage;
     _currentPage = page;
     _lastSavedPage = page;
     _setRenderWindowAround(page, data.pages.length);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
+      if (!_isReaderCurrent(chapterId, generation)) {
         return;
       }
       _jumpToPage(page, persist: false);
       unawaited(_prefetchWindow(_renderStart, _renderEnd));
       Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) {
+        if (_isReaderCurrent(chapterId, generation)) {
           setState(() => _initialScrollDone = true);
           _updateViewportWindow(persistProgress: false);
         }
       });
     });
-    unawaited(_saveInitialProgress(data));
+    unawaited(
+      _saveInitialProgress(data, chapterId: chapterId, generation: generation),
+    );
   }
 
-  Future<void> _saveInitialProgress(ReaderData data) async {
+  Future<void> _saveInitialProgress(
+    ReaderData data, {
+    required int chapterId,
+    required int generation,
+  }) async {
     final progress = data.progress;
     if (progress != null && !progress.isRead) {
       return;
     }
     _wasReset = true;
-    await ref
-        .read(comicRdApiProvider)
-        .saveProgress(
-          bridge.SaveProgressPayload(
-            chapterId: widget.chapterId,
-            lastPage: 0,
-            totalPages: data.pages.length,
-            isRead: false,
-          ),
-        );
+    await _api.saveProgress(
+      bridge.SaveProgressPayload(
+        chapterId: chapterId,
+        lastPage: 0,
+        totalPages: data.pages.length,
+        isRead: false,
+      ),
+    );
+    if (!_isReaderCurrent(chapterId, generation)) {
+      return;
+    }
     _invalidateProgressProviders(data, onClose: false);
   }
 
@@ -591,17 +616,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _invalidateProgressProviders(data, onClose: false);
   }
 
-  Future<void> _saveProgressDirect() async {
-    final data = _lastReaderData;
-    if (data == null || data.pages.isEmpty) {
+  Future<void> _saveProgressDirect({int? chapterId, ReaderData? data}) async {
+    final targetData = data ?? _lastReaderData;
+    final targetChapterId = chapterId ?? _lastReaderChapterId;
+    if (targetData == null ||
+        targetChapterId == null ||
+        targetData.pages.isEmpty) {
       return;
     }
-    final isRead = _currentPage >= data.pages.length - 1;
+    final isRead = _currentPage >= targetData.pages.length - 1;
     await _api.saveProgress(
       bridge.SaveProgressPayload(
-        chapterId: widget.chapterId,
+        chapterId: targetChapterId,
         lastPage: _currentPage,
-        totalPages: data.pages.length,
+        totalPages: targetData.pages.length,
         isRead: isRead,
       ),
     );
@@ -623,8 +651,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _prefetchWindow(int start, int end) async {
-    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    if (data == null || data.pages.isEmpty || end < start) {
+    final chapterId = widget.chapterId;
+    final generation = _readerGeneration;
+    if (!_isReaderCurrent(chapterId, generation) || end < start) {
       return;
     }
     if (_prefetchQueue != null && !_prefetchQueue!.isCompleted) {
@@ -637,29 +666,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _prefetchQueuedStart = null;
     _prefetchQueuedEnd = null;
     try {
-      final clampedStart = math.max(0, start);
-      final clampedEnd = math.min(data.pages.length - 1, end);
       final api = ref.read(comicRdApiProvider);
-      final keepPages = Uint32List.fromList([
-        for (var index = clampedStart; index <= clampedEnd; index++) index,
-      ]);
-      await api.evictChapterPages(
-        chapterId: widget.chapterId,
-        keepPages: keepPages,
-      );
-      await api.prefetchPages(
-        bridge.PrefetchPagesPayload(
-          chapterId: widget.chapterId,
-          pageIndices: keepPages,
-        ),
-      );
+      var nextStart = start;
+      var nextEnd = end;
+      while (true) {
+        if (!_isReaderCurrent(chapterId, generation)) {
+          return;
+        }
+        final data = ref.read(readerDataProvider(chapterId)).asData?.value;
+        if (data == null || data.pages.isEmpty || nextEnd < nextStart) {
+          return;
+        }
+        final clampedStart = math.max(0, nextStart);
+        final clampedEnd = math.min(data.pages.length - 1, nextEnd);
+        final keepPages = Uint32List.fromList([
+          for (var index = clampedStart; index <= clampedEnd; index++) index,
+        ]);
+        await api.evictChapterPages(chapterId: chapterId, keepPages: keepPages);
+        if (!_isReaderCurrent(chapterId, generation)) {
+          return;
+        }
+        await api.prefetchPages(
+          bridge.PrefetchPagesPayload(
+            chapterId: chapterId,
+            pageIndices: keepPages,
+          ),
+        );
+        if (!_isReaderCurrent(chapterId, generation)) {
+          return;
+        }
+        final queuedStart = _prefetchQueuedStart;
+        final queuedEnd = _prefetchQueuedEnd;
+        _prefetchQueuedStart = null;
+        _prefetchQueuedEnd = null;
+        if (queuedStart == null || queuedEnd == null) {
+          return;
+        }
+        nextStart = queuedStart;
+        nextEnd = queuedEnd;
+      }
     } finally {
       completer.complete();
-    }
-    final queuedStart = _prefetchQueuedStart;
-    final queuedEnd = _prefetchQueuedEnd;
-    if (queuedStart != null && queuedEnd != null && mounted) {
-      await _prefetchWindow(queuedStart, queuedEnd);
+      if (identical(_prefetchQueue, completer)) {
+        _prefetchQueue = null;
+      }
     }
   }
 
@@ -696,13 +746,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _close(ReaderData data) async {
-    await _saveProgressDirect();
+    final chapterId = widget.chapterId;
+    await _saveProgressDirect(chapterId: chapterId, data: data);
     _invalidateProgressProviders(data, onClose: true);
+    ref.invalidate(readerDataProvider(chapterId));
     await _releaseChapterMemory(
-      chapterId: widget.chapterId,
+      chapterId: chapterId,
       pageCount: data.pages.length,
     );
-    ref.invalidate(readerDataProvider(widget.chapterId));
     if (!mounted) {
       return;
     }
@@ -721,13 +772,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _switchChapter(int chapterId) async {
-    await _saveProgressDirect();
-    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
+    final currentChapterId = widget.chapterId;
+    final data =
+        ref.read(readerDataProvider(currentChapterId)).asData?.value ??
+        (_lastReaderChapterId == currentChapterId ? _lastReaderData : null);
+    await _saveProgressDirect(chapterId: currentChapterId, data: data);
+    ref.invalidate(readerDataProvider(currentChapterId));
     await _releaseChapterMemory(
-      chapterId: widget.chapterId,
+      chapterId: currentChapterId,
       pageCount: data?.pages.length,
     );
-    ref.invalidate(readerDataProvider(widget.chapterId));
     if (mounted) {
       context.go('/reader/$chapterId');
     }
@@ -736,13 +790,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _releaseChapterMemory({
     required int chapterId,
     required int? pageCount,
+    bool invalidateRenderedPages = true,
   }) async {
-    if (pageCount != null) {
+    _readerGeneration++;
+    _prefetchQueuedStart = null;
+    _prefetchQueuedEnd = null;
+    final pendingPrefetch = _prefetchQueue;
+    if (invalidateRenderedPages && pageCount != null) {
       _invalidateRenderedPages(chapterId, pageCount);
+    }
+    if (_lastReaderChapterId == chapterId) {
+      _lastReaderData = null;
+      _lastReaderChapterId = null;
     }
     _renderStart = 0;
     _renderEnd = -1;
+    if (pendingPrefetch != null && !pendingPrefetch.isCompleted) {
+      await pendingPrefetch.future;
+    }
     await _api.evictChapterPages(chapterId: chapterId, keepPages: []);
+  }
+
+  bool _isReaderCurrent(int chapterId, int generation) {
+    return mounted &&
+        widget.chapterId == chapterId &&
+        _readerGeneration == generation;
   }
 
   void _invalidateRenderedPages(int chapterId, int pageCount) {
@@ -1325,6 +1397,7 @@ class _ReferencePageIndicator extends StatefulWidget {
 
 class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
   bool _hovered = false;
+  int? _hoveredPage;
 
   @override
   Widget build(BuildContext context) {
@@ -1332,7 +1405,10 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
     final current = widget.currentPage.clamp(0, count - 1);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _hoveredPage = null;
+      }),
       child: _ReaderGlass(
         border: const Border(top: BorderSide(color: Color(0x14ffffff))),
         child: AnimatedContainer(
@@ -1359,31 +1435,64 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                 ),
               ),
               Expanded(
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return GestureDetector(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final hoveredPage = (_hoveredPage ?? current).clamp(
+                      0,
+                      count - 1,
+                    );
+                    return MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      onEnter: (event) => _updateHoveredPage(
+                        event.localPosition.dx,
+                        constraints.maxWidth,
+                        count,
+                      ),
+                      onHover: (event) => _updateHoveredPage(
+                        event.localPosition.dx,
+                        constraints.maxWidth,
+                        count,
+                      ),
+                      child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapDown: (details) {
-                          final segmentWidth = constraints.maxWidth / count;
-                          final index =
-                              (details.localPosition.dx / segmentWidth)
-                                  .floor()
-                                  .clamp(0, count - 1);
-                          widget.onSelected(index);
+                          widget.onSelected(
+                            _pageIndexForDx(
+                              details.localPosition.dx,
+                              constraints.maxWidth,
+                              count,
+                            ),
+                          );
                         },
-                        child: CustomPaint(
-                          size: Size(constraints.maxWidth, double.infinity),
-                          painter: _PageIndicatorPainter(
-                            current: current,
-                            pageCount: count,
-                            hovered: _hovered,
-                          ),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _PageIndicatorPainter(
+                                  current: current,
+                                  pageCount: count,
+                                  hovered: _hovered,
+                                ),
+                              ),
+                            ),
+                            if (_hoveredPage != null)
+                              Positioned(
+                                left: _tooltipLeft(
+                                  constraints.maxWidth,
+                                  count,
+                                  hoveredPage,
+                                ),
+                                top: -10,
+                                child: _PageIndicatorTooltip(
+                                  label: '${hoveredPage + 1}',
+                                ),
+                              ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
               AnimatedContainer(
@@ -1401,6 +1510,73 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _updateHoveredPage(double dx, double width, int count) {
+    final page = _pageIndexForDx(dx, width, count);
+    if (_hoveredPage == page) {
+      return;
+    }
+    setState(() => _hoveredPage = page);
+  }
+
+  int _pageIndexForDx(double dx, double width, int count) {
+    if (count <= 1 || width <= 0) {
+      return 0;
+    }
+    final segmentWidth = width / count;
+    return (dx / segmentWidth).floor().clamp(0, count - 1);
+  }
+
+  double _tooltipLeft(double width, int count, int page) {
+    if (count <= 0 || width <= 0) {
+      return 0;
+    }
+    final segmentWidth = width / count;
+    final center = segmentWidth * (page + 0.5);
+    const tooltipWidth = _PageIndicatorTooltip.width;
+    return (center - tooltipWidth / 2).clamp(0, width - tooltipWidth);
+  }
+}
+
+class _PageIndicatorTooltip extends StatelessWidget {
+  const _PageIndicatorTooltip({required this.label});
+
+  static const double width = 40;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xff222831),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: width,
+        height: 22,
+        child: Center(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),

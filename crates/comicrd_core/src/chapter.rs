@@ -455,10 +455,8 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
             child_entries.sort();
 
             for entry in child_entries {
-                if entry.is_file() {
-                    if is_archive(&entry) {
-                        nested_archives.push(entry);
-                    }
+                if entry.is_file() && is_archive(&entry) {
+                    nested_archives.push(entry);
                 }
             }
 
@@ -872,7 +870,6 @@ pub(crate) fn get_chapter_context_conn(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     const VERSION_RAR: &[u8] = &[
         0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00, 0xcf, 0x90, 0x73, 0x00, 0x00, 0x0d, 0x00, 0x00,
