@@ -256,22 +256,28 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                         ),
                         SizedBox(
                           height: 38,
-                          child: Tooltip(
-                            message: preferences.sortDir == bridge.SortDir.asc
-                                ? text.ascending
-                                : text.descending,
-                            child: IconButton(
-                              onPressed: () => _setSort(
-                                preferences.sortBy,
-                                preferences.sortDir == bridge.SortDir.asc
-                                    ? bridge.SortDir.desc
-                                    : bridge.SortDir.asc,
-                              ),
-                              icon: Icon(
-                                preferences.sortDir == bridge.SortDir.asc
-                                    ? FluentIcons.sort_up
-                                    : FluentIcons.sort_down,
-                              ),
+                          child: ToggleButton(
+                            checked: preferences.sortDir == bridge.SortDir.asc,
+                            onChanged: (value) => _setSort(
+                              preferences.sortBy,
+                              value ? bridge.SortDir.asc : bridge.SortDir.desc,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  preferences.sortDir == bridge.SortDir.asc
+                                      ? FluentIcons.sort_up
+                                      : FluentIcons.sort_down,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  preferences.sortDir == bridge.SortDir.asc
+                                      ? text.ascending
+                                      : text.descending,
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -346,6 +352,13 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       'chapter_sort_dir',
       jsonEncode(sortDir == bridge.SortDir.asc ? 'asc' : 'desc'),
     );
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   Future<void> _toggleFavorite(bridge.RawChapter chapter, bool favorite) async {
