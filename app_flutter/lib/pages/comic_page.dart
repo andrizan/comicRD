@@ -254,6 +254,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                             },
                           ),
                         ),
+                        const SizedBox(width: 12),
                         SizedBox(
                           height: 38,
                           child: ToggleButton(
