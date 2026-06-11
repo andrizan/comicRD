@@ -32,6 +32,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   static int _activeInstances = 0;
+  static bool _scrollToBottomOnRestore = false;
   static const double _topPadding = 78;
   static const double _bottomChromeHeight = 48;
   late ScrollController _scroll;
@@ -403,7 +404,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _restoredProgress = true;
     final chapterId = widget.chapterId;
     final generation = _readerGeneration;
-    final page = data.initialPage;
+    final scrollToBottom = _scrollToBottomOnRestore;
+    _scrollToBottomOnRestore = false;
+    final page = scrollToBottom ? data.pages.length - 1 : data.initialPage;
     _currentPage = page;
     _lastSavedPage = page;
     _setRenderWindowAround(page, data.pages.length);
@@ -479,19 +482,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!settings.unlimitedScroll) {
       return;
     }
-    final nextChapterId = data.context?.nextChapterId;
-    if (nextChapterId == null) {
-      return;
-    }
     if (!_scroll.hasClients) {
       return;
     }
     final maxExtent = _scroll.position.maxScrollExtent;
     final currentOffset = _scroll.position.pixels;
     final viewportDimension = _scroll.position.viewportDimension;
-    final isAtEnd = currentOffset >= maxExtent - viewportDimension * 0.1;
-    if (isAtEnd && _currentPage >= data.pages.length - 1) {
-      _switchChapter(nextChapterId);
+
+    // Check for next chapter (scroll to end)
+    final nextChapterId = data.context?.nextChapterId;
+    if (nextChapterId != null) {
+      final isAtEnd = currentOffset >= maxExtent - viewportDimension * 0.1;
+      if (isAtEnd && _currentPage >= data.pages.length - 1) {
+        _switchChapter(nextChapterId);
+        return;
+      }
+    }
+
+    // Check for previous chapter (scroll to beginning)
+    final prevChapterId = data.context?.prevChapterId;
+    if (prevChapterId != null) {
+      final isAtStart = currentOffset <= viewportDimension * 0.1;
+      if (isAtStart && _currentPage <= 0) {
+        _switchChapter(prevChapterId, scrollToBottom: true);
+        return;
+      }
     }
   }
 
@@ -801,7 +816,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  Future<void> _switchChapter(int chapterId) async {
+  Future<void> _switchChapter(
+    int chapterId, {
+    bool scrollToBottom = false,
+  }) async {
+    _scrollToBottomOnRestore = scrollToBottom;
     final currentChapterId = widget.chapterId;
     final data =
         ref.read(readerDataProvider(currentChapterId)).asData?.value ??
