@@ -412,7 +412,8 @@ Memory is bounded around the current viewport:
 
 - Flutter/Riverpod only keeps rendered page providers alive while page widgets
   are built or inside the scroll cache extent
-- Flutter prefetches pages from `current - 2` through `current + 2`
+- Flutter prefetches a small window around the visible pages, from
+  `visibleFirst - 2` through `visibleLast + 2`
 - Flutter asks Rust to evict other raw pages for that chapter
 - Rust caches up to 2 page sources
 - Rust caches up to 6 raw page byte entries
