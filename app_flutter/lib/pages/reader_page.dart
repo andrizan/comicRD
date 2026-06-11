@@ -159,9 +159,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final comicPath = reader.asData?.value.context?.comicSourcePath ?? '';
     final chapterSourcePath =
         reader.asData?.value.context?.chapterSourcePath ?? '';
-    final favorites = ref.watch(chapterFavoritesProvider(comicPath));
+    final favoritePaths = comicPath.isEmpty
+        ? const <String>[]
+        : ref.watch(chapterFavoritesProvider(comicPath)).asData?.value ??
+              const <String>[];
     final isFavorited =
-        favorites.asData?.value.contains(chapterSourcePath) ?? false;
+        chapterSourcePath.isNotEmpty &&
+        favoritePaths.contains(chapterSourcePath);
     return KeyboardListener(
       autofocus: true,
       focusNode: _focusNode,
@@ -488,12 +492,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final maxExtent = _scroll.position.maxScrollExtent;
     final currentOffset = _scroll.position.pixels;
     final viewportDimension = _scroll.position.viewportDimension;
+    final visibleRange = _visiblePageRange(
+      pages: data.pages,
+      zoom: settings.zoom,
+      pageGap: settings.pageGap,
+    );
 
     // Check for next chapter (scroll to end)
     final nextChapterId = data.context?.nextChapterId;
     if (nextChapterId != null) {
       final isAtEnd = currentOffset >= maxExtent - viewportDimension * 0.1;
-      if (isAtEnd && _currentPage >= data.pages.length - 1) {
+      if (isAtEnd && visibleRange.last >= data.pages.length - 1) {
         _switchChapter(nextChapterId);
         return;
       }
@@ -503,7 +512,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final prevChapterId = data.context?.prevChapterId;
     if (prevChapterId != null) {
       final isAtStart = currentOffset <= viewportDimension * 0.1;
-      if (isAtStart && _currentPage <= 0) {
+      if (isAtStart && visibleRange.first <= 0) {
         _switchChapter(prevChapterId, scrollToBottom: true);
         return;
       }

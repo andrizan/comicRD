@@ -37,6 +37,17 @@ verification. Linux packaging is available. The application has been smoke
 tested directly on Windows and Linux. The macOS build target is present, but
 still needs a native macOS smoke test before release claims for that platform.
 
+## Release 1.1.1
+
+This release fixes reader edge cases found after 1.1.0:
+
+- Unlimited scroll now opens the previous chapter correctly when scrolling up at
+  the top of a chapter, including short pages where multiple pages are visible.
+- Reader chapter favorite state no longer queries favorites before the current
+  comic path is available, and favorite toggles use the active chapter path.
+- Regression coverage was added for reader scroll-up navigation and reader
+  favorite toggling.
+
 ## Release 1.1.0
 
 This release focuses on reader memory lifecycle and page navigation polish:
@@ -70,8 +81,8 @@ Download the Linux tarball from GitHub Releases, extract it, and run the bundled
 executable:
 
 ```bash
-tar -xzf comicrd-1.1.0-linux-x86_64.tar.gz
-./comicrd-1.1.0-linux-x86_64/opt/comicrd/ComicRD
+tar -xzf comicrd-1.1.1-linux-x86_64.tar.gz
+./comicrd-1.1.1-linux-x86_64/opt/comicrd/ComicRD
 ```
 
 ### Local Pacman Package
@@ -79,8 +90,8 @@ tar -xzf comicrd-1.1.0-linux-x86_64.tar.gz
 On Arch-based systems, a local install package can be created from source:
 
 ```bash
-./scripts/package-arch-local.sh 1.1.0
-sudo pacman -U dist/arch/comicrd-bin-1.1.0-1-x86_64.pkg.tar.zst
+./scripts/package-arch-local.sh 1.1.1
+sudo pacman -U dist/arch/comicrd-bin-1.1.1-1-x86_64.pkg.tar.zst
 ```
 
 ## Build From Source
@@ -263,15 +274,15 @@ flutter build macos --release
 Create the Linux release tarball used by GitHub Releases and AUR:
 
 ```bash
-./scripts/package-linux.sh 1.1.0
-./scripts/package-linux.sh 1.1.0a1
+./scripts/package-linux.sh 1.1.1
+./scripts/package-linux.sh 1.1.1a1
 ```
 
 The output is written to:
 
 ```text
-dist/comicrd-1.1.0-linux-x86_64.tar.gz
-dist/comicrd-1.1.0a1-linux-x86_64.tar.gz
+dist/comicrd-1.1.1-linux-x86_64.tar.gz
+dist/comicrd-1.1.1a1-linux-x86_64.tar.gz
 ```
 
 ## Repository Layout

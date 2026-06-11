@@ -7,6 +7,7 @@ import 'package:comicrd_flutter/pages/reader_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -279,19 +280,164 @@ void main() {
     expect(prefetchComplete, isNonNegative);
     expect(finalEvict, greaterThan(prefetchComplete));
   });
+
+  testWidgets('unlimited scroll opens previous chapter on top overscroll', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(
+      lastPage: 0,
+      pageCount: 6,
+      pageHeight: 240,
+      prevChapterIds: const {8: 7},
+      unlimitedScroll: true,
+    );
+    final router = GoRouter(
+      initialLocation: '/reader/8',
+      routes: [
+        GoRoute(
+          path: '/reader/:chapterId',
+          builder: (context, state) => ReaderPage(
+            chapterId: int.parse(state.pathParameters['chapterId']!),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: FluentApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(api.loadedChapterIds, contains(8));
+    expect(api.loadedChapterIds, isNot(contains(7)));
+
+    final scrollableCenter = tester.getCenter(find.byType(ListView));
+    tester.binding.handlePointerEvent(
+      PointerScrollEvent(
+        position: scrollableCenter,
+        scrollDelta: const Offset(0, -360),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(api.loadedChapterIds, contains(7));
+  });
+
+  testWidgets(
+    'unlimited scroll opens previous chapter when scrolling up at top',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final api = _ReaderFakeComicRdApi(
+        lastPage: 0,
+        pageCount: 6,
+        pageHeight: 240,
+        prevChapterIds: const {8: 7},
+        unlimitedScroll: true,
+      );
+      final router = GoRouter(
+        initialLocation: '/reader/8',
+        routes: [
+          GoRoute(
+            path: '/reader/:chapterId',
+            builder: (context, state) => ReaderPage(
+              chapterId: int.parse(state.pathParameters['chapterId']!),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [comicRdApiProvider.overrideWithValue(api)],
+          child: FluentApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(api.loadedChapterIds, contains(8));
+      expect(api.loadedChapterIds, isNot(contains(7)));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(api.loadedChapterIds, contains(7));
+    },
+  );
+
+  testWidgets('reader favorite uses the current chapter path', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(lastPage: 0, pageCount: 3);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(api.favoriteListRequests, isNot(contains('')));
+    expect(
+      api.favoriteListRequests,
+      contains('/library/Kaichou wa Maid-sama!'),
+    );
+
+    await tester.tap(find.byIcon(FluentIcons.favorite_star));
+    await tester.pump();
+
+    expect(
+      api.addedChapterFavorites,
+      contains((
+        comicSourcePath: '/library/Kaichou wa Maid-sama!',
+        chapterSourcePath: '/library/Kaichou wa Maid-sama!/Chapter 28',
+      )),
+    );
+  });
 }
 
 class _ReaderFakeComicRdApi extends ComicRdApi {
   _ReaderFakeComicRdApi({
     required this.lastPage,
     required this.pageCount,
+    this.pageHeight = 1300,
     this.nextChapterIds = const {},
+    this.prevChapterIds = const {},
+    this.unlimitedScroll = false,
     this.prefetchGate,
   });
 
   final int lastPage;
   final int pageCount;
+  final int pageHeight;
   final Map<int, int> nextChapterIds;
+  final Map<int, int> prevChapterIds;
+  final bool unlimitedScroll;
   final Completer<void>? prefetchGate;
   final renderedPageIndices = <int>[];
   final prefetchedWindows = <List<int>>[];
@@ -299,16 +445,25 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   final savedProgress = <bridge.SaveProgressPayload>[];
   final loadedChapterIds = <int>[];
   final events = <String>[];
+  final favoriteListRequests = <String>[];
+  final favoriteChapterPaths = <String>{};
+  final addedChapterFavorites =
+      <({String comicSourcePath, String chapterSourcePath})>[];
+  final removedChapterFavorites = <String>[];
   bool _prefetchGateUsed = false;
   int loadedPageEntries = 0;
 
   @override
   Future<List<bridge.SettingEntry>> listSettings() async {
-    return const [
-      bridge.SettingEntry(key: 'default_zoom', valueJson: '1'),
-      bridge.SettingEntry(key: 'page_gap', valueJson: '10'),
-      bridge.SettingEntry(key: 'app_theme', valueJson: '"dark"'),
-      bridge.SettingEntry(key: 'app_locale', valueJson: '"en"'),
+    return [
+      const bridge.SettingEntry(key: 'default_zoom', valueJson: '1'),
+      const bridge.SettingEntry(key: 'page_gap', valueJson: '10'),
+      bridge.SettingEntry(
+        key: 'unlimited_scroll',
+        valueJson: unlimitedScroll.toString(),
+      ),
+      const bridge.SettingEntry(key: 'app_theme', valueJson: '"dark"'),
+      const bridge.SettingEntry(key: 'app_locale', valueJson: '"en"'),
     ];
   }
 
@@ -324,6 +479,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       chapterIndex: 28,
       chapterPosition: 28,
       chapterTotal: 33,
+      prevChapterId: prevChapterIds[chapterId],
       nextChapterId: nextChapterIds[chapterId],
     );
   }
@@ -337,7 +493,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
           index: index,
           name: '${index + 1}.png',
           width: 900,
-          height: 1300,
+          height: pageHeight,
         ),
     ];
     loadedPageEntries = pages.length;
@@ -391,6 +547,31 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   @override
   Future<void> saveProgress(bridge.SaveProgressPayload payload) async {
     savedProgress.add(payload);
+  }
+
+  @override
+  Future<List<String>> listChapterFavorites(String comicSourcePath) async {
+    favoriteListRequests.add(comicSourcePath);
+    return favoriteChapterPaths.toList();
+  }
+
+  @override
+  Future<int> addChapterFavorite({
+    required String chapterSourcePath,
+    required String comicSourcePath,
+  }) async {
+    addedChapterFavorites.add((
+      comicSourcePath: comicSourcePath,
+      chapterSourcePath: chapterSourcePath,
+    ));
+    favoriteChapterPaths.add(chapterSourcePath);
+    return addedChapterFavorites.length;
+  }
+
+  @override
+  Future<void> removeChapterFavorite(String chapterSourcePath) async {
+    removedChapterFavorites.add(chapterSourcePath);
+    favoriteChapterPaths.remove(chapterSourcePath);
   }
 }
 
