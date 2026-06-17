@@ -79,10 +79,16 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
       next.whenData((values) {
-        ref.read(appSettingsProvider.notifier).hydrateFromSettings(values);
-        ref
-            .read(libraryPreferencesProvider.notifier)
-            .hydrateFromSettings(values);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          ref.read(appSettingsProvider.notifier).hydrateFromSettings(values);
+          ref
+              .read(libraryPreferencesProvider.notifier)
+              .hydrateFromSettings(values);
+          ref.read(readerSettingsProvider.notifier).hydrateFromSettings(values);
+        });
       });
     });
     final settings = ref.watch(appSettingsProvider);

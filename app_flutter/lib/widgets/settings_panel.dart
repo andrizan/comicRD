@@ -161,6 +161,24 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         .setPageGap(value),
                   ),
                 ),
+                const SizedBox(height: 12),
+                ToggleSwitch(
+                  checked: readerSettings.unlimitedScroll,
+                  content: Text(text.unlimitedScroll),
+                  onChanged: (value) => ref
+                      .read(readerSettingsProvider.notifier)
+                      .setUnlimitedScroll(value),
+                ),
+                const SizedBox(height: 8),
+                ToggleSwitch(
+                  checked: readerSettings.unlimitedScrollUp,
+                  content: Text(text.unlimitedScrollUp),
+                  onChanged: readerSettings.unlimitedScroll
+                      ? (value) => ref
+                            .read(readerSettingsProvider.notifier)
+                            .setUnlimitedScrollUp(value)
+                      : null,
+                ),
                 const SizedBox(height: 16),
                 _sectionHeader(text.applicationSection),
                 Row(
@@ -240,7 +258,13 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                                   children: [
                                     const Text('🇺🇸'),
                                     const SizedBox(width: 8),
-                                    Text(text.english),
+                                    Expanded(
+                                      child: Text(
+                                        text.english,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -250,7 +274,13 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                                   children: [
                                     const Text('🇮🇩'),
                                     const SizedBox(width: 8),
-                                    Text(text.indonesian),
+                                    Expanded(
+                                      child: Text(
+                                        text.indonesian,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -277,7 +307,9 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                 ),
                 const SizedBox(height: 16),
                 _sectionHeader(text.backupSection),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     FilledButton(
                       onPressed: _exportBackup,
@@ -290,7 +322,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
                     Button(
                       onPressed: _importBackup,
                       child: Row(
@@ -371,9 +402,6 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     _themeMode = appSettings.themeMode;
     _locale = appSettings.localeCode;
     _initialized = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(readerSettingsProvider.notifier).hydrateFromSettings(values);
-    });
   }
 
   String _decodeString(String? raw, String fallback) {

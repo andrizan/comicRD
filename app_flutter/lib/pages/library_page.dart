@@ -11,9 +11,9 @@ import '../routes/path_codec.dart';
 import '../state/api_state.dart';
 import '../state/library_state.dart';
 import '../state/scroll_state.dart';
-import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
 import '../utils/date_format.dart';
+import '../widgets/back_to_top_button.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -23,6 +23,7 @@ class LibraryPage extends ConsumerStatefulWidget {
 }
 
 class _LibraryPageState extends ConsumerState<LibraryPage> {
+  static const double _backToTopThreshold = 320;
   late final ScrollController _historyScroll;
   late final ScrollController _libraryScroll;
   late final ScrollController _bookmarksScroll;
@@ -31,6 +32,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
   bool _refreshedOnMount = false;
+  bool _showBackToTop = false;
 
   @override
   void initState() {
@@ -51,7 +53,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     super.didChangeDependencies();
     if (!_refreshedOnMount) {
       _refreshedOnMount = true;
-      Future.microtask(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           // ignore: unused_result
           ref.refresh(rawLibraryComicsProvider.future);
@@ -84,7 +86,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final controller = ScrollController(
       initialScrollOffset: savedOffset > 0 ? savedOffset : 0,
     );
-    controller.addListener(() => _saveScrollOffset(key, controller));
+    controller.addListener(() {
+      _saveScrollOffset(key, controller);
+      if (identical(controller, _activeScrollController())) {
+        _updateBackToTopVisibility(controller);
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (controller.hasClients) {
         final maxExtent = controller.position.maxScrollExtent;
@@ -117,6 +124,28 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     };
   }
 
+  void _updateBackToTopVisibility(ScrollController controller) {
+    if (!mounted || !controller.hasClients) {
+      return;
+    }
+    final next = controller.offset > _backToTopThreshold;
+    if (next != _showBackToTop) {
+      setState(() => _showBackToTop = next);
+    }
+  }
+
+  void _scrollActiveToTop() {
+    final controller = _activeScrollController();
+    if (!controller.hasClients) {
+      return;
+    }
+    controller.animateTo(
+      0,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   void _handleKey(LogicalKeyboardKey key) {
     if (key == LogicalKeyboardKey.arrowDown) {
       _scrollBy(300);
@@ -141,12 +170,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
-      next.whenData(
-        ref.read(libraryPreferencesProvider.notifier).hydrateFromSettings,
-      );
-    });
-
     final text = stringsFor(ref.watch(appSettingsProvider).localeCode);
     final preferences = ref.watch(libraryPreferencesProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
@@ -158,6 +181,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             .map((bookmark) => bookmark.comicSourcePath)
             .toSet() ??
         const <String>{};
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateBackToTopVisibility(_activeScrollController());
+      }
+    });
     return KeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
@@ -385,36 +413,54 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               loading: () => const SizedBox.shrink(),
             ),
             Expanded(
-              child: switch (preferences.selectedTab) {
-                LibraryTab.history => _HistoryList(
-                  history: history,
-                  displayMode: preferences.displayMode,
-                  controller: _historyScroll,
-                  emptyLabel: text.emptyLibrary,
-                ),
-                LibraryTab.library => _ComicList(
-                  text: text,
-                  comics: comicsState.items,
-                  visibleCount: comicsState.visibleCount,
-                  hasMore: comicsState.hasMore,
-                  onLoadMore: () =>
-                      ref.read(libraryPaginationProvider.notifier).loadMore(),
-                  displayMode: preferences.displayMode,
-                  bookmarkedPaths: bookmarkedPaths,
-                  controller: _libraryScroll,
-                  emptyLabel: text.emptyLibrary,
-                  onToggleBookmark: _toggleComicBookmark,
-                  onCopyTitle: _copyComicTitle,
-                  onCopyPath: _copyComicPath,
-                  onOpenFolder: _openContainingFolder,
-                ),
-                LibraryTab.bookmarks => _BookmarkList(
-                  bookmarks: bookmarks,
-                  displayMode: preferences.displayMode,
-                  controller: _bookmarksScroll,
-                  emptyLabel: text.emptyLibrary,
-                ),
-              },
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: switch (preferences.selectedTab) {
+                      LibraryTab.history => _HistoryList(
+                        history: history,
+                        displayMode: preferences.displayMode,
+                        controller: _historyScroll,
+                        emptyLabel: text.emptyLibrary,
+                      ),
+                      LibraryTab.library => _ComicList(
+                        text: text,
+                        comics: comicsState.items,
+                        visibleCount: comicsState.visibleCount,
+                        hasMore: comicsState.hasMore,
+                        onLoadMore: () => ref
+                            .read(libraryPaginationProvider.notifier)
+                            .loadMore(),
+                        displayMode: preferences.displayMode,
+                        bookmarkedPaths: bookmarkedPaths,
+                        controller: _libraryScroll,
+                        emptyLabel: text.emptyLibrary,
+                        onToggleBookmark: _toggleComicBookmark,
+                        onCopyTitle: _copyComicTitle,
+                        onCopyPath: _copyComicPath,
+                        onOpenFolder: _openContainingFolder,
+                      ),
+                      LibraryTab.bookmarks => _BookmarkList(
+                        bookmarks: bookmarks,
+                        displayMode: preferences.displayMode,
+                        controller: _bookmarksScroll,
+                        emptyLabel: text.emptyLibrary,
+                      ),
+                    },
+                  ),
+                  if (_showBackToTop)
+                    Positioned(
+                      right: 24,
+                      bottom: 24,
+                      child: BackToTopButton(
+                        key: const ValueKey('library-back-to-top-button'),
+                        visible: true,
+                        tooltip: text.backToTop,
+                        onPressed: _scrollActiveToTop,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ],
         ),

@@ -43,6 +43,48 @@ void main() {
     expect(tester.getTopLeft(find.text('Chapter 30')).dy, lessThan(380));
     expect(find.text('Chapter 19'), findsNothing);
   });
+
+  testWidgets('chapter back-to-top button returns the chapter list to top', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    const comicPath = '/library/Demo Comic';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          comicRdApiProvider.overrideWithValue(const _ManyChaptersApi()),
+        ],
+        child: const FluentApp(home: ComicPage(comicPath: comicPath)),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.byKey(const ValueKey('chapter-back-to-top-button')),
+      findsNothing,
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('chapter-back-to-top-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('chapter-back-to-top-button')));
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+
+    expect(find.text('Chapter 1'), findsOneWidget);
+  });
 }
 
 class _ManyChaptersApi extends ComicRdApi {

@@ -22,6 +22,14 @@ fn open_creates_database_and_seeds_compatible_default_settings() {
     assert_eq!(pairs.get("default_zoom").map(String::as_str), Some("1"));
     assert_eq!(pairs.get("page_gap").map(String::as_str), Some("10"));
     assert_eq!(
+        pairs.get("unlimited_scroll").map(String::as_str),
+        Some("false")
+    );
+    assert_eq!(
+        pairs.get("unlimited_scroll_up").map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(
         pairs.get("library_sort_by").map(String::as_str),
         Some("\"name\"")
     );

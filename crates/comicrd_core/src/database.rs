@@ -223,6 +223,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         ("arrow_navigation_enabled", "false"),
         ("default_zoom", "1"),
         ("page_gap", "10"),
+        ("unlimited_scroll", "false"),
+        ("unlimited_scroll_up", "true"),
         ("library_sort_by", "\"name\""),
         ("library_sort_dir", "\"asc\""),
         ("library_view_mode", "\"library\""),

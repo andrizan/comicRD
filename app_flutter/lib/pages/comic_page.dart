@@ -14,6 +14,7 @@ import '../state/scroll_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
 import '../utils/date_format.dart';
+import '../widgets/back_to_top_button.dart';
 
 class ComicPage extends ConsumerStatefulWidget {
   const ComicPage({super.key, required this.comicPath});
@@ -25,12 +26,14 @@ class ComicPage extends ConsumerStatefulWidget {
 }
 
 class _ComicPageState extends ConsumerState<ComicPage> {
+  static const double _backToTopThreshold = 320;
   late final ScrollController _scroll;
   late final TextEditingController _search;
   late final FocusNode _focusNode;
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lastAutoScrollSignature;
+  bool _showBackToTop = false;
 
   @override
   void initState() {
@@ -55,6 +58,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     if (!_scroll.hasClients) {
       return;
     }
+    _updateBackToTopVisibility();
     final now = DateTime.now();
     if (now.difference(_lastScrollSave).inMilliseconds < 200) {
       return;
@@ -80,11 +84,16 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
-      next.whenData(
-        (values) => ref
-            .read(comicPreferencesProvider.notifier)
-            .hydrateFromSettings(widget.comicPath, values),
-      );
+      next.whenData((values) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          ref
+              .read(comicPreferencesProvider.notifier)
+              .hydrateFromSettings(widget.comicPath, values);
+        });
+      });
     });
 
     final text = stringsFor(ref.watch(appSettingsProvider).localeCode);
@@ -97,6 +106,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     final favorites = ref.watch(chapterFavoritesProvider(widget.comicPath));
     final favoritePaths = favorites.asData?.value.toSet() ?? const <String>{};
     final title = widget.comicPath.split(RegExp(r'[/\\]')).last;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateBackToTopVisibility();
+    });
 
     ref.listen(lastOpenedChapterProvider, (prev, next) {
       final prevChapter = prev?[widget.comicPath];
@@ -304,34 +316,51 @@ class _ComicPageState extends ConsumerState<ComicPage> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: chapters.when(
-                data: (items) {
-                  _restoreLastOpenedChapter();
-                  return _ChapterList(
-                    text: text,
-                    chapters: items,
-                    favorites: favoritePaths,
-                    displayMode: preferences.displayMode,
-                    controller: _scroll,
-                    emptyLabel: text.emptyLibrary,
-                    onOpen: _openChapter,
-                    onToggleFavorite: _toggleFavorite,
-                    onOpenFolder: _openChapterFolder,
-                  );
-                },
-                error: (error, _) => Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    error.toString(),
-                    style: TextStyle(
-                      color: FluentTheme.of(context).accentColor,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: chapters.when(
+                      data: (items) {
+                        _restoreLastOpenedChapter();
+                        return _ChapterList(
+                          text: text,
+                          chapters: items,
+                          favorites: favoritePaths,
+                          displayMode: preferences.displayMode,
+                          controller: _scroll,
+                          emptyLabel: text.emptyLibrary,
+                          onOpen: _openChapter,
+                          onToggleFavorite: _toggleFavorite,
+                          onOpenFolder: _openChapterFolder,
+                        );
+                      },
+                      error: (error, _) => Align(
+                        alignment: Alignment.center,
+                        child: Text(
+                          error.toString(),
+                          style: TextStyle(
+                            color: FluentTheme.of(context).accentColor,
+                          ),
+                        ),
+                      ),
+                      loading: () => const Align(
+                        alignment: Alignment.center,
+                        child: ProgressRing(),
+                      ),
                     ),
                   ),
-                ),
-                loading: () => const Align(
-                  alignment: Alignment.center,
-                  child: ProgressRing(),
-                ),
+                  if (_showBackToTop)
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: BackToTopButton(
+                        key: const ValueKey('chapter-back-to-top-button'),
+                        visible: true,
+                        tooltip: text.backToTop,
+                        onPressed: _scrollToTop,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -387,6 +416,23 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  void _scrollToTop() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(
+      0,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _updateBackToTopVisibility() {
+    if (!mounted || !_scroll.hasClients) return;
+    final showBackToTop = _scroll.offset > _backToTopThreshold;
+    if (showBackToTop != _showBackToTop) {
+      setState(() => _showBackToTop = showBackToTop);
+    }
   }
 
   Future<void> _openChapter(bridge.RawChapter chapter) async {

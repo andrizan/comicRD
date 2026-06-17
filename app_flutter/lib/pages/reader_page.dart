@@ -149,7 +149,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
       next.whenData((values) {
-        ref.read(readerSettingsProvider.notifier).hydrateFromSettings(values);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          ref.read(readerSettingsProvider.notifier).hydrateFromSettings(values);
+        });
       });
     });
     final readerSettings = ref.watch(readerSettingsProvider);
@@ -510,7 +515,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     // Check for previous chapter (scroll to beginning)
     final prevChapterId = data.context?.prevChapterId;
-    if (prevChapterId != null) {
+    if (prevChapterId != null && settings.unlimitedScrollUp) {
       final isAtStart = currentOffset <= viewportDimension * 0.1;
       if (isAtStart && visibleRange.first <= 0) {
         _switchChapter(prevChapterId, scrollToBottom: true);

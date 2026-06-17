@@ -95,20 +95,24 @@ class ReaderSettings {
     this.zoom = 1.0,
     this.pageGap = 20.0,
     this.unlimitedScroll = false,
+    this.unlimitedScrollUp = true,
   });
 
   final double zoom;
   final double pageGap;
   final bool unlimitedScroll;
+  final bool unlimitedScrollUp;
 
   ReaderSettings copyWith({
     double? zoom,
     double? pageGap,
     bool? unlimitedScroll,
+    bool? unlimitedScrollUp,
   }) => ReaderSettings(
     zoom: zoom ?? this.zoom,
     pageGap: pageGap ?? this.pageGap,
     unlimitedScroll: unlimitedScroll ?? this.unlimitedScroll,
+    unlimitedScrollUp: unlimitedScrollUp ?? this.unlimitedScrollUp,
   );
 }
 
@@ -131,6 +135,11 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     _saveToDatabase();
   }
 
+  void setUnlimitedScrollUp(bool value) {
+    state = state.copyWith(unlimitedScrollUp: value);
+    _saveToDatabase();
+  }
+
   void _saveToDatabase() {
     final api = ref.read(comicRdApiProvider);
     unawaited(api.setSetting('default_zoom', state.zoom.toStringAsFixed(1)));
@@ -138,16 +147,21 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     unawaited(
       api.setSetting('unlimited_scroll', state.unlimitedScroll.toString()),
     );
+    unawaited(
+      api.setSetting('unlimited_scroll_up', state.unlimitedScrollUp.toString()),
+    );
   }
 
   void hydrateFromSettings(Map<String, String> values) {
     final zoom = _decodeDouble(values['default_zoom'], 1.0);
     final gap = _decodeDouble(values['page_gap'], 20.0);
     final unlimitedScroll = _decodeBool(values['unlimited_scroll'], false);
+    final unlimitedScrollUp = _decodeBool(values['unlimited_scroll_up'], true);
     state = ReaderSettings(
       zoom: zoom.clamp(0.5, 3.0),
       pageGap: gap.clamp(0, 80),
       unlimitedScroll: unlimitedScroll,
+      unlimitedScrollUp: unlimitedScrollUp,
     );
   }
 
@@ -194,6 +208,7 @@ class AppStrings {
     required this.bookmarks,
     required this.search,
     required this.refresh,
+    required this.backToTop,
     required this.totalComics,
     required this.totalChapters,
     required this.showingComics,
@@ -215,6 +230,7 @@ class AppStrings {
     required this.zoom,
     required this.fullscreen,
     required this.unlimitedScroll,
+    required this.unlimitedScrollUp,
     // Chapter status
     required this.read,
     required this.reading,
@@ -281,6 +297,7 @@ class AppStrings {
   final String bookmarks;
   final String search;
   final String refresh;
+  final String backToTop;
   final String totalComics;
   final String totalChapters;
   final String showingComics;
@@ -302,6 +319,7 @@ class AppStrings {
   final String zoom;
   final String fullscreen;
   final String unlimitedScroll;
+  final String unlimitedScrollUp;
   // Chapter status
   final String read;
   final String reading;
@@ -366,6 +384,7 @@ class AppStrings {
     bookmarks: 'Bookmarks',
     search: 'Search',
     refresh: 'Perbarui',
+    backToTop: 'Back to top',
     totalComics: 'Total comics',
     totalChapters: 'chapters',
     showingComics: 'Showing',
@@ -385,6 +404,7 @@ class AppStrings {
     zoom: 'Zoom',
     fullscreen: 'Fullscreen',
     unlimitedScroll: 'Unlimited Scroll',
+    unlimitedScrollUp: 'Unlimited Scroll Up',
     read: 'Read',
     reading: 'Reading',
     unread: 'Unread',
@@ -445,6 +465,7 @@ class AppStrings {
     bookmarks: 'Bookmark',
     search: 'Cari',
     refresh: 'Refresh',
+    backToTop: 'Kembali ke atas',
     totalComics: 'Total komik',
     totalChapters: 'chapter',
     showingComics: 'Menampilkan',
@@ -464,6 +485,7 @@ class AppStrings {
     zoom: 'Perbesar',
     fullscreen: 'Layar penuh',
     unlimitedScroll: 'Scroll Tanpa Batas',
+    unlimitedScrollUp: 'Scroll Tanpa Batas ke Atas',
     read: 'Dibaca',
     reading: 'Sedang dibaca',
     unread: 'Belum dibaca',

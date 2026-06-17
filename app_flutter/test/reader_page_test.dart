@@ -384,6 +384,54 @@ void main() {
     },
   );
 
+  testWidgets(
+    'unlimited scroll does not open previous chapter when scroll up is disabled',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final api = _ReaderFakeComicRdApi(
+        lastPage: 0,
+        pageCount: 6,
+        pageHeight: 240,
+        prevChapterIds: const {8: 7},
+        unlimitedScroll: true,
+        unlimitedScrollUp: false,
+      );
+      final router = GoRouter(
+        initialLocation: '/reader/8',
+        routes: [
+          GoRoute(
+            path: '/reader/:chapterId',
+            builder: (context, state) => ReaderPage(
+              chapterId: int.parse(state.pathParameters['chapterId']!),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [comicRdApiProvider.overrideWithValue(api)],
+          child: FluentApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(api.loadedChapterIds, contains(8));
+      expect(api.loadedChapterIds, isNot(contains(7)));
+    },
+  );
+
   testWidgets('reader favorite uses the current chapter path', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1200, 800);
@@ -429,6 +477,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     this.nextChapterIds = const {},
     this.prevChapterIds = const {},
     this.unlimitedScroll = false,
+    this.unlimitedScrollUp = true,
     this.prefetchGate,
   });
 
@@ -438,6 +487,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   final Map<int, int> nextChapterIds;
   final Map<int, int> prevChapterIds;
   final bool unlimitedScroll;
+  final bool unlimitedScrollUp;
   final Completer<void>? prefetchGate;
   final renderedPageIndices = <int>[];
   final prefetchedWindows = <List<int>>[];
@@ -461,6 +511,10 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       bridge.SettingEntry(
         key: 'unlimited_scroll',
         valueJson: unlimitedScroll.toString(),
+      ),
+      bridge.SettingEntry(
+        key: 'unlimited_scroll_up',
+        valueJson: unlimitedScrollUp.toString(),
       ),
       const bridge.SettingEntry(key: 'app_theme', valueJson: '"dark"'),
       const bridge.SettingEntry(key: 'app_locale', valueJson: '"en"'),
