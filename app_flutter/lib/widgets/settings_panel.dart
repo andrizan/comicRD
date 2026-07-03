@@ -127,7 +127,10 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                   ),
                   error: (error, _) => Text(
                     error.toString(),
-                    style: TextStyle(fontSize: 12, color: context.appColors.destructive),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.appColors.destructive,
+                    ),
                   ),
                   loading: () => const FCircularProgress.loader(),
                 ),
@@ -152,9 +155,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                       initial: FSliderValue(max: readerSettings.pageGap / 80),
                       onChange: (value) => ref
                           .read(readerSettingsProvider.notifier)
-                          .setPageGap(
-                            (value.max * 80).clamp(0, 80).toDouble(),
-                          ),
+                          .setPageGap((value.max * 80).clamp(0, 80).toDouble()),
                     ),
                   ),
                 ),
@@ -216,10 +217,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                         text.locale,
                         FSelect<String>(
                           hint: text.locale,
-                          items: {
-                            text.english: 'en',
-                            text.indonesian: 'id',
-                          },
+                          items: {text.english: 'en', text.indonesian: 'id'},
                           control: .managed(
                             initial: _locale,
                             onChange: (value) async {

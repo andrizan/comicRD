@@ -47,7 +47,8 @@ class ComicRdApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsProvider);
-    final isDark = settings.themeMode == ThemeMode.dark ||
+    final isDark =
+        settings.themeMode == ThemeMode.dark ||
         (settings.themeMode == ThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
     final fTheme = isDark ? ComicReaderFTheme.dark : ComicReaderFTheme.light;
@@ -102,37 +103,37 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
       child: ColoredBox(
         color: context.theme.colors.background,
         child: Column(
-        children: [
-          _ShellHeader(
-            text: text,
-            themeMode: settings.themeMode,
-            selectedTab: selectedTab,
-            onSelectTab: (tab) => _setSelectedTab(tab),
-            onThemeChanged: (mode) async {
-              ref.read(appSettingsProvider.notifier).setThemeMode(mode);
-              await ref
-                  .read(comicRdApiProvider)
-                  .setSetting(
-                    'app_theme',
-                    jsonEncode(themeModeToSetting(mode)),
-                  );
-            },
-            onLocaleChanged: (locale) async {
-              ref.read(appSettingsProvider.notifier).setLocale(locale);
-              await ref
-                  .read(comicRdApiProvider)
-                  .setSetting('app_locale', jsonEncode(locale));
-            },
-            onSettingsPressed: () {
-              showFDialog<void>(
-                context: context,
-                builder: (context, style, animation) => const SettingsPanel(),
-              );
-            },
-          ),
-          Expanded(child: widget.child),
-        ],
-      ),
+          children: [
+            _ShellHeader(
+              text: text,
+              themeMode: settings.themeMode,
+              selectedTab: selectedTab,
+              onSelectTab: (tab) => _setSelectedTab(tab),
+              onThemeChanged: (mode) async {
+                ref.read(appSettingsProvider.notifier).setThemeMode(mode);
+                await ref
+                    .read(comicRdApiProvider)
+                    .setSetting(
+                      'app_theme',
+                      jsonEncode(themeModeToSetting(mode)),
+                    );
+              },
+              onLocaleChanged: (locale) async {
+                ref.read(appSettingsProvider.notifier).setLocale(locale);
+                await ref
+                    .read(comicRdApiProvider)
+                    .setSetting('app_locale', jsonEncode(locale));
+              },
+              onSettingsPressed: () {
+                showFDialog<void>(
+                  context: context,
+                  builder: (context, style, animation) => const SettingsPanel(),
+                );
+              },
+            ),
+            Expanded(child: widget.child),
+          ],
+        ),
       ),
     );
   }
@@ -175,9 +176,7 @@ class _ShellHeader extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: context.theme.colors.background,
-        border: Border(
-          bottom: BorderSide(color: context.theme.colors.border),
-        ),
+        border: Border(bottom: BorderSide(color: context.theme.colors.border)),
       ),
       child: SafeArea(
         bottom: false,
@@ -229,10 +228,7 @@ class _ShellHeader extends StatelessWidget {
                 onChanged: onThemeChanged,
               ),
               const SizedBox(width: 8),
-              _LocaleMenuButton(
-                text: text,
-                onChanged: onLocaleChanged,
-              ),
+              _LocaleMenuButton(text: text, onChanged: onLocaleChanged),
               const SizedBox(width: 8),
               FButton.icon(
                 variant: .ghost,
@@ -299,9 +295,7 @@ class _ThemeMenuButton extends StatelessWidget {
             FItem(
               prefix: Icon(
                 AppIcons.monitor,
-                color: themeMode == ThemeMode.system
-                    ? context.appAccent
-                    : null,
+                color: themeMode == ThemeMode.system ? context.appAccent : null,
               ),
               title: Text(text.themeSystem),
               onPress: () => onChanged(ThemeMode.system),
@@ -309,9 +303,7 @@ class _ThemeMenuButton extends StatelessWidget {
             FItem(
               prefix: Icon(
                 AppIcons.sun,
-                color: themeMode == ThemeMode.light
-                    ? context.appAccent
-                    : null,
+                color: themeMode == ThemeMode.light ? context.appAccent : null,
               ),
               title: Text(text.themeLight),
               onPress: () => onChanged(ThemeMode.light),
@@ -319,9 +311,7 @@ class _ThemeMenuButton extends StatelessWidget {
             FItem(
               prefix: Icon(
                 AppIcons.moon,
-                color: themeMode == ThemeMode.dark
-                    ? context.appAccent
-                    : null,
+                color: themeMode == ThemeMode.dark ? context.appAccent : null,
               ),
               title: Text(text.themeDark),
               onPress: () => onChanged(ThemeMode.dark),

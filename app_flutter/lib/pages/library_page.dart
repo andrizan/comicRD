@@ -64,17 +64,16 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       _refreshedOnMount = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ref.listenManual<LibraryComicsState>(
-          libraryComicsProvider,
-          (prev, next) {
-            if (mounted) {
-              setState(() {
-                _comicsState = next;
-              });
-            }
-          },
-          fireImmediately: true,
-        );
+        ref.listenManual<LibraryComicsState>(libraryComicsProvider, (
+          prev,
+          next,
+        ) {
+          if (mounted) {
+            setState(() {
+              _comicsState = next;
+            });
+          }
+        }, fireImmediately: true);
         // ignore: unused_result
         ref.refresh(rawLibraryComicsProvider.future);
         // ignore: unused_result
@@ -236,7 +235,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     hint: text.search,
                     prefixBuilder: (context, style, variants) => Padding(
                       padding: const EdgeInsets.only(left: 12),
-                      child: Icon(AppIcons.search, size: 16, color: context.appMutedText),
+                      child: Icon(
+                        AppIcons.search,
+                        size: 16,
+                        color: context.appMutedText,
+                      ),
                     ),
                   ),
                 ),
@@ -284,18 +287,15 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           variant: .outline,
                           selected:
                               preferences.viewMode == LibraryViewMode.unread,
-                          onPress: () =>
-                              _setViewMode(LibraryViewMode.unread),
+                          onPress: () => _setViewMode(LibraryViewMode.unread),
                           child: Text(text.unread),
                         ),
                         const SizedBox(width: 4),
                         FButton(
                           variant: .outline,
                           selected:
-                              preferences.viewMode ==
-                              LibraryViewMode.reading,
-                          onPress: () =>
-                              _setViewMode(LibraryViewMode.reading),
+                              preferences.viewMode == LibraryViewMode.reading,
+                          onPress: () => _setViewMode(LibraryViewMode.reading),
                           child: Text(text.progress),
                         ),
                         const SizedBox(width: 12),
@@ -726,10 +726,7 @@ class _ComicListItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      comic.title,
-                      style: context.appBodyStrongStyle,
-                    ),
+                    Text(comic.title, style: context.appBodyStrongStyle),
                     Text(
                       comic.sourcePath,
                       maxLines: 1,
@@ -988,11 +985,7 @@ class _BookmarkMarker extends StatelessWidget {
   Widget build(BuildContext context) {
     return FTooltip(
       tipBuilder: (context, _) => Text(text.bookmarks),
-      child: Icon(
-        AppIcons.bookmark,
-        size: 16,
-        color: context.appAccent,
-      ),
+      child: Icon(AppIcons.bookmark, size: 16, color: context.appAccent),
     );
   }
 }
@@ -1026,18 +1019,9 @@ class _ComicActionsButton extends StatelessWidget {
               title: Text(bookmarked ? text.removeBookmark : text.addBookmark),
               onPress: onToggleBookmark,
             ),
-            FItem(
-              title: Text(text.openFolder),
-              onPress: onOpenFolder,
-            ),
-            FItem(
-              title: Text(text.copyTitle),
-              onPress: onCopyTitle,
-            ),
-            FItem(
-              title: Text(text.copyPath),
-              onPress: onCopyPath,
-            ),
+            FItem(title: Text(text.openFolder), onPress: onOpenFolder),
+            FItem(title: Text(text.copyTitle), onPress: onCopyTitle),
+            FItem(title: Text(text.copyPath), onPress: onCopyPath),
           ],
         ),
       ],
@@ -1108,8 +1092,10 @@ class _HistoryList extends StatelessWidget {
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () =>
-          const Align(alignment: Alignment.center, child: FCircularProgress.loader()),
+      loading: () => const Align(
+        alignment: Alignment.center,
+        child: FCircularProgress.loader(),
+      ),
     );
   }
 }
@@ -1142,10 +1128,7 @@ class _HistoryListItem extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(item.comicTitle),
-                    Text(
-                      item.chapterTitle,
-                      style: context.appCaptionStyle,
-                    ),
+                    Text(item.chapterTitle, style: context.appCaptionStyle),
                   ],
                 ),
               ),
@@ -1260,8 +1243,10 @@ class _BookmarkList extends StatelessWidget {
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),
-      loading: () =>
-          const Align(alignment: Alignment.center, child: FCircularProgress.loader()),
+      loading: () => const Align(
+        alignment: Alignment.center,
+        child: FCircularProgress.loader(),
+      ),
     );
   }
 }
@@ -1356,9 +1341,7 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text(label, style: context.appBodyStrongStyle),
-    );
+    return Center(child: Text(label, style: context.appBodyStrongStyle));
   }
 }
 
@@ -1370,10 +1353,7 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text(
-        message,
-        style: TextStyle(color: context.appAccent),
-      ),
+      child: Text(message, style: TextStyle(color: context.appAccent)),
     );
   }
 }

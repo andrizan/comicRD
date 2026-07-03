@@ -38,7 +38,9 @@ class BackToTopButton extends StatelessWidget {
                 border: Border.all(color: context.appBorder),
                 boxShadow: [
                   BoxShadow(
-                    color: context.theme.colors.foreground.withValues(alpha: 0.18),
+                    color: context.theme.colors.foreground.withValues(
+                      alpha: 0.18,
+                    ),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),

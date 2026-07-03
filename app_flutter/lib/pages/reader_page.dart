@@ -332,8 +332,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               style: const TextStyle(color: Colors.white),
             ),
           ),
-          loading: () =>
-              const Align(alignment: Alignment.center, child: FCircularProgress.loader()),
+          loading: () => const Align(
+            alignment: Alignment.center,
+            child: FCircularProgress.loader(),
+          ),
         ),
       ),
     );
@@ -1307,9 +1309,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                     ),
                     _ReferenceReaderIconButton(
                       tooltip: text.fullscreen,
-                      icon: fullscreen
-                          ? AppIcons.minimize
-                          : AppIcons.maximize,
+                      icon: fullscreen ? AppIcons.minimize : AppIcons.maximize,
                       active: fullscreen,
                       onPressed: onToggleFullscreen,
                     ),

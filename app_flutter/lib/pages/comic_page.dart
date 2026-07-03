@@ -179,7 +179,11 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                     hint: text.search,
                     prefixBuilder: (context, style, variants) => Padding(
                       padding: const EdgeInsets.only(left: 12),
-                      child: Icon(AppIcons.search, size: 16, color: context.appMutedText),
+                      child: Icon(
+                        AppIcons.search,
+                        size: 16,
+                        color: context.appMutedText,
+                      ),
                     ),
                   ),
                 ),
@@ -640,9 +644,7 @@ class _ChapterListItem extends StatelessWidget {
           color: states.contains(FTappableVariant.hovered)
               ? context.appSecondarySurface
               : null,
-          border: Border(
-            bottom: BorderSide(color: context.appBorder),
-          ),
+          border: Border(bottom: BorderSide(color: context.appBorder)),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Padding(
@@ -733,9 +735,7 @@ class _ChapterGridTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(
-                    chapter.isRead ? AppIcons.check : AppIcons.read,
-                  ),
+                  Icon(chapter.isRead ? AppIcons.check : AppIcons.read),
                   const Spacer(),
                   FButton.icon(
                     variant: .ghost,

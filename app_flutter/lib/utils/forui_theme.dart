@@ -238,8 +238,7 @@ extension AppThemeContext on BuildContext {
   TextStyle get appTitleStyle => theme.typography.display.lg;
   TextStyle get appSubtitleStyle => theme.typography.display.sm;
   TextStyle get appBodyStyle => theme.typography.body.md;
-  TextStyle get appBodyStrongStyle => theme.typography.body.md.copyWith(
-    fontWeight: FontWeight.w600,
-  );
+  TextStyle get appBodyStrongStyle =>
+      theme.typography.body.md.copyWith(fontWeight: FontWeight.w600);
   TextStyle get appCaptionStyle => theme.typography.body.sm;
 }
