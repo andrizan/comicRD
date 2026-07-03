@@ -1,4 +1,7 @@
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
+
+import '../utils/forui_theme.dart';
 
 class BackToTopButton extends StatelessWidget {
   const BackToTopButton({
@@ -26,20 +29,16 @@ class BackToTopButton extends StatelessWidget {
         curve: Curves.easeOutCubic,
         child: IgnorePointer(
           ignoring: !visible,
-          child: Tooltip(
-            message: tooltip,
+          child: FTooltip(
+            tipBuilder: (context, _) => Text(tooltip),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: FluentTheme.of(context).micaBackgroundColor,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: FluentTheme.of(
-                    context,
-                  ).resources.controlStrokeColorDefault,
-                ),
+                color: context.appSurface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: context.appBorder),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
+                    color: context.theme.colors.foreground.withValues(alpha: 0.18),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -47,9 +46,10 @@ class BackToTopButton extends StatelessWidget {
               ),
               child: SizedBox.square(
                 dimension: _buttonSize,
-                child: IconButton(
-                  onPressed: onPressed,
-                  icon: const Icon(FluentIcons.up, size: 24),
+                child: FButton.icon(
+                  variant: .ghost,
+                  onPress: onPressed,
+                  child: const Icon(AppIcons.arrowUp, size: 24),
                 ),
               ),
             ),

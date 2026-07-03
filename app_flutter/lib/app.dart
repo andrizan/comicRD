@@ -1,8 +1,10 @@
 import 'dart:convert';
 
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'pages/comic_page.dart';
 import 'pages/library_page.dart';
@@ -11,6 +13,7 @@ import 'state/api_state.dart';
 import 'state/library_state.dart';
 import 'state/settings_data_state.dart';
 import 'state/settings_state.dart';
+import 'utils/forui_theme.dart';
 import 'widgets/settings_panel.dart';
 
 final _router = GoRouter(
@@ -44,23 +47,23 @@ class ComicRdApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsProvider);
-    return FluentApp.router(
+    final isDark = settings.themeMode == ThemeMode.dark ||
+        (settings.themeMode == ThemeMode.system &&
+            MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+    final fTheme = isDark ? ComicReaderFTheme.dark : ComicReaderFTheme.light;
+    return MaterialApp.router(
       title: stringsFor(settings.localeCode).appName,
       debugShowCheckedModeBanner: false,
       locale: const Locale('en'),
       supportedLocales: const [Locale('en')],
       themeMode: settings.themeMode,
-      theme: FluentThemeData(
-        brightness: Brightness.light,
-        accentColor: Colors.blue,
-        fontFamily: 'DM Sans',
-      ),
-      darkTheme: FluentThemeData(
-        brightness: Brightness.dark,
-        accentColor: Colors.blue,
-        fontFamily: 'DM Sans',
-      ),
+      theme: ComicReaderFTheme.light.toApproximateMaterialTheme(),
+      darkTheme: ComicReaderFTheme.dark.toApproximateMaterialTheme(),
       routerConfig: _router,
+      builder: (context, child) => FTheme(
+        data: fTheme,
+        child: FToaster(child: FTooltipGroup(child: child!)),
+      ),
     );
   }
 }
@@ -94,165 +97,42 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
     final settings = ref.watch(appSettingsProvider);
     final libraryPreferences = ref.watch(libraryPreferencesProvider);
     final text = stringsFor(settings.localeCode);
-    return NavigationView(
-      titleBar: TitleBar(
-        isBackButtonVisible: false,
-        title: Text(
-          text.appName,
-          style: const TextStyle(
-            fontFamily: 'Syne',
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        endHeader: Row(
-          children: [
-            Tooltip(
-              message: text.theme,
-              child: DropDownButton(
-                title: Icon(
-                  settings.themeMode == ThemeMode.dark
-                      ? FluentIcons.clear_night
-                      : settings.themeMode == ThemeMode.light
-                      ? FluentIcons.sunny
-                      : FluentIcons.screen,
-                ),
-                items: [
-                  MenuFlyoutItem(
-                    text: Text(text.themeSystem),
-                    leading: Icon(
-                      FluentIcons.screen,
-                      color: settings.themeMode == ThemeMode.system
-                          ? FluentTheme.of(context).accentColor
-                          : null,
-                    ),
-                    onPressed: () async {
-                      ref
-                          .read(appSettingsProvider.notifier)
-                          .setThemeMode(ThemeMode.system);
-                      await ref
-                          .read(comicRdApiProvider)
-                          .setSetting(
-                            'app_theme',
-                            jsonEncode(themeModeToSetting(ThemeMode.system)),
-                          );
-                    },
-                  ),
-                  MenuFlyoutItem(
-                    text: Text(text.themeLight),
-                    leading: Icon(
-                      FluentIcons.sunny,
-                      color: settings.themeMode == ThemeMode.light
-                          ? FluentTheme.of(context).accentColor
-                          : null,
-                    ),
-                    onPressed: () async {
-                      ref
-                          .read(appSettingsProvider.notifier)
-                          .setThemeMode(ThemeMode.light);
-                      await ref
-                          .read(comicRdApiProvider)
-                          .setSetting(
-                            'app_theme',
-                            jsonEncode(themeModeToSetting(ThemeMode.light)),
-                          );
-                    },
-                  ),
-                  MenuFlyoutItem(
-                    text: Text(text.themeDark),
-                    leading: Icon(
-                      FluentIcons.clear_night,
-                      color: settings.themeMode == ThemeMode.dark
-                          ? FluentTheme.of(context).accentColor
-                          : null,
-                    ),
-                    onPressed: () async {
-                      ref
-                          .read(appSettingsProvider.notifier)
-                          .setThemeMode(ThemeMode.dark);
-                      await ref
-                          .read(comicRdApiProvider)
-                          .setSetting(
-                            'app_theme',
-                            jsonEncode(themeModeToSetting(ThemeMode.dark)),
-                          );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Tooltip(
-              message: text.locale,
-              child: DropDownButton(
-                title: const Icon(FluentIcons.locale_language),
-                items: [
-                  MenuFlyoutItem(
-                    text: Text(text.english),
-                    leading: Text(
-                      '🇺🇸',
-                      style: FluentTheme.of(context).typography.body,
-                    ),
-                    onPressed: () async {
-                      ref.read(appSettingsProvider.notifier).setLocale('en');
-                      await ref
-                          .read(comicRdApiProvider)
-                          .setSetting('app_locale', jsonEncode('en'));
-                    },
-                  ),
-                  MenuFlyoutItem(
-                    text: Text(text.indonesian),
-                    leading: Text(
-                      '🇮🇩',
-                      style: FluentTheme.of(context).typography.body,
-                    ),
-                    onPressed: () async {
-                      ref.read(appSettingsProvider.notifier).setLocale('id');
-                      await ref
-                          .read(comicRdApiProvider)
-                          .setSetting('app_locale', jsonEncode('id'));
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Tooltip(
-              message: text.settings,
-              child: IconButton(
-                icon: const Icon(FluentIcons.settings),
-                onPressed: () {
-                  showDialog<void>(
-                    context: context,
-                    builder: (_) => const SettingsPanel(),
+    final selectedTab = libraryPreferences.selectedTab;
+    return DragToMoveArea(
+      child: ColoredBox(
+        color: context.theme.colors.background,
+        child: Column(
+        children: [
+          _ShellHeader(
+            text: text,
+            themeMode: settings.themeMode,
+            selectedTab: selectedTab,
+            onSelectTab: (tab) => _setSelectedTab(tab),
+            onThemeChanged: (mode) async {
+              ref.read(appSettingsProvider.notifier).setThemeMode(mode);
+              await ref
+                  .read(comicRdApiProvider)
+                  .setSetting(
+                    'app_theme',
+                    jsonEncode(themeModeToSetting(mode)),
                   );
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-      ),
-      pane: NavigationPane(
-        selected: _paneIndexForTab(libraryPreferences.selectedTab),
-        onChanged: (index) => _setSelectedTab(_tabForPaneIndex(index)),
-        displayMode: PaneDisplayMode.top,
-        items: [
-          PaneItem(
-            icon: const Icon(FluentIcons.library),
-            title: Text(text.library),
-            body: widget.child,
+            },
+            onLocaleChanged: (locale) async {
+              ref.read(appSettingsProvider.notifier).setLocale(locale);
+              await ref
+                  .read(comicRdApiProvider)
+                  .setSetting('app_locale', jsonEncode(locale));
+            },
+            onSettingsPressed: () {
+              showFDialog<void>(
+                context: context,
+                builder: (context, style, animation) => const SettingsPanel(),
+              );
+            },
           ),
-          PaneItem(
-            icon: const Icon(FluentIcons.history),
-            title: Text(text.history),
-            body: widget.child,
-          ),
-          PaneItem(
-            icon: const Icon(FluentIcons.single_bookmark_solid),
-            title: Text(text.bookmarks),
-            body: widget.child,
-          ),
+          Expanded(child: widget.child),
         ],
+      ),
       ),
     );
   }
@@ -271,18 +151,225 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
   }
 }
 
-int _paneIndexForTab(LibraryTab tab) {
-  return switch (tab) {
-    LibraryTab.library => 0,
-    LibraryTab.history => 1,
-    LibraryTab.bookmarks => 2,
-  };
+class _ShellHeader extends StatelessWidget {
+  const _ShellHeader({
+    required this.text,
+    required this.themeMode,
+    required this.selectedTab,
+    required this.onSelectTab,
+    required this.onThemeChanged,
+    required this.onLocaleChanged,
+    required this.onSettingsPressed,
+  });
+
+  final AppStrings text;
+  final ThemeMode themeMode;
+  final LibraryTab selectedTab;
+  final ValueChanged<LibraryTab> onSelectTab;
+  final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onLocaleChanged;
+  final VoidCallback onSettingsPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.theme.colors.background,
+        border: Border(
+          bottom: BorderSide(color: context.theme.colors.border),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
+          child: Row(
+            children: [
+              Text(
+                text.appName,
+                style: const TextStyle(
+                  fontFamily: appFontFamily,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 20,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _NavButton(
+                      icon: AppIcons.library,
+                      label: text.library,
+                      selected: selectedTab == LibraryTab.library,
+                      onPressed: () => onSelectTab(LibraryTab.library),
+                    ),
+                    const SizedBox(width: 4),
+                    _NavButton(
+                      icon: AppIcons.history,
+                      label: text.history,
+                      selected: selectedTab == LibraryTab.history,
+                      onPressed: () => onSelectTab(LibraryTab.history),
+                    ),
+                    const SizedBox(width: 4),
+                    _NavButton(
+                      icon: AppIcons.bookmark,
+                      label: text.bookmarks,
+                      selected: selectedTab == LibraryTab.bookmarks,
+                      onPressed: () => onSelectTab(LibraryTab.bookmarks),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _ThemeMenuButton(
+                text: text,
+                themeMode: themeMode,
+                onChanged: onThemeChanged,
+              ),
+              const SizedBox(width: 8),
+              _LocaleMenuButton(
+                text: text,
+                onChanged: onLocaleChanged,
+              ),
+              const SizedBox(width: 8),
+              FButton.icon(
+                variant: .ghost,
+                onPress: onSettingsPressed,
+                child: const Icon(AppIcons.settings),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-LibraryTab _tabForPaneIndex(int index) {
-  return switch (index) {
-    1 => LibraryTab.history,
-    2 => LibraryTab.bookmarks,
-    _ => LibraryTab.library,
-  };
+class _NavButton extends StatelessWidget {
+  const _NavButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FButton(
+      variant: .ghost,
+      selected: selected,
+      onPress: onPressed,
+      prefix: Icon(icon),
+      child: Text(label),
+    );
+  }
+}
+
+class _ThemeMenuButton extends StatelessWidget {
+  const _ThemeMenuButton({
+    required this.text,
+    required this.themeMode,
+    required this.onChanged,
+  });
+
+  final AppStrings text;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (themeMode) {
+      ThemeMode.dark => AppIcons.moon,
+      ThemeMode.light => AppIcons.sun,
+      ThemeMode.system => AppIcons.monitor,
+    };
+    return FPopoverMenu(
+      menuAnchor: .bottomEnd,
+      childAnchor: .topEnd,
+      menu: [
+        FItemGroup(
+          children: [
+            FItem(
+              prefix: Icon(
+                AppIcons.monitor,
+                color: themeMode == ThemeMode.system
+                    ? context.appAccent
+                    : null,
+              ),
+              title: Text(text.themeSystem),
+              onPress: () => onChanged(ThemeMode.system),
+            ),
+            FItem(
+              prefix: Icon(
+                AppIcons.sun,
+                color: themeMode == ThemeMode.light
+                    ? context.appAccent
+                    : null,
+              ),
+              title: Text(text.themeLight),
+              onPress: () => onChanged(ThemeMode.light),
+            ),
+            FItem(
+              prefix: Icon(
+                AppIcons.moon,
+                color: themeMode == ThemeMode.dark
+                    ? context.appAccent
+                    : null,
+              ),
+              title: Text(text.themeDark),
+              onPress: () => onChanged(ThemeMode.dark),
+            ),
+          ],
+        ),
+      ],
+      builder: (_, controller, _) => FButton.icon(
+        variant: .ghost,
+        onPress: controller.toggle,
+        child: Icon(icon),
+      ),
+    );
+  }
+}
+
+class _LocaleMenuButton extends StatelessWidget {
+  const _LocaleMenuButton({required this.text, required this.onChanged});
+
+  final AppStrings text;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return FPopoverMenu(
+      menuAnchor: .bottomEnd,
+      childAnchor: .topEnd,
+      menu: [
+        FItemGroup(
+          children: [
+            FItem(
+              prefix: const Text('🇺🇸'),
+              title: Text(text.english),
+              onPress: () => onChanged('en'),
+            ),
+            FItem(
+              prefix: const Text('🇮🇩'),
+              title: Text(text.indonesian),
+              onPress: () => onChanged('id'),
+            ),
+          ],
+        ),
+      ],
+      builder: (_, controller, _) => FButton.icon(
+        variant: .ghost,
+        onPress: controller.toggle,
+        child: const Icon(AppIcons.languages),
+      ),
+    );
+  }
 }

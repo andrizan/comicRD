@@ -3,9 +3,10 @@ import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/comic_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:forui/forui.dart';
 
 void main() {
   testWidgets('scrolls the chapter list to the last opened chapter on load', (
@@ -31,7 +32,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const FluentApp(home: ComicPage(comicPath: comicPath)),
+        child: const _ForuiHost(child: ComicPage(comicPath: comicPath)),
       ),
     );
 
@@ -59,7 +60,7 @@ void main() {
         overrides: [
           comicRdApiProvider.overrideWithValue(const _ManyChaptersApi()),
         ],
-        child: const FluentApp(home: ComicPage(comicPath: comicPath)),
+        child: const _ForuiHost(child: ComicPage(comicPath: comicPath)),
       ),
     );
 
@@ -72,7 +73,10 @@ void main() {
       findsNothing,
     );
 
-    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.drag(
+      find.byType(Scrollable).last,
+      const Offset(0, -900),
+    );
     await tester.pumpAndSettle();
 
     expect(
@@ -85,6 +89,25 @@ void main() {
 
     expect(find.text('Chapter 1'), findsOneWidget);
   });
+}
+
+class _ForuiHost extends StatelessWidget {
+  const _ForuiHost({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: FTheme(
+        data: FThemes.zinc.light.desktop,
+        child: FToaster(
+          child: FTooltipGroup(
+            child: Scaffold(body: child),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ManyChaptersApi extends ComicRdApi {

@@ -6,14 +6,28 @@ import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/reader_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  Widget wrap(Widget child, {GoRouter? router}) {
+    final core = router == null
+        ? MaterialApp(home: child)
+        : MaterialApp.router(routerConfig: router);
+    return FTheme(
+      data: FThemes.zinc.light.desktop,
+      child: FToaster(
+        child: FTooltipGroup(child: core),
+      ),
+    );
+  }
+
   testWidgets('loads all page entries and lazily renders from saved progress', (
     tester,
   ) async {
@@ -27,7 +41,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+        child: wrap(const ReaderPage(chapterId: 7)),
       ),
     );
 
@@ -59,7 +73,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+        child: wrap(const ReaderPage(chapterId: 7)),
       ),
     );
 
@@ -84,7 +98,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+        child: wrap(const ReaderPage(chapterId: 7)),
       ),
     );
 
@@ -112,7 +126,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+        child: wrap(const ReaderPage(chapterId: 7)),
       ),
     );
 
@@ -164,7 +178,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+        child: wrap(const ReaderPage(chapterId: 7)),
       ),
     );
 
@@ -172,7 +186,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.byType(ProgressRing), findsNothing);
+    expect(find.byType(FCircularProgress), findsNothing);
   });
 
   testWidgets('closing reader remembers the active chapter for list restore', (
@@ -206,7 +220,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: FluentApp.router(routerConfig: router),
+        child: wrap(const ReaderPage(chapterId: 7), router: router),
       ),
     );
     await tester.pump();
@@ -255,7 +269,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: FluentApp.router(routerConfig: router),
+        child: wrap(const ReaderPage(chapterId: 7), router: router),
       ),
     );
     await tester.pump();
@@ -312,7 +326,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: FluentApp.router(routerConfig: router),
+        child: wrap(const ReaderPage(chapterId: 8), router: router),
       ),
     );
     await tester.pump();
@@ -366,7 +380,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [comicRdApiProvider.overrideWithValue(api)],
-          child: FluentApp.router(routerConfig: router),
+          child: wrap(const ReaderPage(chapterId: 8), router: router),
         ),
       );
       await tester.pump();
@@ -416,7 +430,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [comicRdApiProvider.overrideWithValue(api)],
-          child: FluentApp.router(routerConfig: router),
+          child: wrap(const ReaderPage(chapterId: 8), router: router),
         ),
       );
       await tester.pump();
@@ -443,7 +457,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: const FluentApp(home: ReaderPage(chapterId: 7)),
+        child: wrap(const ReaderPage(chapterId: 7)),
       ),
     );
     await tester.pump();
@@ -456,7 +470,7 @@ void main() {
       contains('/library/Kaichou wa Maid-sama!'),
     );
 
-    await tester.tap(find.byIcon(FluentIcons.favorite_star));
+    await tester.tap(find.byIcon(AppIcons.star));
     await tester.pump();
 
     expect(

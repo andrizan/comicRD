@@ -5,9 +5,11 @@ import 'package:comicrd_flutter/api/comicrd_api.dart';
 import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/library_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:comicrd_flutter/utils/forui_theme.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
@@ -26,7 +28,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('No library source configured'), findsOneWidget);
-    expect(find.byType(ProgressRing), findsNothing);
+    expect(find.byType(FCircularProgress), findsNothing);
   });
 
   testWidgets('shows mount hint when configured library path is unavailable', (
@@ -42,7 +44,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byType(ProgressRing), findsNothing);
+    expect(find.byType(FCircularProgress), findsNothing);
   });
 
   testWidgets('keeps filesystem comics when only one comic is indexed', (
@@ -62,7 +64,10 @@ void main() {
     await tester.pumpWidget(_testApp(api: const _PercentPathApi()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('100% Comic #1 [A+B] %20?x=y&z'));
+    final comic = find.text('100% Comic #1 [A+B] %20?x=y&z');
+    await tester.tap(comic, warnIfMissed: false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -77,7 +82,7 @@ void main() {
     await tester.pumpWidget(_testApp(api: api));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(FluentIcons.settings));
+    await tester.tap(find.byIcon(AppIcons.settings));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -90,9 +95,9 @@ void main() {
     expect(find.text('Unlimited Scroll'), findsOneWidget);
     expect(find.text('Unlimited Scroll Up'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ToggleSwitch, 'Unlimited Scroll'));
+    await tester.tap(find.widgetWithText(FSwitch, 'Unlimited Scroll'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ToggleSwitch, 'Unlimited Scroll Up'));
+    await tester.tap(find.widgetWithText(FSwitch, 'Unlimited Scroll Up'));
     await tester.pumpAndSettle();
 
     expect(api.savedSettings['unlimited_scroll'], 'true');
@@ -110,7 +115,8 @@ void main() {
     await tester.pumpWidget(_testApp(api: const _ManyComicsApi()));
     await tester.pumpAndSettle();
     if (find.byType(LibraryPage).evaluate().isEmpty) {
-      GoRouter.of(tester.element(find.byType(NavigationView))).go('/');
+      final context = tester.element(find.byType(ComicRdShell));
+      GoRouter.of(context).go('/');
       await tester.pumpAndSettle();
     }
 

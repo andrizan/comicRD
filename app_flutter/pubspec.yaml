@@ -1,5 +1,5 @@
 name: comicrd_flutter
-description: "A new Flutter project."
+description: "Comic Reader Flutter App"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.2+4
+version: 2.0.0+1
 
 environment:
   sdk: ^3.12.1
@@ -40,7 +40,8 @@ dependencies:
   go_router: ^17.0.0
   flutter_riverpod: ^3.0.3
   file_selector: ^1.0.4
-  fluent_ui: ^4.15.1
+  forui: ^0.23.0
+  forui_assets: ^0.23.0
   window_manager: ^0.5.1
   package_info_plus: ^10.1.0
 
@@ -79,21 +80,15 @@ flutter:
   # https://flutter.dev/to/asset-from-package
 
   fonts:
-    - family: DM Sans
+    - family: Inter
       fonts:
-        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
-          weight: 300
-        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+        - asset: assets/fonts/Inter-Regular.ttf
           weight: 400
-        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
           weight: 500
-        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+        - asset: assets/fonts/Inter-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+        - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
-    - family: Syne
-      fonts:
-        - asset: assets/fonts/Syne-VariableFont_wght.ttf
-          weight: 600
-        - asset: assets/fonts/Syne-VariableFont_wght.ttf
-          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800

@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -14,6 +15,7 @@ import '../state/scroll_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
 import '../utils/date_format.dart';
+import '../utils/forui_theme.dart';
 import '../widgets/back_to_top_button.dart';
 
 class ComicPage extends ConsumerStatefulWidget {
@@ -138,11 +140,12 @@ class _ComicPageState extends ConsumerState<ComicPage> {
           children: [
             Row(
               children: [
-                Tooltip(
-                  message: text.home,
-                  child: IconButton(
-                    onPressed: () => context.go('/'),
-                    icon: const Icon(FluentIcons.back),
+                FTooltip(
+                  tipBuilder: (context, _) => Text(text.home),
+                  child: FButton.icon(
+                    variant: .ghost,
+                    onPress: () => context.go('/'),
+                    child: const Icon(AppIcons.back),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -151,7 +154,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                     title.isEmpty ? text.comic : title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: FluentTheme.of(context).typography.title,
+                    style: context.appTitleStyle,
                   ),
                 ),
               ],
@@ -160,58 +163,49 @@ class _ComicPageState extends ConsumerState<ComicPage> {
             Row(
               children: [
                 Expanded(
-                  child: SizedBox(
-                    height: 38,
-                    child: TextBox(
+                  child: FTextField(
+                    control: .managed(
                       controller: _search,
-                      prefix: const Padding(
-                        padding: EdgeInsets.only(left: 8),
-                        child: Icon(FluentIcons.search, size: 16),
-                      ),
-                      placeholder: text.search,
-                      onChanged: (value) {
+                      onChange: (value) {
                         _searchDebounce?.cancel();
                         _searchDebounce = Timer(
                           const Duration(milliseconds: 300),
                           () => ref
                               .read(comicPreferencesProvider.notifier)
-                              .setQuery(widget.comicPath, value),
+                              .setQuery(widget.comicPath, value.text),
                         );
                       },
+                    ),
+                    hint: text.search,
+                    prefixBuilder: (context, style, variants) => Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Icon(AppIcons.search, size: 16, color: context.appMutedText),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                SizedBox(
-                  height: 38,
-                  child: ToggleButton(
-                    checked: preferences.displayMode == ChapterDisplayMode.grid,
-                    onChanged: (value) => ref
-                        .read(comicPreferencesProvider.notifier)
-                        .setDisplayMode(
-                          widget.comicPath,
-                          value
-                              ? ChapterDisplayMode.grid
-                              : ChapterDisplayMode.list,
-                        ),
-                    child: const Icon(FluentIcons.grid_view_medium),
-                  ),
+                FButton(
+                  variant: .outline,
+                  selected: preferences.displayMode == ChapterDisplayMode.grid,
+                  onPress: () => ref
+                      .read(comicPreferencesProvider.notifier)
+                      .setDisplayMode(
+                        widget.comicPath,
+                        ChapterDisplayMode.grid,
+                      ),
+                  child: const Icon(AppIcons.gridView),
                 ),
                 const SizedBox(width: 4),
-                SizedBox(
-                  height: 38,
-                  child: ToggleButton(
-                    checked: preferences.displayMode == ChapterDisplayMode.list,
-                    onChanged: (value) => ref
-                        .read(comicPreferencesProvider.notifier)
-                        .setDisplayMode(
-                          widget.comicPath,
-                          value
-                              ? ChapterDisplayMode.list
-                              : ChapterDisplayMode.grid,
-                        ),
-                    child: const Icon(FluentIcons.list),
-                  ),
+                FButton(
+                  variant: .outline,
+                  selected: preferences.displayMode == ChapterDisplayMode.list,
+                  onPress: () => ref
+                      .read(comicPreferencesProvider.notifier)
+                      .setDisplayMode(
+                        widget.comicPath,
+                        ChapterDisplayMode.list,
+                      ),
+                  child: const Icon(AppIcons.list),
                 ),
               ],
             ),
@@ -223,75 +217,59 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        SizedBox(
-                          height: 38,
-                          child: ToggleButton(
-                            checked: preferences.favoritesOnly,
-                            onChanged: (value) => ref
-                                .read(comicPreferencesProvider.notifier)
-                                .setFavoritesOnly(widget.comicPath, value),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(FluentIcons.favorite_star, size: 18),
-                                const SizedBox(width: 4),
-                                Text(text.favorites),
-                              ],
-                            ),
-                          ),
+                        FButton(
+                          variant: .outline,
+                          selected: preferences.favoritesOnly,
+                          onPress: () => ref
+                              .read(comicPreferencesProvider.notifier)
+                              .setFavoritesOnly(
+                                widget.comicPath,
+                                !preferences.favoritesOnly,
+                              ),
+                          prefix: const Icon(AppIcons.star, size: 18),
+                          child: Text(text.favorites),
                         ),
                         const SizedBox(width: 12),
                         SizedBox(
+                          width: 180,
                           height: 38,
-                          child: ComboBox<ChapterSortBy>(
-                            value: preferences.sortBy,
-                            items: [
-                              ComboBoxItem(
-                                value: ChapterSortBy.chapterIndex,
-                                child: Text(text.chapter),
-                              ),
-                              ComboBoxItem(
-                                value: ChapterSortBy.name,
-                                child: Text(text.name),
-                              ),
-                              ComboBoxItem(
-                                value: ChapterSortBy.folderDate,
-                                child: Text(text.folderDate),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                _setSort(value, preferences.sortDir);
-                              }
+                          child: FSelect<ChapterSortBy>(
+                            hint: text.chapter,
+                            items: {
+                              text.chapter: ChapterSortBy.chapterIndex,
+                              text.name: ChapterSortBy.name,
+                              text.folderDate: ChapterSortBy.folderDate,
                             },
+                            control: .managed(
+                              initial: preferences.sortBy,
+                              onChange: (value) {
+                                if (value != null) {
+                                  _setSort(value, preferences.sortDir);
+                                }
+                              },
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        SizedBox(
-                          height: 38,
-                          child: ToggleButton(
-                            checked: preferences.sortDir == bridge.SortDir.asc,
-                            onChanged: (value) => _setSort(
-                              preferences.sortBy,
-                              value ? bridge.SortDir.asc : bridge.SortDir.desc,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  preferences.sortDir == bridge.SortDir.asc
-                                      ? FluentIcons.sort_up
-                                      : FluentIcons.sort_down,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  preferences.sortDir == bridge.SortDir.asc
-                                      ? text.ascending
-                                      : text.descending,
-                                ),
-                              ],
-                            ),
+                        FButton(
+                          variant: .outline,
+                          selected: preferences.sortDir == bridge.SortDir.asc,
+                          onPress: () => _setSort(
+                            preferences.sortBy,
+                            preferences.sortDir == bridge.SortDir.asc
+                                ? bridge.SortDir.desc
+                                : bridge.SortDir.asc,
+                          ),
+                          prefix: Icon(
+                            preferences.sortDir == bridge.SortDir.asc
+                                ? AppIcons.sortUp
+                                : AppIcons.sortDown,
+                            size: 16,
+                          ),
+                          child: Text(
+                            preferences.sortDir == bridge.SortDir.asc
+                                ? text.ascending
+                                : text.descending,
                           ),
                         ),
                       ],
@@ -302,10 +280,8 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 chapters.when(
                   data: (items) => Text(
                     '${items.length} ${text.totalChapters}',
-                    style: FluentTheme.of(context).typography.caption?.copyWith(
-                      color: FluentTheme.of(
-                        context,
-                      ).resources.textFillColorSecondary,
+                    style: context.appCaptionStyle.copyWith(
+                      color: context.appMutedText,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -338,14 +314,12 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                         alignment: Alignment.center,
                         child: Text(
                           error.toString(),
-                          style: TextStyle(
-                            color: FluentTheme.of(context).accentColor,
-                          ),
+                          style: TextStyle(color: context.appAccent),
                         ),
                       ),
                       loading: () => const Align(
                         alignment: Alignment.center,
-                        child: ProgressRing(),
+                        child: FCircularProgress.loader(),
                       ),
                     ),
                   ),
@@ -587,10 +561,7 @@ class _ChapterList extends StatelessWidget {
     if (chapters.isEmpty) {
       return Align(
         alignment: Alignment.center,
-        child: Text(
-          emptyLabel,
-          style: FluentTheme.of(context).typography.bodyStrong,
-        ),
+        child: Text(emptyLabel, style: context.appBodyStrongStyle),
       );
     }
     if (displayMode == ChapterDisplayMode.grid) {
@@ -630,76 +601,95 @@ class _ChapterList extends StatelessWidget {
       itemBuilder: (context, index) {
         final chapter = chapters[index];
         final favorite = favorites.contains(chapter.sourcePath);
-        return HoverButton(
-          onPressed: () => onOpen(chapter),
-          builder: (context, states) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: states.isHovered
-                    ? FluentTheme.of(
-                        context,
-                      ).resources.cardBackgroundFillColorSecondary
-                    : null,
-                border: Border(
-                  bottom: BorderSide(
-                    color: FluentTheme.of(
-                      context,
-                    ).resources.dividerStrokeColorDefault,
-                  ),
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      favorite
-                          ? FluentIcons.favorite_star_fill
-                          : FluentIcons.favorite_star,
-                      color: favorite
-                          ? FluentTheme.of(context).accentColor
-                          : null,
-                    ),
-                    onPressed: () => onToggleFavorite(chapter, favorite),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(chapter.title),
-                        if (chapter.dateModified > 0)
-                          Text(
-                            formatModifiedDate(chapter.dateModified),
-                            style: FluentTheme.of(context).typography.caption
-                                ?.copyWith(
-                                  color: FluentTheme.of(
-                                    context,
-                                  ).resources.textFillColorSecondary,
-                                ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  _ChapterStatusBadge(text: text, chapter: chapter),
-                  const SizedBox(width: 8),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(FluentIcons.folder_open, size: 20),
-                        onPressed: () => onOpenFolder(chapter),
-                      ),
-                      const Icon(FluentIcons.chevron_right),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
+        return _ChapterListItem(
+          chapter: chapter,
+          favorite: favorite,
+          text: text,
+          onOpen: () => onOpen(chapter),
+          onToggleFavorite: () => onToggleFavorite(chapter, favorite),
+          onOpenFolder: () => onOpenFolder(chapter),
         );
       },
+    );
+  }
+}
+
+class _ChapterListItem extends StatelessWidget {
+  const _ChapterListItem({
+    required this.chapter,
+    required this.favorite,
+    required this.text,
+    required this.onOpen,
+    required this.onToggleFavorite,
+    required this.onOpenFolder,
+  });
+
+  final bridge.RawChapter chapter;
+  final bool favorite;
+  final AppStrings text;
+  final VoidCallback onOpen;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onOpenFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return FTappable(
+      onPress: onOpen,
+      builder: (context, states, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: states.contains(FTappableVariant.hovered)
+              ? context.appSecondarySurface
+              : null,
+          border: Border(
+            bottom: BorderSide(color: context.appBorder),
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              FButton.icon(
+                variant: .ghost,
+                onPress: onToggleFavorite,
+                child: Icon(
+                  AppIcons.star,
+                  color: favorite ? context.appAccent : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(chapter.title),
+                    if (chapter.dateModified > 0)
+                      Text(
+                        formatModifiedDate(chapter.dateModified),
+                        style: context.appCaptionStyle.copyWith(
+                          color: context.appMutedText,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              _ChapterStatusBadge(text: text, chapter: chapter),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FButton.icon(
+                    variant: .ghost,
+                    onPress: onOpenFolder,
+                    child: const Icon(AppIcons.folderOpen, size: 20),
+                  ),
+                  const Icon(AppIcons.chevronRight),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -727,70 +717,60 @@ class _ChapterGridTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: HoverButton(
-        onPressed: onOpen,
-        builder: (context, states) {
-          return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: states.isHovered
-                  ? FluentTheme.of(
-                      context,
-                    ).resources.cardBackgroundFillColorSecondary
-                  : null,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      chapter.isRead
-                          ? FluentIcons.check_mark
-                          : FluentIcons.reading_mode,
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(FluentIcons.folder_open, size: 20),
-                      onPressed: onOpenFolder,
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        favorite
-                            ? FluentIcons.favorite_star_fill
-                            : FluentIcons.favorite_star,
-                        color: favorite
-                            ? FluentTheme.of(context).accentColor
-                            : null,
-                      ),
-                      onPressed: onToggleFavorite,
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  chapter.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: FluentTheme.of(context).typography.bodyStrong,
-                ),
-                const SizedBox(height: 6),
-                _ChapterStatusBadge(text: text, chapter: chapter),
-                if (chapter.dateModified > 0)
-                  Text(
-                    formatModifiedDate(chapter.dateModified),
-                    style: FluentTheme.of(context).typography.caption?.copyWith(
-                      color: FluentTheme.of(
-                        context,
-                      ).resources.textFillColorSecondary,
+    return FCard.raw(
+      child: FTappable(
+        onPress: onOpen,
+        builder: (context, states, child) => Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: states.contains(FTappableVariant.hovered)
+                ? context.appSecondarySurface
+                : null,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    chapter.isRead ? AppIcons.check : AppIcons.read,
+                  ),
+                  const Spacer(),
+                  FButton.icon(
+                    variant: .ghost,
+                    onPress: onOpenFolder,
+                    child: const Icon(AppIcons.folderOpen, size: 20),
+                  ),
+                  FButton.icon(
+                    variant: .ghost,
+                    onPress: onToggleFavorite,
+                    child: Icon(
+                      AppIcons.star,
+                      color: favorite ? context.appAccent : null,
                     ),
                   ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+              const Spacer(),
+              Text(
+                chapter.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: context.appBodyStrongStyle,
+              ),
+              const SizedBox(height: 6),
+              _ChapterStatusBadge(text: text, chapter: chapter),
+              if (chapter.dateModified > 0)
+                Text(
+                  formatModifiedDate(chapter.dateModified),
+                  style: context.appCaptionStyle.copyWith(
+                    color: context.appMutedText,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -804,12 +784,11 @@ class _ChapterStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
     if (chapter.isRead) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: theme.accentColor.withAlpha(40),
+          color: context.appAccent.withAlpha(40),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
@@ -818,7 +797,7 @@ class _ChapterStatusBadge extends StatelessWidget {
           softWrap: false,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: theme.accentColor,
+            color: context.appAccent,
             fontSize: 11,
             fontWeight: FontWeight.w500,
           ),
@@ -832,7 +811,7 @@ class _ChapterStatusBadge extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: theme.accentColor.withAlpha(30),
+          color: context.appAccent.withAlpha(30),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
@@ -841,7 +820,7 @@ class _ChapterStatusBadge extends StatelessWidget {
           softWrap: false,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: theme.accentColor,
+            color: context.appAccent,
             fontSize: 11,
             fontWeight: FontWeight.w500,
           ),
@@ -852,7 +831,7 @@ class _ChapterStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.resources.cardBackgroundFillColorSecondary,
+        color: context.appSecondarySurface,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
@@ -861,7 +840,7 @@ class _ChapterStatusBadge extends StatelessWidget {
         softWrap: false,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: theme.resources.textFillColorSecondary,
+          color: context.appMutedText,
           fontSize: 11,
           fontWeight: FontWeight.w500,
         ),

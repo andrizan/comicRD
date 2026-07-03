@@ -3,11 +3,12 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' as widgets;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:go_router/go_router.dart';
 
@@ -20,6 +21,7 @@ import '../state/library_state.dart';
 import '../state/reader_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
+import '../utils/forui_theme.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({super.key, required this.chapterId});
@@ -287,7 +289,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       ignoring: _toolbarVisible,
                       child: _ReferenceReaderIconButton(
                         tooltip: text.readerControls,
-                        icon: FluentIcons.settings,
+                        icon: AppIcons.settings,
                         onPressed: _showToolbar,
                         compact: true,
                       ),
@@ -331,7 +333,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           ),
           loading: () =>
-              const Align(alignment: Alignment.center, child: ProgressRing()),
+              const Align(alignment: Alignment.center, child: FCircularProgress.loader()),
         ),
       ),
     );
@@ -1214,7 +1216,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
               children: [
                 _ReferenceReaderIconButton(
                   tooltip: text.close,
-                  icon: FluentIcons.cancel,
+                  icon: AppIcons.close,
                   onPressed: onClose,
                 ),
                 const SizedBox(width: 12),
@@ -1255,38 +1257,36 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                   children: [
                     _ReferenceReaderIconButton(
                       tooltip: text.previousPage,
-                      icon: FluentIcons.chevron_left,
+                      icon: AppIcons.chevronLeft,
                       onPressed: onPreviousPage,
                     ),
                     _ReferenceReaderIconButton(
                       tooltip: text.nextPage,
-                      icon: FluentIcons.chevron_right,
+                      icon: AppIcons.chevronRight,
                       onPressed: onNextPage,
                     ),
                     const SizedBox(width: 4),
                     _ReferenceReaderIconButton(
                       tooltip: text.previousChapter,
-                      icon: FluentIcons.previous,
+                      icon: AppIcons.chevronFirst,
                       onPressed: onPreviousChapter,
                     ),
                     _ReferenceReaderIconButton(
                       tooltip: text.nextChapter,
-                      icon: FluentIcons.next,
+                      icon: AppIcons.chevronLast,
                       onPressed: onNextChapter,
                     ),
                     _ReferenceReaderIconButton(
                       tooltip: isFavorited
                           ? text.removeFavorite
                           : text.addFavorite,
-                      icon: isFavorited
-                          ? FluentIcons.favorite_star_fill
-                          : FluentIcons.favorite_star,
+                      icon: AppIcons.star,
                       active: isFavorited,
                       onPressed: onToggleFavorite,
                     ),
                     const SizedBox(width: 4),
                     _ReaderControlChip(
-                      icon: FluentIcons.search,
+                      icon: AppIcons.search,
                       value: '${(zoom * 100).round()}%',
                       tooltip: text.zoom,
                       onDecrease: () =>
@@ -1296,7 +1296,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       onReset: () => onZoomChanged(1),
                     ),
                     _ReaderControlChip(
-                      icon: FluentIcons.align_horizontal_center,
+                      icon: AppIcons.alignCenter,
                       value: '${pageGap.round()}px',
                       tooltip: text.gap,
                       onDecrease: () =>
@@ -1308,14 +1308,14 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                     _ReferenceReaderIconButton(
                       tooltip: text.fullscreen,
                       icon: fullscreen
-                          ? FluentIcons.back_to_window
-                          : FluentIcons.full_screen,
+                          ? AppIcons.minimize
+                          : AppIcons.maximize,
                       active: fullscreen,
                       onPressed: onToggleFullscreen,
                     ),
                     _ReferenceReaderIconButton(
                       tooltip: text.unlimitedScroll,
-                      icon: FluentIcons.scroll_up_down,
+                      icon: AppIcons.scroll,
                       active: unlimitedScroll,
                       onPressed: onToggleUnlimitedScroll,
                     ),
@@ -1438,7 +1438,7 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _chipButton(FluentIcons.remove, widget.onDecrease),
+              _chipButton(AppIcons.minus, widget.onDecrease),
               GestureDetector(
                 onDoubleTap: widget.onReset,
                 child: SizedBox(
@@ -1455,7 +1455,7 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
                   ),
                 ),
               ),
-              _chipButton(FluentIcons.add, widget.onIncrease),
+              _chipButton(AppIcons.plus, widget.onIncrease),
             ],
           ),
         ),

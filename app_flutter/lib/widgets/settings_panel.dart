@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -9,6 +10,7 @@ import '../state/api_state.dart';
 import '../state/library_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
+import '../utils/forui_theme.dart';
 
 class SettingsPanel extends ConsumerStatefulWidget {
   const SettingsPanel({super.key});
@@ -37,7 +39,8 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     final appSettings = ref.watch(appSettingsProvider);
     final readerSettings = ref.watch(readerSettingsProvider);
     final text = stringsFor(appSettings.localeCode);
-    return ContentDialog(
+    return FDialog(
+      direction: .vertical,
       title: Row(
         children: [
           Text(text.settings),
@@ -50,16 +53,14 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: FluentTheme.of(
-                    context,
-                  ).accentColor.withValues(alpha: 0.15),
+                  color: context.appAccent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   'v${info.version}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: FluentTheme.of(context).accentColor,
+                    color: context.appAccent,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -68,12 +69,12 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
           ),
         ],
       ),
-      content: settings.when(
-        data: (values) {
-          _initialize(values, appSettings);
-          return ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: ListView(
+      body: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: settings.when(
+          data: (values) {
+            _initialize(values, appSettings);
+            return ListView(
               shrinkWrap: true,
               children: [
                 _sectionHeader(text.librarySection),
@@ -81,32 +82,32 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: _controlBox(
-                        TextBox(
-                          controller: _librarySource,
-                          placeholder: text.librarySource,
+                      child: SizedBox(
+                        height: 40,
+                        child: FTextField(
+                          control: .managed(controller: _librarySource),
+                          hint: text.librarySource,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Tooltip(
-                      message: text.browseDirectory,
-                      child: _iconControlBox(
-                        IconButton(
-                          onPressed: _pickLibrarySource,
-                          icon: const Icon(FluentIcons.folder_open),
-                        ),
+                    FTooltip(
+                      tipBuilder: (context, _) => Text(text.browseDirectory),
+                      child: FButton.icon(
+                        variant: .outline,
+                        onPress: _pickLibrarySource,
+                        child: const Icon(AppIcons.folderOpen),
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Tooltip(
-                      message: text.refreshSourceStatus,
-                      child: _iconControlBox(
-                        IconButton(
-                          onPressed: () =>
-                              ref.invalidate(librarySourceStatusProvider),
-                          icon: const Icon(FluentIcons.refresh),
-                        ),
+                    FTooltip(
+                      tipBuilder: (context, _) =>
+                          Text(text.refreshSourceStatus),
+                      child: FButton.icon(
+                        variant: .outline,
+                        onPress: () =>
+                            ref.invalidate(librarySourceStatusProvider),
+                        child: const Icon(AppIcons.refresh),
                       ),
                     ),
                   ],
@@ -120,60 +121,56 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     style: TextStyle(
                       fontSize: 12,
                       color: status.error == null
-                          ? FluentTheme.of(
-                              context,
-                            ).resources.textFillColorSecondary
-                          : Colors.red,
+                          ? context.appMutedText
+                          : context.appColors.destructive,
                     ),
                   ),
                   error: (error, _) => Text(
                     error.toString(),
-                    style: TextStyle(fontSize: 12, color: Colors.red),
+                    style: TextStyle(fontSize: 12, color: context.appColors.destructive),
                   ),
-                  loading: () => const ProgressRing(),
+                  loading: () => const FCircularProgress.loader(),
                 ),
                 const SizedBox(height: 16),
                 _sectionHeader(text.readerSection),
                 _labeledField(
                   '${text.defaultZoom} (${(readerSettings.zoom * 100).round()}%)',
-                  Slider(
-                    value: readerSettings.zoom,
-                    min: 0.5,
-                    max: 3,
-                    divisions: 25,
-                    label: '${(readerSettings.zoom * 100).round()}%',
-                    onChanged: (value) => ref
-                        .read(readerSettingsProvider.notifier)
-                        .setZoom(value),
+                  FSlider(
+                    control: .managedContinuous(
+                      initial: FSliderValue(max: readerSettings.zoom),
+                      onChange: (value) => ref
+                          .read(readerSettingsProvider.notifier)
+                          .setZoom(value.max),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 _labeledField(
                   '${text.pageGap} (${readerSettings.pageGap.round()}px)',
-                  Slider(
-                    value: readerSettings.pageGap,
-                    min: 0,
-                    max: 80,
-                    divisions: 16,
-                    label: '${readerSettings.pageGap.round()}px',
-                    onChanged: (value) => ref
-                        .read(readerSettingsProvider.notifier)
-                        .setPageGap(value),
+                  FSlider(
+                    control: .managedContinuous(
+                      initial: FSliderValue(max: readerSettings.pageGap / 80),
+                      onChange: (value) => ref
+                          .read(readerSettingsProvider.notifier)
+                          .setPageGap(
+                            (value.max * 80).clamp(0, 80).toDouble(),
+                          ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                ToggleSwitch(
-                  checked: readerSettings.unlimitedScroll,
-                  content: Text(text.unlimitedScroll),
-                  onChanged: (value) => ref
+                FSwitch(
+                  label: Text(text.unlimitedScroll),
+                  value: readerSettings.unlimitedScroll,
+                  onChange: (value) => ref
                       .read(readerSettingsProvider.notifier)
                       .setUnlimitedScroll(value),
                 ),
                 const SizedBox(height: 8),
-                ToggleSwitch(
-                  checked: readerSettings.unlimitedScrollUp,
-                  content: Text(text.unlimitedScrollUp),
-                  onChanged: readerSettings.unlimitedScroll
+                FSwitch(
+                  label: Text(text.unlimitedScrollUp),
+                  value: readerSettings.unlimitedScrollUp,
+                  onChange: readerSettings.unlimitedScroll
                       ? (value) => ref
                             .read(readerSettingsProvider.notifier)
                             .setUnlimitedScrollUp(value)
@@ -186,46 +183,16 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     Expanded(
                       child: _labeledField(
                         text.theme,
-                        _controlBox(
-                          ComboBox<ThemeMode>(
-                            value: _themeMode,
-                            isExpanded: true,
-                            items: [
-                              ComboBoxItem(
-                                value: ThemeMode.light,
-                                child: Row(
-                                  children: [
-                                    const Icon(FluentIcons.sunny, size: 16),
-                                    const SizedBox(width: 8),
-                                    Text(text.themeLight),
-                                  ],
-                                ),
-                              ),
-                              ComboBoxItem(
-                                value: ThemeMode.dark,
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      FluentIcons.clear_night,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(text.themeDark),
-                                  ],
-                                ),
-                              ),
-                              ComboBoxItem(
-                                value: ThemeMode.system,
-                                child: Row(
-                                  children: [
-                                    const Icon(FluentIcons.screen, size: 16),
-                                    const SizedBox(width: 8),
-                                    Text(text.themeSystem),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            onChanged: (value) async {
+                        FSelect<ThemeMode>(
+                          hint: text.theme,
+                          items: {
+                            text.themeLight: ThemeMode.light,
+                            text.themeDark: ThemeMode.dark,
+                            text.themeSystem: ThemeMode.system,
+                          },
+                          control: .managed(
+                            initial: _themeMode,
+                            onChange: (value) async {
                               if (value != null) {
                                 setState(() => _themeMode = value);
                                 ref
@@ -247,45 +214,15 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                     Expanded(
                       child: _labeledField(
                         text.locale,
-                        _controlBox(
-                          ComboBox<String>(
-                            value: _locale,
-                            isExpanded: true,
-                            items: [
-                              ComboBoxItem(
-                                value: 'en',
-                                child: Row(
-                                  children: [
-                                    const Text('🇺🇸'),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        text.english,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              ComboBoxItem(
-                                value: 'id',
-                                child: Row(
-                                  children: [
-                                    const Text('🇮🇩'),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        text.indonesian,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            onChanged: (value) async {
+                        FSelect<String>(
+                          hint: text.locale,
+                          items: {
+                            text.english: 'en',
+                            text.indonesian: 'id',
+                          },
+                          control: .managed(
+                            initial: _locale,
+                            onChange: (value) async {
                               if (value != null) {
                                 setState(() => _locale = value);
                                 ref
@@ -307,64 +244,59 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
                 ),
                 const SizedBox(height: 16),
                 _sectionHeader(text.backupSection),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Row(
                   children: [
-                    FilledButton(
-                      onPressed: _exportBackup,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(FluentIcons.download, size: 16),
-                          const SizedBox(width: 6),
-                          Text(text.exportBackup),
-                        ],
+                    Expanded(
+                      child: FButton(
+                        onPress: _exportBackup,
+                        prefix: const Icon(AppIcons.download, size: 16),
+                        child: Text(text.exportBackup),
                       ),
                     ),
-                    Button(
-                      onPressed: _importBackup,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(FluentIcons.upload, size: 16),
-                          const SizedBox(width: 6),
-                          Text(text.importBackup),
-                        ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FButton(
+                        variant: .outline,
+                        onPress: _importBackup,
+                        prefix: const Icon(AppIcons.upload, size: 16),
+                        child: Text(text.importBackup),
                       ),
                     ),
                   ],
                 ),
                 if (_message != null) ...[
                   const SizedBox(height: 12),
-                  InfoBar(
+                  FAlert(
+                    icon: const Icon(FLucideIcons.check),
                     title: Text(_message!),
-                    severity: InfoBarSeverity.success,
-                    isLong: true,
                   ),
                 ],
               ],
-            ),
-          );
-        },
-        error: (error, _) => Text(error.toString()),
-        loading: () => const Center(child: ProgressRing()),
+            );
+          },
+          error: (error, _) => Text(error.toString()),
+          loading: () => const Center(child: FCircularProgress.loader()),
+        ),
       ),
       actions: [
-        Button(
-          child: Text(text.cancel),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        FilledButton(
-          onPressed: _save,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(FluentIcons.save, size: 16),
-              const SizedBox(width: 6),
-              Text(text.save),
-            ],
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: FButton(
+                variant: .outline,
+                onPress: () => Navigator.of(context).pop(),
+                child: Text(text.cancel),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FButton(
+                onPress: _save,
+                prefix: const Icon(AppIcons.save, size: 16),
+                child: Text(text.save),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -373,7 +305,7 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
   Widget _sectionHeader(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(label, style: FluentTheme.of(context).typography.subtitle),
+      child: Text(label, style: context.appSubtitleStyle),
     );
   }
 
@@ -381,19 +313,11 @@ class _SettingsPanelState extends ConsumerState<SettingsPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: FluentTheme.of(context).typography.caption),
+        Text(label, style: context.appCaptionStyle),
         const SizedBox(height: 4),
         child,
       ],
     );
-  }
-
-  Widget _controlBox(Widget child) {
-    return SizedBox(height: 38, child: child);
-  }
-
-  Widget _iconControlBox(Widget child) {
-    return SizedBox(width: 38, height: 38, child: child);
   }
 
   void _initialize(Map<String, String> values, AppSettings appSettings) {
