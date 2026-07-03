@@ -99,7 +99,10 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
     final libraryPreferences = ref.watch(libraryPreferencesProvider);
     final text = stringsFor(settings.localeCode);
     final selectedTab = libraryPreferences.selectedTab;
-    return DragToMoveArea(
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (_) => windowManager.startDragging(),
+      onDoubleTap: () {},
       child: ColoredBox(
         color: context.theme.colors.background,
         child: Column(
