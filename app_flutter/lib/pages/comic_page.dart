@@ -150,10 +150,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
+                  child: SelectableText(
                     title.isEmpty ? text.comic : title,
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: context.appTitleStyle,
                   ),
                 ),
