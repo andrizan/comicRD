@@ -98,3 +98,30 @@ fn open_copies_legacy_tauri_database_once_when_new_database_is_absent() {
         Some("\"en\"".to_string())
     );
 }
+
+#[test]
+fn reopen_is_idempotent_and_preserves_size_bytes_columns() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter = comic.join("Chapter 1");
+    std::fs::create_dir_all(&chapter).expect("chapter");
+    std::fs::write(chapter.join("001.png"), vec![0u8; 1024]).expect("page");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+    core.scan_libraries().expect("scan libraries");
+    drop(core);
+
+    let core = ComicRdCore::open(&app_data).expect("reopen core");
+    let stats = core.get_library_storage_stats().expect("stats");
+    assert_eq!(stats.total_size_bytes, 1024);
+    assert_eq!(stats.comic_count, 1);
+}

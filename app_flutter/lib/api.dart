@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `core`, `open_path`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<void> initApp({required String appDataDir}) =>
     RustLib.instance.api.crateApiInitApp(appDataDir: appDataDir);
@@ -39,6 +39,9 @@ Future<List<RawComic>> listLibraryComicsRaw({
   sortBy: sortBy,
   sortDir: sortDir,
 );
+
+Future<LibraryStorageStats> getLibraryStorageStats() =>
+    RustLib.instance.api.crateApiGetLibraryStorageStats();
 
 Future<List<String>> listComicsWithProgress() =>
     RustLib.instance.api.crateApiListComicsWithProgress();
@@ -380,6 +383,30 @@ class LibrarySourceStatus {
           error == other.error;
 }
 
+class LibraryStorageStats {
+  final PlatformInt64 totalSizeBytes;
+  final PlatformInt64 comicCount;
+
+  const LibraryStorageStats({
+    required this.totalSizeBytes,
+    required this.comicCount,
+  });
+
+  static Future<LibraryStorageStats> default_() =>
+      RustLib.instance.api.crateApiLibraryStorageStatsDefault();
+
+  @override
+  int get hashCode => totalSizeBytes.hashCode ^ comicCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LibraryStorageStats &&
+          runtimeType == other.runtimeType &&
+          totalSizeBytes == other.totalSizeBytes &&
+          comicCount == other.comicCount;
+}
+
 class OpenChapterPayload {
   final String comicSourcePath;
   final String chapterSourcePath;
@@ -509,6 +536,7 @@ class RawComic {
   final PlatformInt64 chapterCount;
   final PlatformInt64 readChapterCount;
   final PlatformInt64 inProgressChapterCount;
+  final PlatformInt64 sizeBytes;
 
   const RawComic({
     required this.title,
@@ -518,6 +546,7 @@ class RawComic {
     required this.chapterCount,
     required this.readChapterCount,
     required this.inProgressChapterCount,
+    required this.sizeBytes,
   });
 
   @override
@@ -528,7 +557,8 @@ class RawComic {
       dateModified.hashCode ^
       chapterCount.hashCode ^
       readChapterCount.hashCode ^
-      inProgressChapterCount.hashCode;
+      inProgressChapterCount.hashCode ^
+      sizeBytes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -541,7 +571,8 @@ class RawComic {
           dateModified == other.dateModified &&
           chapterCount == other.chapterCount &&
           readChapterCount == other.readChapterCount &&
-          inProgressChapterCount == other.inProgressChapterCount;
+          inProgressChapterCount == other.inProgressChapterCount &&
+          sizeBytes == other.sizeBytes;
 }
 
 class ReadingHistoryEntry {

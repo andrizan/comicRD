@@ -180,6 +180,11 @@ class _FakeComicRdApi extends ComicRdApi {
   }
 
   @override
+  Future<bridge.LibraryStorageStats> getLibraryStorageStats() async {
+    return const bridge.LibraryStorageStats(totalSizeBytes: 0, comicCount: 0);
+  }
+
+  @override
   Future<List<bridge.RawComic>> listLibraryComicsRaw({
     required bridge.SortBy sortBy,
     required bridge.SortDir sortDir,
@@ -193,6 +198,7 @@ class _FakeComicRdApi extends ComicRdApi {
         chapterCount: 0,
         readChapterCount: 0,
         inProgressChapterCount: 0,
+        sizeBytes: 0,
       ),
     ];
   }
@@ -249,6 +255,11 @@ class _MissingSourceApi extends _FakeComicRdApi {
       isDir: false,
       readable: false,
     );
+  }
+
+  @override
+  Future<bridge.LibraryStorageStats> getLibraryStorageStats() async {
+    return const bridge.LibraryStorageStats(totalSizeBytes: 0, comicCount: 0);
   }
 
   @override
@@ -310,6 +321,7 @@ class _PartiallyIndexedSourceApi extends _FakeComicRdApi {
         chapterCount: 151,
         readChapterCount: 0,
         inProgressChapterCount: 0,
+        sizeBytes: 0,
       ),
       bridge.RawComic(
         title: 'Other Comic',
@@ -319,6 +331,7 @@ class _PartiallyIndexedSourceApi extends _FakeComicRdApi {
         chapterCount: 20,
         readChapterCount: 0,
         inProgressChapterCount: 0,
+        sizeBytes: 0,
       ),
     ];
   }
@@ -341,6 +354,7 @@ class _PercentPathApi extends _PartiallyIndexedSourceApi {
         chapterCount: 1,
         readChapterCount: 0,
         inProgressChapterCount: 0,
+        sizeBytes: 0,
       ),
     ];
   }
@@ -412,8 +426,9 @@ class _ManyComicsApi extends _PartiallyIndexedSourceApi {
           sourceType: 'folder',
           dateModified: index,
           chapterCount: 12,
-          readChapterCount: 0,
-          inProgressChapterCount: 0,
+        readChapterCount: 0,
+        inProgressChapterCount: 0,
+        sizeBytes: 0,
         ),
     ];
   }

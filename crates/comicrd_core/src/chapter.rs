@@ -118,6 +118,7 @@ pub(crate) struct ChapterUpsert<'a> {
     pub(crate) source_type: &'a str,
     pub(crate) page_count: usize,
     pub(crate) date_modified: i64,
+    pub(crate) size_bytes: i64,
 }
 
 pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Result<i64, String> {
@@ -130,8 +131,8 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
         conn.execute(
             r#"
         UPDATE chapters
-        SET comic_id = ?1, title = ?2, chapter_index = ?3, source_path = ?4, source_type = ?5, page_count = ?6, updated_at = ?7, date_modified = ?8
-        WHERE id = ?9
+        SET comic_id = ?1, title = ?2, chapter_index = ?3, source_path = ?4, source_type = ?5, page_count = ?6, updated_at = ?7, date_modified = ?8, size_bytes = ?9
+        WHERE id = ?10
         "#,
             params![
                 params.comic_id,
@@ -142,6 +143,7 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
                 params.page_count as i64,
                 ts,
                 params.date_modified,
+                params.size_bytes,
                 id
             ],
         )
@@ -151,8 +153,8 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
 
     conn.execute(
         r#"
-      INSERT INTO chapters (comic_id, title, chapter_index, history_key, source_path, source_type, page_count, created_at, updated_at, date_modified)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+      INSERT INTO chapters (comic_id, title, chapter_index, history_key, source_path, source_type, page_count, created_at, updated_at, date_modified, size_bytes)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
       ON CONFLICT(source_path) DO UPDATE SET
         comic_id = excluded.comic_id,
         title = excluded.title,
@@ -161,7 +163,8 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
         source_type = excluded.source_type,
         page_count = excluded.page_count,
         updated_at = excluded.updated_at,
-        date_modified = excluded.date_modified
+        date_modified = excluded.date_modified,
+        size_bytes = excluded.size_bytes
       "#,
         params![
             params.comic_id,
@@ -173,7 +176,8 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
             params.page_count as i64,
             ts,
             ts,
-            params.date_modified
+            params.date_modified,
+            params.size_bytes
         ],
     )
     .map_err(|e| format!("failed inserting chapter: {e}"))?;
@@ -221,6 +225,23 @@ pub(crate) fn is_image(path: &Path) -> bool {
         || ext_eq(path, "gif")
         || ext_eq(path, "bmp")
         || ext_eq(path, "avif")
+}
+
+pub(crate) fn chapter_size_bytes(path: &Path, source_type: &str) -> i64 {
+    if source_type == "folder" {
+        let entries = image_entries_in_dir(path);
+        let mut total: i64 = 0;
+        for entry in entries {
+            if let Ok(meta) = fs::metadata(&entry) {
+                total = total.saturating_add(meta.len() as i64);
+            }
+        }
+        total
+    } else {
+        fs::metadata(path)
+            .map(|m| m.len() as i64)
+            .unwrap_or(0)
+    }
 }
 
 pub(crate) fn archive_image_entries(path: &Path) -> Result<Vec<String>, String> {
@@ -667,12 +688,15 @@ pub(crate) fn open_chapter_for_reading_conn(
 
     let chapter_entries = discover_chapter_entries_for_comic(&payload.comic_source_path)?;
     let mut selected_chapter_id = None;
+    let mut total_size_bytes: i64 = 0;
     for (chapter_title, chapter_path, chapter_type, chapter_index) in chapter_entries {
         let chapter_key = chapter_history_key(&library_path, &chapter_path, chapter_index);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
         let cached_page_count = chapter_snapshot_by_history_key(&tx, &chapter_key)?
             .map(|(pc, _)| pc.max(0) as usize)
             .unwrap_or(0);
+        let chapter_size = chapter_size_bytes(Path::new(&chapter_path), &chapter_type);
+        total_size_bytes = total_size_bytes.saturating_add(chapter_size);
         let chapter_id = upsert_chapter(
             &tx,
             ChapterUpsert {
@@ -684,12 +708,18 @@ pub(crate) fn open_chapter_for_reading_conn(
                 source_type: &chapter_type,
                 page_count: cached_page_count,
                 date_modified: modified_at,
+                size_bytes: chapter_size,
             },
         )?;
         if chapter_path == payload.chapter_source_path {
             selected_chapter_id = Some(chapter_id);
         }
     }
+    tx.execute(
+        "UPDATE comics SET size_bytes = ?1, updated_at = ?2 WHERE id = ?3",
+        params![total_size_bytes, now_ts(), comic_id],
+    )
+    .map_err(|e| format!("failed updating comic size_bytes: {e}"))?;
     tx.commit()
         .map_err(|e| format!("failed committing chapter transaction: {e}"))?;
     selected_chapter_id.ok_or_else(|| "chapter tidak ditemukan".to_string())
@@ -932,6 +962,32 @@ mod tests {
         assert!(is_image(Path::new("page.avif")));
         assert!(!is_image(Path::new("page.txt")));
         assert!(!is_image(Path::new("page.cbz")));
+    }
+
+    #[test]
+    fn chapter_size_bytes_sums_image_files_in_folder() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let chapter_dir = temp.path().join("Chapter 1");
+        fs::create_dir_all(&chapter_dir).expect("chapter");
+        fs::write(chapter_dir.join("001.png"), vec![0u8; 1024]).expect("p1");
+        fs::write(chapter_dir.join("002.png"), vec![0u8; 2048]).expect("p2");
+        fs::write(chapter_dir.join("Thumbs.db"), b"junk").expect("thumbs");
+        fs::write(chapter_dir.join("notes.txt"), b"junk").expect("notes");
+        fs::create_dir_all(chapter_dir.join("__MACOSX")).expect("macosx");
+        fs::write(chapter_dir.join("__MACOSX").join("._001.png"), b"junk")
+            .expect("macosx file");
+
+        let total = chapter_size_bytes(&chapter_dir, "folder");
+        assert_eq!(total, 1024 + 2048);
+    }
+
+    #[test]
+    fn chapter_size_bytes_uses_archive_file_size() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let archive = temp.path().join("comic.cbz");
+        fs::write(&archive, vec![0u8; 4096]).expect("cbz");
+        let total = chapter_size_bytes(&archive, "cbz");
+        assert_eq!(total, 4096);
     }
 
     #[test]

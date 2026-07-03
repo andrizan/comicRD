@@ -26,6 +26,7 @@ pub struct RawComic {
     pub chapter_count: i64,
     pub read_chapter_count: i64,
     pub in_progress_chapter_count: i64,
+    pub size_bytes: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -178,6 +179,12 @@ pub struct LibrarySourceStatus {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LibraryStorageStats {
+    pub total_size_bytes: i64,
+    pub comic_count: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettingEntry {
     pub key: String,
@@ -212,6 +219,7 @@ impl From<core::RawComic> for RawComic {
             chapter_count: value.chapter_count,
             read_chapter_count: value.read_chapter_count,
             in_progress_chapter_count: value.in_progress_chapter_count,
+            size_bytes: value.size_bytes,
         }
     }
 }
@@ -421,6 +429,15 @@ impl From<core::LibrarySourceStatus> for LibrarySourceStatus {
     }
 }
 
+impl From<core::LibraryStorageStats> for LibraryStorageStats {
+    fn from(value: core::LibraryStorageStats) -> Self {
+        Self {
+            total_size_bytes: value.total_size_bytes,
+            comic_count: value.comic_count,
+        }
+    }
+}
+
 impl From<core::SettingEntry> for SettingEntry {
     fn from(value: core::SettingEntry) -> Self {
         Self {
@@ -485,6 +502,10 @@ pub fn list_library_comics_raw(
         .into_iter()
         .map(Into::into)
         .collect())
+}
+
+pub fn get_library_storage_stats() -> Result<LibraryStorageStats, String> {
+    Ok(core()?.get_library_storage_stats()?.into())
 }
 
 pub fn list_comics_with_progress() -> Result<Vec<String>, String> {

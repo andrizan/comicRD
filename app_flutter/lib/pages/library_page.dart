@@ -13,6 +13,7 @@ import '../state/library_state.dart';
 import '../state/scroll_state.dart';
 import '../state/settings_state.dart';
 import '../utils/date_format.dart';
+import '../utils/format_size.dart';
 import '../widgets/back_to_top_button.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
@@ -33,6 +34,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
   bool _refreshedOnMount = false;
   bool _showBackToTop = false;
+  LibraryComicsState _comicsState = const LibraryComicsState(
+    items: [],
+    filteredTotal: 0,
+    visibleCount: 0,
+    hasMore: false,
+  );
 
   @override
   void initState() {
@@ -54,14 +61,24 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     if (!_refreshedOnMount) {
       _refreshedOnMount = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          // ignore: unused_result
-          ref.refresh(rawLibraryComicsProvider.future);
-          // ignore: unused_result
-          ref.refresh(comicsWithProgressProvider.future);
-          // ignore: unused_result
-          ref.refresh(readingHistoryProvider.future);
-        }
+        if (!mounted) return;
+        ref.listenManual<LibraryComicsState>(
+          libraryComicsProvider,
+          (prev, next) {
+            if (mounted) {
+              setState(() {
+                _comicsState = next;
+              });
+            }
+          },
+          fireImmediately: true,
+        );
+        // ignore: unused_result
+        ref.refresh(rawLibraryComicsProvider.future);
+        // ignore: unused_result
+        ref.refresh(comicsWithProgressProvider.future);
+        // ignore: unused_result
+        ref.refresh(readingHistoryProvider.future);
       });
     }
   }
@@ -174,7 +191,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final preferences = ref.watch(libraryPreferencesProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
     final history = ref.watch(readingHistoryProvider);
-    final comicsState = ref.watch(libraryComicsProvider);
+    final comicsState = _comicsState;
     final bookmarks = ref.watch(allBookmarksProvider);
     final bookmarkedPaths =
         bookmarks.asData?.value
@@ -564,12 +581,52 @@ class _TabCountLabel extends StatelessWidget {
       LibraryTab.bookmarks => '${text.totalComics}: $bookmarksCount',
     };
 
-    return Text(
-      label,
-      style: theme.typography.caption?.copyWith(
-        color: theme.resources.textFillColorSecondary,
-        fontWeight: FontWeight.w600,
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: theme.typography.caption?.copyWith(
+            color: theme.resources.textFillColorSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (selectedTab == LibraryTab.library) _StorageSuffix(text: text),
+      ],
+    );
+  }
+}
+
+class _StorageSuffix extends ConsumerWidget {
+  const _StorageSuffix({required this.text});
+
+  final AppStrings text;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = FluentTheme.of(context);
+    final api = ref.watch(comicRdApiProvider);
+    return FutureBuilder<bridge.LibraryStorageStats>(
+      future: api.getLibraryStorageStats(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        final total = snapshot.data!.totalSizeBytes;
+        if (total <= 0) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Text(
+            '  •  Storage: ${formatBytes(total)}',
+            style: theme.typography.caption?.copyWith(
+              color: theme.resources.textFillColorSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -626,7 +683,7 @@ class _ComicList extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 220,
-                mainAxisExtent: 196,
+                mainAxisExtent: 220,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
@@ -710,6 +767,10 @@ class _ComicList extends StatelessWidget {
                             totalCount: comic.chapterCount,
                             inProgressCount: comic.inProgressChapterCount,
                           ),
+                          if (comic.sizeBytes > 0) ...[
+                            const SizedBox(width: 6),
+                            _SizeBadge(sizeBytes: comic.sizeBytes),
+                          ],
                           const SizedBox(width: 8),
                           if (bookmarked) ...[
                             _BookmarkMarker(text: text),
@@ -800,6 +861,10 @@ class _ComicGridTile extends StatelessWidget {
                   totalCount: comic.chapterCount,
                   inProgressCount: comic.inProgressChapterCount,
                 ),
+                if (comic.sizeBytes > 0) ...[
+                  const SizedBox(height: 4),
+                  _SizeBadge(sizeBytes: comic.sizeBytes),
+                ],
                 const Spacer(),
                 Text(
                   comic.title,
@@ -899,6 +964,35 @@ class _ReadStatusBadge extends StatelessWidget {
       ),
       child: Text(
         text.unread,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: theme.resources.textFillColorSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _SizeBadge extends StatelessWidget {
+  const _SizeBadge({required this.sizeBytes});
+
+  final int sizeBytes;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.resources.cardBackgroundFillColorSecondary,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        formatBytes(sizeBytes),
         maxLines: 1,
         softWrap: false,
         overflow: TextOverflow.ellipsis,

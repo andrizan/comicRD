@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -904639111;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -356747559;
 
 // Section: executor
 
@@ -380,6 +380,38 @@ fn wire__crate__api__get_library_scan_status_impl(
         },
     )
 }
+fn wire__crate__api__get_library_storage_stats_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_library_storage_stats",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::get_library_storage_stats()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__get_progress_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -539,6 +571,39 @@ fn wire__crate__api__is_comic_bookmarked_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::is_comic_bookmarked(api_comic_source_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__library_storage_stats_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "library_storage_stats_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::LibraryStorageStats::default())?;
                     Ok(output_ok)
                 })())
             }
@@ -1386,6 +1451,18 @@ impl SseDecode for crate::api::LibrarySourceStatus {
     }
 }
 
+impl SseDecode for crate::api::LibraryStorageStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_totalSizeBytes = <i64>::sse_decode(deserializer);
+        let mut var_comicCount = <i64>::sse_decode(deserializer);
+        return crate::api::LibraryStorageStats {
+            total_size_bytes: var_totalSizeBytes,
+            comic_count: var_comicCount,
+        };
+    }
+}
+
 impl SseDecode for Vec<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1660,6 +1737,7 @@ impl SseDecode for crate::api::RawComic {
         let mut var_chapterCount = <i64>::sse_decode(deserializer);
         let mut var_readChapterCount = <i64>::sse_decode(deserializer);
         let mut var_inProgressChapterCount = <i64>::sse_decode(deserializer);
+        let mut var_sizeBytes = <i64>::sse_decode(deserializer);
         return crate::api::RawComic {
             title: var_title,
             source_path: var_sourcePath,
@@ -1668,6 +1746,7 @@ impl SseDecode for crate::api::RawComic {
             chapter_count: var_chapterCount,
             read_chapter_count: var_readChapterCount,
             in_progress_chapter_count: var_inProgressChapterCount,
+            size_bytes: var_sizeBytes,
         };
     }
 }
@@ -1858,32 +1937,36 @@ fn pde_ffi_dispatcher_primary_impl(
         8 => wire__crate__api__get_chapter_context_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__get_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__get_library_scan_status_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__import_database_backup_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__is_comic_bookmarked_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__list_all_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__list_chapter_favorites_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__list_reading_history_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__list_settings_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__remove_chapter_favorite_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__remove_comic_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__scan_libraries_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__get_library_storage_stats_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__import_database_backup_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__is_comic_bookmarked_impl(port, ptr, rust_vec_len, data_len),
+        17 => {
+            wire__crate__api__library_storage_stats_default_impl(port, ptr, rust_vec_len, data_len)
+        }
+        18 => wire__crate__api__list_all_bookmarks_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__list_chapter_favorites_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__list_reading_history_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__list_settings_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__remove_chapter_favorite_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__remove_comic_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__scan_libraries_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2031,6 +2114,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::LibrarySourceStatus>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::LibraryStorageStats {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.total_size_bytes.into_into_dart().into_dart(),
+            self.comic_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::LibraryStorageStats
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::LibraryStorageStats>
+    for crate::api::LibraryStorageStats
+{
+    fn into_into_dart(self) -> crate::api::LibraryStorageStats {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::OpenChapterPayload {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2124,6 +2228,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::RawComic {
             self.chapter_count.into_into_dart().into_dart(),
             self.read_chapter_count.into_into_dart().into_dart(),
             self.in_progress_chapter_count.into_into_dart().into_dart(),
+            self.size_bytes.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2429,6 +2534,14 @@ impl SseEncode for crate::api::LibrarySourceStatus {
     }
 }
 
+impl SseEncode for crate::api::LibraryStorageStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.total_size_bytes, serializer);
+        <i64>::sse_encode(self.comic_count, serializer);
+    }
+}
+
 impl SseEncode for Vec<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2650,6 +2763,7 @@ impl SseEncode for crate::api::RawComic {
         <i64>::sse_encode(self.chapter_count, serializer);
         <i64>::sse_encode(self.read_chapter_count, serializer);
         <i64>::sse_encode(self.in_progress_chapter_count, serializer);
+        <i64>::sse_encode(self.size_bytes, serializer);
     }
 }
 

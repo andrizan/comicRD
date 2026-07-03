@@ -45,6 +45,7 @@ pub struct RawComic {
     pub chapter_count: i64,
     pub read_chapter_count: i64,
     pub in_progress_chapter_count: i64,
+    pub size_bytes: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -219,6 +220,12 @@ pub struct LibrarySourceStatus {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct LibraryStorageStats {
+    pub total_size_bytes: i64,
+    pub comic_count: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SettingEntry {
     pub key: String,
@@ -228,6 +235,8 @@ pub struct SettingEntry {
 struct LibraryListCache {
     library_path: String,
     entries: Arc<Vec<PathBuf>>,
+    total_size_bytes: i64,
+    comic_count: i64,
     updated_at: Instant,
 }
 
@@ -344,6 +353,8 @@ impl ComicRdCore {
                 *cache_guard = Some(LibraryListCache {
                     library_path: library_path.clone(),
                     entries: Arc::clone(&shared),
+                    total_size_bytes: 0,
+                    comic_count: 0,
                     updated_at: Instant::now(),
                 });
                 shared
@@ -361,6 +372,20 @@ impl ComicRdCore {
             comics_from_fs_entries(&conn, &library_path, &entries, &mut comics)?;
             comics
         };
+        let total_size_bytes: i64 = comics.iter().map(|c| c.size_bytes).sum();
+        let comic_count = comics.len() as i64;
+        {
+            let mut cache_guard = self
+                .library_list_cache
+                .lock()
+                .map_err(|_| "library list cache lock poisoned".to_string())?;
+            if let Some(cached) = cache_guard.as_mut() {
+                if cached.library_path == library_path {
+                    cached.total_size_bytes = total_size_bytes;
+                    cached.comic_count = comic_count;
+                }
+            }
+        }
         comics.sort_by(|a, b| {
             let ord = match sort_by {
                 SortBy::FolderDate => a.date_modified.cmp(&b.date_modified),
@@ -372,6 +397,38 @@ impl ComicRdCore {
             }
         });
         Ok(comics)
+    }
+
+    pub fn get_library_storage_stats(&self) -> Result<LibraryStorageStats, String> {
+        {
+            let cache_guard = self
+                .library_list_cache
+                .lock()
+                .map_err(|_| "library list cache lock poisoned".to_string())?;
+            if let Some(cached) = cache_guard.as_ref() {
+                if cached.updated_at.elapsed() <= Duration::from_secs(30) {
+                    return Ok(LibraryStorageStats {
+                        total_size_bytes: cached.total_size_bytes,
+                        comic_count: cached.comic_count,
+                    });
+                }
+            }
+        }
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        conn.query_row(
+            "SELECT COALESCE(SUM(size_bytes), 0), COUNT(*) FROM comics",
+            [],
+            |row| {
+                Ok(LibraryStorageStats {
+                    total_size_bytes: row.get(0)?,
+                    comic_count: row.get(1)?,
+                })
+            },
+        )
+        .map_err(|e| format!("failed querying library storage stats: {e}"))
     }
 
     pub fn add_library(&self, path: &str) -> Result<i64, String> {
@@ -534,7 +591,13 @@ impl ComicRdCore {
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        open_chapter_for_reading_conn(&mut conn, payload)
+        let result = open_chapter_for_reading_conn(&mut conn, payload);
+        drop(conn);
+        if result.is_ok() {
+            self.clear_library_list_cache();
+            self.clear_chapter_discovery_cache();
+        }
+        result
     }
 
     pub fn get_chapter_pages(&self, chapter_id: i64) -> Result<Vec<PageInfo>, String> {

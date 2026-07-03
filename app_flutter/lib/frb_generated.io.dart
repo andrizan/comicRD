@@ -81,6 +81,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LibrarySourceStatus dco_decode_library_source_status(dynamic raw);
 
   @protected
+  LibraryStorageStats dco_decode_library_storage_stats(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -263,6 +266,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LibrarySourceStatus sse_decode_library_source_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  LibraryStorageStats sse_decode_library_storage_stats(
     SseDeserializer deserializer,
   );
 
@@ -491,6 +499,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_library_source_status(
     LibrarySourceStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_library_storage_stats(
+    LibraryStorageStats self,
     SseSerializer serializer,
   );
 

@@ -36,6 +36,9 @@ class ComicRdApi {
     required bridge.SortDir sortDir,
   }) => bridge.listLibraryComicsRaw(sortBy: sortBy, sortDir: sortDir);
 
+  Future<bridge.LibraryStorageStats> getLibraryStorageStats() =>
+      bridge.getLibraryStorageStats();
+
   Future<List<String>> listComicsWithProgress() =>
       bridge.listComicsWithProgress();
 

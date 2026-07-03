@@ -203,6 +203,19 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| format!("failed running migrations: {e}"))?;
 
+    add_column_if_missing(
+        conn,
+        "comics",
+        "size_bytes",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    add_column_if_missing(
+        conn,
+        "chapters",
+        "size_bytes",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+
     conn.execute_batch(
         r#"
       CREATE INDEX IF NOT EXISTS idx_chapters_comic_id ON chapters(comic_id);
@@ -242,6 +255,44 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
             params![key, value_json, ts],
         )
         .map_err(|e| format!("failed seeding default setting {key}: {e}"))?;
+    }
+    Ok(())
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    column_ddl: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|e| format!("failed inspecting {table} schema: {e}"))?;
+    let mut exists = false;
+    let mut rows = stmt
+        .query([])
+        .map_err(|e| format!("failed reading {table} schema: {e}"))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| format!("failed iterating {table} schema: {e}"))?
+    {
+        let name: String = row
+            .get(1)
+            .map_err(|e| format!("failed reading column name: {e}"))?;
+        if name == column {
+            exists = true;
+            break;
+        }
+    }
+    drop(rows);
+    stmt = conn
+        .prepare("SELECT 1")
+        .map_err(|e| format!("failed preparing noop: {e}"))?;
+    drop(stmt);
+    if !exists {
+        let sql = format!("ALTER TABLE {table} ADD COLUMN {column} {column_ddl}");
+        conn.execute(&sql, [])
+            .map_err(|e| format!("failed adding {table}.{column}: {e}"))?;
     }
     Ok(())
 }
