@@ -37,30 +37,6 @@ verification. Linux packaging is available. The application has been smoke
 tested directly on Windows and Linux. The macOS build target is present, but
 still needs a native macOS smoke test before release claims for that platform.
 
-## Release 1.1.1
-
-This release fixes reader edge cases found after 1.1.0:
-
-- Unlimited scroll now opens the previous chapter correctly when scrolling up at
-  the top of a chapter, including short pages where multiple pages are visible.
-- Reader chapter favorite state no longer queries favorites before the current
-  comic path is available, and favorite toggles use the active chapter path.
-- Regression coverage was added for reader scroll-up navigation and reader
-  favorite toggling.
-
-## Release 1.1.0
-
-This release focuses on reader memory lifecycle and page navigation polish:
-
-- Reader chapter switch/close now waits for active prefetch work before final
-  eviction, preventing previous chapter bytes from being re-cached after cleanup.
-- `evictChapterPages(chapterId, [])` releases both raw page bytes and page source
-  metadata for the chapter.
-- Reader progress bar hover now shows a page-number tooltip positioned above the
-  hovered segment.
-- Regression coverage was added for reader cache release, prefetch cleanup, and
-  progress bar tooltip behavior.
-
 ## Install
 
 ### Arch Linux / CachyOS
