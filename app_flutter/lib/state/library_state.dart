@@ -118,6 +118,30 @@ final allBookmarksProvider = FutureProvider<List<bridge.ComicBookmark>>((ref) {
   return ref.watch(comicRdApiProvider).listAllBookmarks();
 });
 
+class LibraryCountNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void update(int count) {
+    state = count;
+  }
+}
+
+final libraryCountProvider =
+    NotifierProvider<LibraryCountNotifier, int>(LibraryCountNotifier.new);
+
+class BookmarkCountNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void update(int count) {
+    state = count;
+  }
+}
+
+final bookmarkCountProvider =
+    NotifierProvider<BookmarkCountNotifier, int>(BookmarkCountNotifier.new);
+
 final comicsWithProgressProvider = FutureProvider<List<String>>((ref) {
   return ref.watch(comicRdApiProvider).listComicsWithProgress();
 });

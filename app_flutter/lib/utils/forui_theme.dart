@@ -92,6 +92,7 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
   const ComicReaderColors({
     required this.canvas,
     required this.progress,
+    required this.progressTrack,
     required this.bookmark,
     required this.badgeNew,
     required this.star,
@@ -103,6 +104,9 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
 
   /// Progress bar / chapter completion indicator.
   final Color progress;
+
+  /// Progress bar track (background) color.
+  final Color progressTrack;
 
   /// Bookmark highlight color.
   final Color bookmark;
@@ -119,6 +123,7 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
   static const light = ComicReaderColors(
     canvas: Color(0xFF221F2C),
     progress: Color(0xFF6D5DD3),
+    progressTrack: Color(0xFFE8E6E1),
     bookmark: Color(0xFF6D5DD3),
     badgeNew: Color(0xFF6D5DD3),
     star: Color(0xFFE5A832),
@@ -128,6 +133,7 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
   static const dark = ComicReaderColors(
     canvas: Color(0xFF0D0B12),
     progress: Color(0xFF9C8CFF),
+    progressTrack: Color(0xFF252230),
     bookmark: Color(0xFF9C8CFF),
     badgeNew: Color(0xFF9C8CFF),
     star: Color(0xFFF5C542),
@@ -138,6 +144,7 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
   ComicReaderColors copyWith({
     Color? canvas,
     Color? progress,
+    Color? progressTrack,
     Color? bookmark,
     Color? badgeNew,
     Color? star,
@@ -146,6 +153,7 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     return ComicReaderColors(
       canvas: canvas ?? this.canvas,
       progress: progress ?? this.progress,
+      progressTrack: progressTrack ?? this.progressTrack,
       bookmark: bookmark ?? this.bookmark,
       badgeNew: badgeNew ?? this.badgeNew,
       star: star ?? this.star,
@@ -159,6 +167,7 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     return ComicReaderColors(
       canvas: Color.lerp(canvas, other.canvas, t)!,
       progress: Color.lerp(progress, other.progress, t)!,
+      progressTrack: Color.lerp(progressTrack, other.progressTrack, t)!,
       bookmark: Color.lerp(bookmark, other.bookmark, t)!,
       badgeNew: Color.lerp(badgeNew, other.badgeNew, t)!,
       star: Color.lerp(star, other.star, t)!,
@@ -174,7 +183,10 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
 class AppIcons {
   const AppIcons._();
 
+  static const IconData menu = FLucideIcons.menu;
   static const IconData search = FLucideIcons.search;
+  static const IconData image = FLucideIcons.image;
+  static const IconData chevronDown = FLucideIcons.chevronDown;
   static const IconData refresh = FLucideIcons.refreshCcw;
   static const IconData settings = FLucideIcons.settings;
   static const IconData library = FLucideIcons.bookOpen;
@@ -228,11 +240,7 @@ extension AppThemeContext on BuildContext {
 
   /// Reader-specific colors.
   ComicReaderColors get appReader {
-    try {
-      return theme.extension<ComicReaderColors>();
-    } catch (_) {
-      return ComicReaderColors.light;
-    }
+    return Theme.of(this).extension<ComicReaderColors>() ?? ComicReaderColors.light;
   }
 
   TextStyle get appTitleStyle => theme.typography.display.lg;

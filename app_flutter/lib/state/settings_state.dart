@@ -257,6 +257,15 @@ class AppStrings {
     required this.copyTitle,
     required this.copyPath,
     required this.noLibrarySource,
+    // Redesign labels
+    required this.menu,
+    required this.newBadge,
+    required this.continueReading,
+    required this.totalSize,
+    required this.chapterCountLabel,
+    required this.librarySubtitleTemplate,
+    required this.bookmarksSubtitleTemplate,
+    required this.latestReading,
     // Settings panel
     required this.librarySection,
     required this.librarySource,
@@ -346,6 +355,15 @@ class AppStrings {
   final String copyTitle;
   final String copyPath;
   final String noLibrarySource;
+  // Redesign labels
+  final String menu;
+  final String newBadge;
+  final String continueReading;
+  final String totalSize;
+  final String chapterCountLabel;
+  final String librarySubtitleTemplate;
+  final String bookmarksSubtitleTemplate;
+  final String latestReading;
   // Settings panel
   final String librarySection;
   final String librarySource;
@@ -427,6 +445,14 @@ class AppStrings {
     copyTitle: 'Copy title',
     copyPath: 'Copy path',
     noLibrarySource: 'No library source configured',
+    menu: 'Menu',
+    newBadge: 'New',
+    continueReading: 'Continue',
+    totalSize: 'Total size',
+    chapterCountLabel: 'Ch.',
+    librarySubtitleTemplate: '{count} titles saved',
+    bookmarksSubtitleTemplate: '{count} titles saved',
+    latestReading: 'Latest reading',
     librarySection: 'Library',
     librarySource: 'Library source',
     browseDirectory: 'Browse directory',
@@ -508,6 +534,14 @@ class AppStrings {
     copyTitle: 'Salin judul',
     copyPath: 'Salin path',
     noLibrarySource: 'Sumber pustaka belum dikonfigurasi',
+    menu: 'Menu',
+    newBadge: 'Baru',
+    continueReading: 'Lanjut',
+    totalSize: 'Total ukuran',
+    chapterCountLabel: 'Ch.',
+    librarySubtitleTemplate: '{count} judul tersimpan',
+    bookmarksSubtitleTemplate: '{count} judul disimpan',
+    latestReading: 'Bacaan terakhir',
     librarySection: 'Pustaka',
     librarySource: 'Sumber pustaka',
     browseDirectory: 'Pilih direktori',

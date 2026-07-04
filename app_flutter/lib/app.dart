@@ -9,12 +9,12 @@ import 'package:window_manager/window_manager.dart';
 import 'pages/comic_page.dart';
 import 'pages/library_page.dart';
 import 'pages/reader_page.dart';
+import 'pages/settings_page.dart';
 import 'state/api_state.dart';
 import 'state/library_state.dart';
 import 'state/settings_data_state.dart';
 import 'state/settings_state.dart';
 import 'utils/forui_theme.dart';
-import 'widgets/settings_panel.dart';
 
 final _router = GoRouter(
   routes: [
@@ -29,6 +29,10 @@ final _router = GoRouter(
             return ComicPage(comicPath: comicPath);
           },
         ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsPage(),
+        ),
       ],
     ),
     GoRoute(
@@ -40,6 +44,21 @@ final _router = GoRouter(
     ),
   ],
 );
+
+enum SidebarTab { library, history, bookmarks, settings }
+
+final sidebarTabProvider = NotifierProvider<SidebarTabNotifier, SidebarTab>(
+  SidebarTabNotifier.new,
+);
+
+class SidebarTabNotifier extends Notifier<SidebarTab> {
+  @override
+  SidebarTab build() => SidebarTab.library;
+
+  void set(SidebarTab tab) {
+    state = tab;
+  }
+}
 
 class ComicRdApp extends ConsumerWidget {
   const ComicRdApp({super.key});
@@ -58,8 +77,18 @@ class ComicRdApp extends ConsumerWidget {
       locale: const Locale('en'),
       supportedLocales: const [Locale('en')],
       themeMode: settings.themeMode,
-      theme: ComicReaderFTheme.light.toApproximateMaterialTheme(),
-      darkTheme: ComicReaderFTheme.dark.toApproximateMaterialTheme(),
+      theme: ComicReaderFTheme.light.toApproximateMaterialTheme().copyWith(
+        extensions: [
+          ...ComicReaderFTheme.light.toApproximateMaterialTheme().extensions.values,
+          ComicReaderColors.light,
+        ],
+      ),
+      darkTheme: ComicReaderFTheme.dark.toApproximateMaterialTheme().copyWith(
+        extensions: [
+          ...ComicReaderFTheme.dark.toApproximateMaterialTheme().extensions.values,
+          ComicReaderColors.dark,
+        ],
+      ),
       routerConfig: _router,
       builder: (context, child) => FTheme(
         data: fTheme,
@@ -79,6 +108,8 @@ class ComicRdShell extends ConsumerStatefulWidget {
 }
 
 class _ComicRdShellState extends ConsumerState<ComicRdShell> {
+  bool _sidebarCollapsed = false;
+
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
@@ -96,148 +127,381 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
       });
     });
     final settings = ref.watch(appSettingsProvider);
-    final libraryPreferences = ref.watch(libraryPreferencesProvider);
     final text = stringsFor(settings.localeCode);
-    final selectedTab = libraryPreferences.selectedTab;
+    final selectedTab = ref.watch(sidebarTabProvider);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncSidebarTabWithRoute();
+    });
+
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => windowManager.startDragging(),
       onDoubleTap: () {},
       child: ColoredBox(
         color: context.theme.colors.background,
-        child: Column(
+        child: Row(
           children: [
-            _ShellHeader(
+            _Sidebar(
+              collapsed: _sidebarCollapsed,
+              onToggleCollapse: () => setState(
+                () => _sidebarCollapsed = !_sidebarCollapsed,
+              ),
               text: text,
-              themeMode: settings.themeMode,
               selectedTab: selectedTab,
-              onSelectTab: (tab) => _setSelectedTab(tab),
-              onThemeChanged: (mode) async {
-                ref.read(appSettingsProvider.notifier).setThemeMode(mode);
-                await ref
-                    .read(comicRdApiProvider)
-                    .setSetting(
-                      'app_theme',
-                      jsonEncode(themeModeToSetting(mode)),
-                    );
-              },
-              onLocaleChanged: (locale) async {
-                ref.read(appSettingsProvider.notifier).setLocale(locale);
-                await ref
-                    .read(comicRdApiProvider)
-                    .setSetting('app_locale', jsonEncode(locale));
-              },
-              onSettingsPressed: () {
-                showFDialog<void>(
-                  context: context,
-                  builder: (context, style, animation) => const SettingsPanel(),
-                );
-              },
+              libraryCount: ref.watch(libraryCountProvider),
+              bookmarkCount: ref.watch(bookmarkCountProvider),
+              onSelectTab: _setSelectedTab,
             ),
-            Expanded(child: widget.child),
+            Expanded(
+              child: Column(
+                children: [
+                  _TopBar(
+                    text: text,
+                    themeMode: settings.themeMode,
+                    onThemeChanged: (mode) async {
+                      ref.read(appSettingsProvider.notifier).setThemeMode(mode);
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting(
+                            'app_theme',
+                            jsonEncode(themeModeToSetting(mode)),
+                          );
+                    },
+                    onLocaleChanged: (locale) async {
+                      ref.read(appSettingsProvider.notifier).setLocale(locale);
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting('app_locale', jsonEncode(locale));
+                    },
+                  ),
+                  Expanded(child: widget.child),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _setSelectedTab(LibraryTab selectedTab) async {
-    ref.read(libraryPreferencesProvider.notifier).setSelectedTab(selectedTab);
-    await ref
-        .read(comicRdApiProvider)
-        .setSetting(
+  void _syncSidebarTabWithRoute() {
+    if (!mounted) return;
+    final location = GoRouterState.of(context).uri.path;
+    final libraryTab = ref.read(libraryPreferencesProvider).selectedTab;
+    SidebarTab nextTab;
+    if (location == '/settings') {
+      nextTab = SidebarTab.settings;
+    } else {
+      nextTab = switch (libraryTab) {
+        LibraryTab.library => SidebarTab.library,
+        LibraryTab.history => SidebarTab.history,
+        LibraryTab.bookmarks => SidebarTab.bookmarks,
+      };
+    }
+    if (ref.read(sidebarTabProvider) != nextTab) {
+      ref.read(sidebarTabProvider.notifier).set(nextTab);
+    }
+  }
+
+  Future<void> _setSelectedTab(SidebarTab selectedTab) async {
+    ref.read(sidebarTabProvider.notifier).set(selectedTab);
+    switch (selectedTab) {
+      case SidebarTab.library:
+        ref
+            .read(libraryPreferencesProvider.notifier)
+            .setSelectedTab(LibraryTab.library);
+        await ref.read(comicRdApiProvider).setSetting(
           'library_selected_tab',
-          jsonEncode(encodeLibraryTab(selectedTab)),
+          jsonEncode(encodeLibraryTab(LibraryTab.library)),
         );
-    if (mounted) {
-      context.go('/');
+        if (mounted) context.go('/');
+      case SidebarTab.history:
+        ref
+            .read(libraryPreferencesProvider.notifier)
+            .setSelectedTab(LibraryTab.history);
+        await ref.read(comicRdApiProvider).setSetting(
+          'library_selected_tab',
+          jsonEncode(encodeLibraryTab(LibraryTab.history)),
+        );
+        if (mounted) context.go('/');
+      case SidebarTab.bookmarks:
+        ref
+            .read(libraryPreferencesProvider.notifier)
+            .setSelectedTab(LibraryTab.bookmarks);
+        await ref.read(comicRdApiProvider).setSetting(
+          'library_selected_tab',
+          jsonEncode(encodeLibraryTab(LibraryTab.bookmarks)),
+        );
+        if (mounted) context.go('/');
+      case SidebarTab.settings:
+        if (mounted) context.go('/settings');
     }
   }
 }
 
-class _ShellHeader extends StatelessWidget {
-  const _ShellHeader({
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({
+    required this.collapsed,
+    required this.onToggleCollapse,
     required this.text,
-    required this.themeMode,
     required this.selectedTab,
+    required this.libraryCount,
+    required this.bookmarkCount,
     required this.onSelectTab,
-    required this.onThemeChanged,
-    required this.onLocaleChanged,
-    required this.onSettingsPressed,
   });
 
+  final bool collapsed;
+  final VoidCallback onToggleCollapse;
   final AppStrings text;
-  final ThemeMode themeMode;
-  final LibraryTab selectedTab;
-  final ValueChanged<LibraryTab> onSelectTab;
-  final ValueChanged<ThemeMode> onThemeChanged;
-  final ValueChanged<String> onLocaleChanged;
-  final VoidCallback onSettingsPressed;
+  final SidebarTab selectedTab;
+  final int libraryCount;
+  final int bookmarkCount;
+  final ValueChanged<SidebarTab> onSelectTab;
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.theme.colors;
     return Container(
+      width: collapsed ? 72.0 : 260.0,
       decoration: BoxDecoration(
-        color: context.theme.colors.background,
-        border: Border(bottom: BorderSide(color: context.theme.colors.border)),
+        color: colors.card,
+        border: Border(right: BorderSide(color: colors.border)),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
+      padding: EdgeInsets.fromLTRB(collapsed ? 8 : 16, 24, collapsed ? 8 : 16, 24),
+      child: Column(
+        crossAxisAlignment:
+            collapsed ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        children: [
+          _SidebarBrand(
+            collapsed: collapsed,
+            onToggleCollapse: onToggleCollapse,
+            text: text,
+          ),
+          const SizedBox(height: 32),
+          if (!collapsed)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, bottom: 12),
+              child: Text(
+                text.menu.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          _SidebarNavItem(
+            collapsed: collapsed,
+            icon: AppIcons.library,
+            label: text.library,
+            count: libraryCount,
+            selected: selectedTab == SidebarTab.library,
+            onTap: () => onSelectTab(SidebarTab.library),
+          ),
+          const SizedBox(height: 4),
+          _SidebarNavItem(
+            collapsed: collapsed,
+            icon: AppIcons.history,
+            label: text.history,
+            selected: selectedTab == SidebarTab.history,
+            onTap: () => onSelectTab(SidebarTab.history),
+          ),
+          const SizedBox(height: 4),
+          _SidebarNavItem(
+            collapsed: collapsed,
+            icon: AppIcons.bookmark,
+            label: text.bookmarks,
+            count: bookmarkCount,
+            selected: selectedTab == SidebarTab.bookmarks,
+            onTap: () => onSelectTab(SidebarTab.bookmarks),
+          ),
+          const Spacer(),
+          const SizedBox(height: 4),
+          if (!collapsed)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, bottom: 12),
+              child: Text(
+                text.settings.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ),
+          _SidebarNavItem(
+            collapsed: collapsed,
+            icon: AppIcons.settings,
+            label: text.settings,
+            selected: selectedTab == SidebarTab.settings,
+            onTap: () => onSelectTab(SidebarTab.settings),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarBrand extends StatelessWidget {
+  const _SidebarBrand({
+    required this.collapsed,
+    required this.onToggleCollapse,
+    required this.text,
+  });
+
+  final bool collapsed;
+  final VoidCallback onToggleCollapse;
+  final AppStrings text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return Row(
+      mainAxisAlignment:
+          collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+      children: [
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: onToggleCollapse,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.transparent,
+              ),
+              child: Icon(AppIcons.menu, size: 24, color: colors.mutedForeground),
+            ),
+          ),
+        ),
+        if (!collapsed) ...[
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              text.appName,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: appFontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+                color: colors.foreground,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SidebarNavItem extends StatefulWidget {
+  const _SidebarNavItem({
+    required this.collapsed,
+    required this.icon,
+    required this.label,
+    this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final bool collapsed;
+  final IconData icon;
+  final String label;
+  final int? count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  State<_SidebarNavItem> createState() => _SidebarNavItemState();
+}
+
+class _SidebarNavItemState extends State<_SidebarNavItem> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.collapsed ? 12 : 12,
+            vertical: 10,
+          ),
+          clipBehavior: Clip.hardEdge,
+          decoration: BoxDecoration(
+            color: widget.selected
+                ? colors.secondary
+                : _hovered
+                    ? colors.muted.withValues(alpha: 0.5)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Row(
+            mainAxisAlignment: widget.collapsed
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
-              Text(
-                text.appName,
-                style: const TextStyle(
-                  fontFamily: appFontFamily,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                  letterSpacing: -0.4,
+              if (widget.selected && !widget.collapsed)
+                Container(
+                  width: 3,
+                  height: 18,
+                  margin: const EdgeInsets.only(right: 9),
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                )
+              else if (!widget.collapsed)
+                const SizedBox(width: 12),
+              Icon(
+                widget.icon,
+                size: 20,
+                color: widget.selected ? colors.primary : colors.mutedForeground,
+              ),
+              if (!widget.collapsed) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: widget.selected ? colors.primary : colors.foreground,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _NavButton(
-                      icon: AppIcons.library,
-                      label: text.library,
-                      selected: selectedTab == LibraryTab.library,
-                      onPressed: () => onSelectTab(LibraryTab.library),
+                if (widget.count != null && widget.count! > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
                     ),
-                    const SizedBox(width: 4),
-                    _NavButton(
-                      icon: AppIcons.history,
-                      label: text.history,
-                      selected: selectedTab == LibraryTab.history,
-                      onPressed: () => onSelectTab(LibraryTab.history),
+                    decoration: BoxDecoration(
+                      color: colors.secondary,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    const SizedBox(width: 4),
-                    _NavButton(
-                      icon: AppIcons.bookmark,
-                      label: text.bookmarks,
-                      selected: selectedTab == LibraryTab.bookmarks,
-                      onPressed: () => onSelectTab(LibraryTab.bookmarks),
+                    child: Text(
+                      '${widget.count}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: colors.primary,
+                      ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              _ThemeMenuButton(
-                text: text,
-                themeMode: themeMode,
-                onChanged: onThemeChanged,
-              ),
-              const SizedBox(width: 8),
-              _LocaleMenuButton(text: text, onChanged: onLocaleChanged),
-              const SizedBox(width: 8),
-              FButton.icon(
-                variant: .ghost,
-                onPress: onSettingsPressed,
-                child: const Icon(AppIcons.settings),
-              ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -246,27 +510,45 @@ class _ShellHeader extends StatelessWidget {
   }
 }
 
-class _NavButton extends StatelessWidget {
-  const _NavButton({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onPressed,
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.text,
+    required this.themeMode,
+    required this.onThemeChanged,
+    required this.onLocaleChanged,
   });
 
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onPressed;
+  final AppStrings text;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onLocaleChanged;
 
   @override
   Widget build(BuildContext context) {
-    return FButton(
-      variant: .ghost,
-      selected: selected,
-      onPress: onPressed,
-      prefix: Icon(icon),
-      child: Text(label),
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        color: context.theme.colors.background,
+        border: Border(bottom: BorderSide(color: context.theme.colors.border)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              const Spacer(),
+              _ThemeMenuButton(
+                text: text,
+                themeMode: themeMode,
+                onChanged: onThemeChanged,
+              ),
+              const SizedBox(width: 8),
+              _LocaleMenuButton(text: text, onChanged: onLocaleChanged),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
