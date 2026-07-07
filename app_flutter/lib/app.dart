@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ import 'pages/comic_page.dart';
 import 'pages/library_page.dart';
 import 'pages/reader_page.dart';
 import 'pages/settings_page.dart';
+import 'routes/path_codec.dart';
 import 'state/api_state.dart';
 import 'state/library_state.dart';
 import 'state/settings_data_state.dart';
@@ -22,13 +24,15 @@ final _router = GoRouter(
       builder: (context, state, child) => ComicRdShell(child: child),
       routes: [
         GoRoute(path: '/', builder: (context, state) => const LibraryPage()),
-        GoRoute(
-          path: '/comic/:comicPath',
-          builder: (context, state) {
-            final comicPath = state.pathParameters['comicPath'] ?? '';
-            return ComicPage(comicPath: comicPath);
-          },
-        ),
+          GoRoute(
+            path: '/comic/:comicPath',
+            builder: (context, state) {
+              final comicPath = decodeRoutePath(
+                state.pathParameters['comicPath'] ?? '',
+              );
+              return ComicPage(comicPath: comicPath);
+            },
+          ),
         GoRoute(
           path: '/settings',
           builder: (context, state) => const SettingsPage(),
@@ -138,7 +142,23 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => windowManager.startDragging(),
       onDoubleTap: () {},
-      child: ColoredBox(
+      child: Shortcuts(
+        shortcuts: <LogicalKeySet, Intent>{
+          LogicalKeySet(LogicalKeyboardKey.keyT, LogicalKeyboardKey.control):
+              const _ToggleThemeIntent(),
+          LogicalKeySet(LogicalKeyboardKey.keyL, LogicalKeyboardKey.control):
+              const _ToggleLocaleIntent(),
+        },
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            _ToggleThemeIntent: CallbackAction<_ToggleThemeIntent>(
+              onInvoke: (_) => _onThemeShortcut(),
+            ),
+            _ToggleLocaleIntent: CallbackAction<_ToggleLocaleIntent>(
+              onInvoke: (_) => _onLocaleShortcut(),
+            ),
+          },
+          child: ColoredBox(
         color: context.theme.colors.background,
         child: Row(
           children: [
@@ -180,6 +200,8 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
               ),
             ),
           ],
+        ),
+          ),
         ),
       ),
     );
@@ -237,6 +259,14 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
       case SidebarTab.settings:
         if (mounted) context.go('/settings');
     }
+  }
+
+  void _onThemeShortcut() {
+    ref.read(appSettingsProvider.notifier).toggleTheme();
+  }
+
+  void _onLocaleShortcut() {
+    ref.read(appSettingsProvider.notifier).toggleLocale();
   }
 }
 
@@ -647,4 +677,12 @@ class _LocaleMenuButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ToggleThemeIntent extends Intent {
+  const _ToggleThemeIntent();
+}
+
+class _ToggleLocaleIntent extends Intent {
+  const _ToggleLocaleIntent();
 }

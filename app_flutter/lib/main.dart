@@ -13,6 +13,23 @@ Future<void> main() async {
     await windowManager.show();
     await windowManager.focus();
   });
-  await const ComicRdApi().init();
+  const api = ComicRdApi();
+  windowManager.setPreventClose(true);
+  windowManager.addListener(
+    _WindowListener(onClose: () => api.shutdown()),
+  );
+  await api.init();
   runApp(const ProviderScope(child: ComicRdApp()));
+}
+
+class _WindowListener extends WindowListener {
+  _WindowListener({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  void onWindowClose() async {
+    onClose();
+    await windowManager.destroy();
+  }
 }

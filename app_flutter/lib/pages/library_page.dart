@@ -74,12 +74,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             });
           }
         }, fireImmediately: true);
-        // ignore: unused_result
-        ref.refresh(rawLibraryComicsProvider.future);
-        // ignore: unused_result
-        ref.refresh(comicsWithProgressProvider.future);
-        // ignore: unused_result
-        ref.refresh(readingHistoryProvider.future);
+        unawaited(ref.refresh(rawLibraryComicsProvider.future));
+        unawaited(ref.refresh(comicsWithProgressProvider.future));
+        unawaited(ref.refresh(readingHistoryProvider.future));
       });
     }
   }
@@ -1076,6 +1073,12 @@ class _ComicCard extends StatelessWidget {
             isNew: _isNew,
             bookmarked: bookmarked,
             onToggleBookmark: onToggleBookmark,
+            contextMenu: _CardContextMenu(
+              text: text,
+              onCopyTitle: onCopyTitle,
+              onCopyPath: onCopyPath,
+              onOpenFolder: onOpenFolder,
+            ),
           ),
         ),
         Padding(
@@ -1206,10 +1209,22 @@ class _ComicCard extends StatelessWidget {
           Center(
             child: Padding(
               padding: const EdgeInsets.only(right: 16),
-              child: _BookmarkButton(
-                bookmarked: bookmarked,
-                onToggle: onToggleBookmark,
-                isGrid: false,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _BookmarkButton(
+                    bookmarked: bookmarked,
+                    onToggle: onToggleBookmark,
+                    isGrid: false,
+                  ),
+                  const SizedBox(width: 4),
+                  _CardContextMenu(
+                    text: text,
+                    onCopyTitle: onCopyTitle,
+                    onCopyPath: onCopyPath,
+                    onOpenFolder: onOpenFolder,
+                  ),
+                ],
               ),
             ),
           ),
@@ -1227,6 +1242,7 @@ class _CoverArea extends StatelessWidget {
     required this.bookmarked,
     required this.onToggleBookmark,
     this.showBookmark = true,
+    this.contextMenu,
   });
 
   final AppStrings text;
@@ -1235,6 +1251,7 @@ class _CoverArea extends StatelessWidget {
   final bool bookmarked;
   final VoidCallback onToggleBookmark;
   final bool showBookmark;
+  final Widget? contextMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -1284,6 +1301,12 @@ class _CoverArea extends StatelessWidget {
                 onToggle: onToggleBookmark,
                 isGrid: isGrid,
               ),
+            ),
+          if (contextMenu != null && isGrid)
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: contextMenu!,
             ),
         ],
       ),
@@ -1811,6 +1834,69 @@ class _BookmarkCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CardContextMenu extends StatelessWidget {
+  const _CardContextMenu({
+    required this.text,
+    required this.onCopyTitle,
+    required this.onCopyPath,
+    required this.onOpenFolder,
+  });
+
+  final AppStrings text;
+  final VoidCallback onCopyTitle;
+  final VoidCallback onCopyPath;
+  final VoidCallback onOpenFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return FPopoverMenu(
+      menuAnchor: .bottomEnd,
+      childAnchor: .topEnd,
+      menu: [
+        FItemGroup(
+          children: [
+            FItem(
+              prefix: const Icon(AppIcons.copyTitle, size: 16),
+              title: Text(text.copyTitle),
+              onPress: onCopyTitle,
+            ),
+            FItem(
+              prefix: const Icon(AppIcons.copyPath, size: 16),
+              title: Text(text.copyPath),
+              onPress: onCopyPath,
+            ),
+            FItem(
+              prefix: const Icon(AppIcons.folderOpen, size: 16),
+              title: Text(text.openFolder),
+              onPress: onOpenFolder,
+            ),
+          ],
+        ),
+      ],
+      builder: (_, controller, _) => MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: controller.toggle,
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.35),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              AppIcons.more,
+              size: 14,
+              color: Colors.white,
+            ),
+          ),
+        ),
       ),
     );
   }

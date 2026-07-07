@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -21,14 +23,20 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _librarySource = TextEditingController();
+  final _librarySourceFocus = FocusNode();
   bool _initialized = false;
   ThemeMode _themeMode = ThemeMode.light;
   String _locale = 'en';
   String? _message;
+  bool _scanning = false;
+  String? _scanStatus;
+  Timer? _scanPollTimer;
 
   @override
   void dispose() {
     _librarySource.dispose();
+    _librarySourceFocus.dispose();
+    _scanPollTimer?.cancel();
     super.dispose();
   }
 
@@ -100,9 +108,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Expanded(
                           child: SizedBox(
                             height: 40,
-                            child: FTextField(
-                              control: .managed(controller: _librarySource),
-                              hint: text.librarySource,
+                            child: KeyboardListener(
+                              focusNode: _librarySourceFocus,
+                              autofocus: false,
+                              onKeyEvent: (event) {
+                                if (event is KeyDownEvent &&
+                                    event.logicalKey ==
+                                        LogicalKeyboardKey.enter) {
+                                  _save();
+                                }
+                              },
+                              child: FTextField(
+                                control: .managed(controller: _librarySource),
+                                hint: text.librarySource,
+                              ),
                             ),
                           ),
                         ),
@@ -113,6 +132,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             variant: .outline,
                             onPress: _pickLibrarySource,
                             child: const Icon(AppIcons.folderOpen),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        FTooltip(
+                          tipBuilder: (context, _) => Text(text.save),
+                          child: FButton.icon(
+                            variant: .outline,
+                            onPress: _save,
+                            child: const Icon(AppIcons.save),
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -149,6 +177,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                       ),
                       loading: () => const FCircularProgress.loader(),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        FButton(
+                          variant: .outline,
+                          onPress: _scanning ? null : _startScan,
+                          prefix: _scanning
+                              ? const FCircularProgress.loader()
+                              : const Icon(AppIcons.refresh, size: 16),
+                          child: Text(_scanning ? text.scanning : text.scanLibrary),
+                        ),
+                        if (_scanStatus != null) ...[
+                          const SizedBox(width: 12),
+                          Text(
+                            _scanStatus!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.appMutedText,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 24),
                     _sectionHeader(text.readerSection),
@@ -427,5 +478,68 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ref.invalidate(comicsWithProgressProvider);
     ref.invalidate(readingHistoryProvider);
     ref.invalidate(allBookmarksProvider);
+  }
+
+  Future<void> _startScan() async {
+    final api = ref.read(comicRdApiProvider);
+    final t = stringsFor(_locale);
+    setState(() {
+      _scanning = true;
+      _scanStatus = null;
+    });
+    try {
+      final started = await api.startScanLibraries();
+      if (started) {
+        _pollScanStatus();
+      } else {
+        setState(() {
+          _scanning = false;
+          _scanStatus = t.scanNoChange;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _scanning = false;
+        _scanStatus = e.toString();
+      });
+    }
+  }
+
+  void _pollScanStatus() {
+    _scanPollTimer?.cancel();
+    _scanPollTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      try {
+        final api = ref.read(comicRdApiProvider);
+        final t = stringsFor(_locale);
+        final status = await api.getLibraryScanStatus();
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (!status.running) {
+          timer.cancel();
+          final summary = await api.scanLibraries();
+          setState(() {
+            _scanning = false;
+            _scanStatus = t.scanCompleted
+                .replaceAll('{comics}', '${summary.comics}')
+                .replaceAll('{chapters}', '${summary.chapters}');
+          });
+          _invalidateDataProviders();
+        } else {
+          setState(() {
+            _scanStatus = '${t.scanProgress}...';
+          });
+        }
+      } catch (e) {
+        timer.cancel();
+        if (mounted) {
+          setState(() {
+            _scanning = false;
+            _scanStatus = e.toString();
+          });
+        }
+      }
+    });
   }
 }

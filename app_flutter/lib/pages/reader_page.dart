@@ -173,6 +173,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final isFavorited =
         chapterSourcePath.isNotEmpty &&
         favoritePaths.contains(chapterSourcePath);
+    final chapterBookmarksAsync = ref.watch(
+      chapterBookmarksProvider(widget.chapterId),
+    );
+    final chapterBookmarks = chapterBookmarksAsync.asData?.value ?? [];
+    final isCurrentPageBookmarked = chapterBookmarks.any(
+      (b) => b.page == _currentPage,
+    );
+    final currentBookmarkId = isCurrentPageBookmarked
+        ? chapterBookmarks
+            .firstWhere((b) => b.page == _currentPage)
+            .id
+        : null;
     return KeyboardListener(
       autofocus: true,
       focusNode: _focusNode,
@@ -238,6 +250,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             fullscreen: _fullscreen,
                             unlimitedScroll: readerSettings.unlimitedScroll,
                             isFavorited: isFavorited,
+                            isPageBookmarked: isCurrentPageBookmarked,
                             onClose: () => _close(data),
                             onPreviousPage: () => _jumpBy(-1),
                             onNextPage: () => _jumpBy(1),
@@ -272,6 +285,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             },
                             onToggleFavorite: () =>
                                 _toggleFavorite(chapterSourcePath, comicPath),
+                            onTogglePageBookmark: () =>
+                                _togglePageBookmark(currentBookmarkId),
                           ),
                         ),
                       ),
@@ -1026,6 +1041,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     ref.invalidate(chapterFavoritesProvider(comicSourcePath));
   }
+
+  Future<void> _togglePageBookmark(int? bookmarkId) async {
+    final api = ref.read(comicRdApiProvider);
+    if (bookmarkId != null) {
+      await api.removeBookmark(bookmarkId);
+    } else {
+      await api.addBookmark(
+        bridge.SaveBookmarkPayload(
+          chapterId: widget.chapterId,
+          page: _currentPage,
+          note: '',
+        ),
+      );
+    }
+    ref.invalidate(chapterBookmarksProvider(widget.chapterId));
+  }
 }
 
 class _ReaderPageItem extends ConsumerWidget {
@@ -1169,6 +1200,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.fullscreen,
     required this.unlimitedScroll,
     required this.isFavorited,
+    required this.isPageBookmarked,
     required this.onClose,
     required this.onPreviousPage,
     required this.onNextPage,
@@ -1179,6 +1211,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.onToggleFullscreen,
     required this.onToggleUnlimitedScroll,
     required this.onToggleFavorite,
+    required this.onTogglePageBookmark,
   });
 
   final AppStrings text;
@@ -1189,6 +1222,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final bool fullscreen;
   final bool unlimitedScroll;
   final bool isFavorited;
+  final bool isPageBookmarked;
   final VoidCallback onClose;
   final VoidCallback onPreviousPage;
   final VoidCallback onNextPage;
@@ -1199,6 +1233,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final VoidCallback onToggleFullscreen;
   final VoidCallback onToggleUnlimitedScroll;
   final VoidCallback onToggleFavorite;
+  final VoidCallback onTogglePageBookmark;
 
   @override
   Widget build(BuildContext context) {
@@ -1285,6 +1320,14 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       icon: AppIcons.star,
                       active: isFavorited,
                       onPressed: onToggleFavorite,
+                    ),
+                    _ReferenceReaderIconButton(
+                      tooltip: isPageBookmarked
+                          ? text.removeBookmark
+                          : text.addBookmark,
+                      icon: AppIcons.bookmark,
+                      active: isPageBookmarked,
+                      onPressed: onTogglePageBookmark,
                     ),
                     const SizedBox(width: 4),
                     _ReaderControlChip(

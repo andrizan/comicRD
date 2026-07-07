@@ -221,6 +221,8 @@ class AppIcons {
   static const IconData scroll = FLucideIcons.scroll;
   static const IconData minus = FLucideIcons.minus;
   static const IconData plus = FLucideIcons.plus;
+  static const IconData copyTitle = FLucideIcons.text;
+  static const IconData copyPath = FLucideIcons.copy;
 }
 
 // ---------------------------------------------------------------------------

@@ -289,6 +289,12 @@ class AppStrings {
     required this.backupImported,
     required this.sqliteDatabase,
     required this.modified,
+    // Scan
+    required this.scanLibrary,
+    required this.scanning,
+    required this.scanNoChange,
+    required this.scanProgress,
+    required this.scanCompleted,
   });
 
   // App identity
@@ -387,6 +393,12 @@ class AppStrings {
   final String backupImported;
   final String sqliteDatabase;
   final String modified;
+  // Scan
+  final String scanLibrary;
+  final String scanning;
+  final String scanNoChange;
+  final String scanProgress;
+  final String scanCompleted;
 
   static const en = AppStrings(
     appName: 'ComicRD',
@@ -475,6 +487,11 @@ class AppStrings {
     backupImported: 'Backup imported',
     sqliteDatabase: 'SQLite database',
     modified: 'Modified',
+    scanLibrary: 'Scan library',
+    scanning: 'Scanning...',
+    scanNoChange: 'No changes detected',
+    scanProgress: 'Scanning',
+    scanCompleted: 'Scan complete: {comics} comics, {chapters} chapters found',
   );
 
   static const id = AppStrings(
@@ -564,5 +581,10 @@ class AppStrings {
     backupImported: 'Cadangan diimpor',
     sqliteDatabase: 'Database SQLite',
     modified: 'Diubah',
+    scanLibrary: 'Pindai pustaka',
+    scanning: 'Memindai...',
+    scanNoChange: 'Tidak ada perubahan',
+    scanProgress: 'Memindai',
+    scanCompleted: 'Pemindaian selesai: {comics} komik, {chapters} chapter ditemukan',
   );
 }
