@@ -51,320 +51,335 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       builder: (context, constraints) {
         final horizontalPadding = constraints.maxWidth < 540 ? 16.0 : 48.0;
         return Padding(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, 32, horizontalPadding, 48),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            32,
+            horizontalPadding,
+            48,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          Row(
-            children: [
-              Text(
-                text.settings,
-                style: const TextStyle(
-                  fontFamily: appFontFamily,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.01,
-                ),
+              Row(
+                children: [
+                  Text(
+                    text.settings,
+                    style: const TextStyle(
+                      fontFamily: appFontFamily,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.01,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const SizedBox.shrink();
+                      final info = snapshot.data!;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.appAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'v${info.version}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.appAccent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              FutureBuilder<PackageInfo>(
-                future: PackageInfo.fromPlatform(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink();
-                  final info = snapshot.data!;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.appAccent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'v${info.version}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.appAccent,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
-                },
+              const SizedBox(height: 24),
+              Expanded(
+                child: settings.when(
+                  data: (values) {
+                    _initialize(values, appSettings);
+                    return ListView(
+                      children: [
+                        _sectionHeader(text.librarySection),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 40,
+                                child: KeyboardListener(
+                                  focusNode: _librarySourceFocus,
+                                  autofocus: false,
+                                  onKeyEvent: (event) {
+                                    if (event is KeyDownEvent &&
+                                        event.logicalKey ==
+                                            LogicalKeyboardKey.enter) {
+                                      _save();
+                                    }
+                                  },
+                                  child: FTextField(
+                                    control: .managed(
+                                      controller: _librarySource,
+                                    ),
+                                    hint: text.librarySource,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            FTooltip(
+                              tipBuilder: (context, _) =>
+                                  Text(text.browseDirectory),
+                              child: FButton.icon(
+                                variant: .outline,
+                                onPress: _pickLibrarySource,
+                                child: const Icon(AppIcons.folderOpen),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            FTooltip(
+                              tipBuilder: (context, _) => Text(text.save),
+                              child: FButton.icon(
+                                variant: .outline,
+                                onPress: _save,
+                                child: const Icon(AppIcons.save),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            FTooltip(
+                              tipBuilder: (context, _) =>
+                                  Text(text.refreshSourceStatus),
+                              child: FButton.icon(
+                                variant: .outline,
+                                onPress: () =>
+                                    ref.invalidate(librarySourceStatusProvider),
+                                child: const Icon(AppIcons.refresh),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        sourceStatus.when(
+                          data: (status) => Text(
+                            status.configured
+                                ? status.error ?? status.path
+                                : text.noLibrarySource,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: status.error == null
+                                  ? context.appMutedText
+                                  : context.appColors.destructive,
+                            ),
+                          ),
+                          error: (error, _) => Text(
+                            error.toString(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.appColors.destructive,
+                            ),
+                          ),
+                          loading: () => const FCircularProgress.loader(),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            FButton(
+                              variant: .outline,
+                              onPress: _scanning ? null : _startScan,
+                              prefix: _scanning
+                                  ? const FCircularProgress.loader()
+                                  : const Icon(AppIcons.refresh, size: 16),
+                              child: Text(
+                                _scanning ? text.scanning : text.scanLibrary,
+                              ),
+                            ),
+                            if (_scanStatus != null) ...[
+                              const SizedBox(width: 12),
+                              Text(
+                                _scanStatus!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.appMutedText,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        _sectionHeader(text.readerSection),
+                        _labeledField(
+                          '${text.defaultZoom} (${(readerSettings.zoom * 100).round()}%)',
+                          FSlider(
+                            control: .managedContinuous(
+                              initial: FSliderValue(max: readerSettings.zoom),
+                              onChange: (value) => ref
+                                  .read(readerSettingsProvider.notifier)
+                                  .setZoom(value.max),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _labeledField(
+                          '${text.pageGap} (${readerSettings.pageGap.round()}px)',
+                          FSlider(
+                            control: .managedContinuous(
+                              initial: FSliderValue(
+                                max: readerSettings.pageGap / 80,
+                              ),
+                              onChange: (value) => ref
+                                  .read(readerSettingsProvider.notifier)
+                                  .setPageGap(
+                                    (value.max * 80).clamp(0, 80).toDouble(),
+                                  ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        FSwitch(
+                          label: Text(text.unlimitedScroll),
+                          value: readerSettings.unlimitedScroll,
+                          onChange: (value) => ref
+                              .read(readerSettingsProvider.notifier)
+                              .setUnlimitedScroll(value),
+                        ),
+                        const SizedBox(height: 8),
+                        FSwitch(
+                          label: Text(text.unlimitedScrollUp),
+                          value: readerSettings.unlimitedScrollUp,
+                          onChange: readerSettings.unlimitedScroll
+                              ? (value) => ref
+                                    .read(readerSettingsProvider.notifier)
+                                    .setUnlimitedScrollUp(value)
+                              : null,
+                        ),
+                        const SizedBox(height: 24),
+                        _sectionHeader(text.applicationSection),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _labeledField(
+                                text.theme,
+                                FSelect<ThemeMode>(
+                                  hint: text.theme,
+                                  items: {
+                                    text.themeLight: ThemeMode.light,
+                                    text.themeDark: ThemeMode.dark,
+                                    text.themeSystem: ThemeMode.system,
+                                  },
+                                  control: .managed(
+                                    initial: _themeMode,
+                                    onChange: (value) async {
+                                      if (value != null) {
+                                        setState(() => _themeMode = value);
+                                        ref
+                                            .read(appSettingsProvider.notifier)
+                                            .setThemeMode(value);
+                                        await ref
+                                            .read(comicRdApiProvider)
+                                            .setSetting(
+                                              'app_theme',
+                                              jsonEncode(
+                                                themeModeToSetting(value),
+                                              ),
+                                            );
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _labeledField(
+                                text.locale,
+                                FSelect<String>(
+                                  hint: text.locale,
+                                  items: {
+                                    text.english: 'en',
+                                    text.indonesian: 'id',
+                                  },
+                                  control: .managed(
+                                    initial: _locale,
+                                    onChange: (value) async {
+                                      if (value != null) {
+                                        setState(() => _locale = value);
+                                        ref
+                                            .read(appSettingsProvider.notifier)
+                                            .setLocale(value);
+                                        await ref
+                                            .read(comicRdApiProvider)
+                                            .setSetting(
+                                              'app_locale',
+                                              jsonEncode(value),
+                                            );
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        _sectionHeader(text.backupSection),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final buttons = [
+                              FButton(
+                                onPress: _exportBackup,
+                                prefix: const Icon(AppIcons.download, size: 16),
+                                child: Text(text.exportBackup),
+                              ),
+                              FButton(
+                                variant: .outline,
+                                onPress: _importBackup,
+                                prefix: const Icon(AppIcons.upload, size: 16),
+                                child: Text(text.importBackup),
+                              ),
+                            ];
+                            if (constraints.maxWidth < 420) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  buttons[0],
+                                  const SizedBox(height: 8),
+                                  buttons[1],
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(child: buttons[0]),
+                                const SizedBox(width: 8),
+                                Expanded(child: buttons[1]),
+                              ],
+                            );
+                          },
+                        ),
+                        if (_message != null) ...[
+                          const SizedBox(height: 12),
+                          FAlert(
+                            icon: const Icon(FLucideIcons.check),
+                            title: Text(_message!),
+                          ),
+                        ],
+                        const SizedBox(height: 32),
+                      ],
+                    );
+                  },
+                  error: (error, _) => Text(error.toString()),
+                  loading: () =>
+                      const Center(child: FCircularProgress.loader()),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: settings.when(
-              data: (values) {
-                _initialize(values, appSettings);
-                return ListView(
-                  children: [
-                    _sectionHeader(text.librarySection),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 40,
-                            child: KeyboardListener(
-                              focusNode: _librarySourceFocus,
-                              autofocus: false,
-                              onKeyEvent: (event) {
-                                if (event is KeyDownEvent &&
-                                    event.logicalKey ==
-                                        LogicalKeyboardKey.enter) {
-                                  _save();
-                                }
-                              },
-                              child: FTextField(
-                                control: .managed(controller: _librarySource),
-                                hint: text.librarySource,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        FTooltip(
-                          tipBuilder: (context, _) => Text(text.browseDirectory),
-                          child: FButton.icon(
-                            variant: .outline,
-                            onPress: _pickLibrarySource,
-                            child: const Icon(AppIcons.folderOpen),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        FTooltip(
-                          tipBuilder: (context, _) => Text(text.save),
-                          child: FButton.icon(
-                            variant: .outline,
-                            onPress: _save,
-                            child: const Icon(AppIcons.save),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        FTooltip(
-                          tipBuilder: (context, _) =>
-                              Text(text.refreshSourceStatus),
-                          child: FButton.icon(
-                            variant: .outline,
-                            onPress: () =>
-                                ref.invalidate(librarySourceStatusProvider),
-                            child: const Icon(AppIcons.refresh),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    sourceStatus.when(
-                      data: (status) => Text(
-                        status.configured
-                            ? status.error ?? status.path
-                            : text.noLibrarySource,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: status.error == null
-                              ? context.appMutedText
-                              : context.appColors.destructive,
-                        ),
-                      ),
-                      error: (error, _) => Text(
-                        error.toString(),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.appColors.destructive,
-                        ),
-                      ),
-                      loading: () => const FCircularProgress.loader(),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        FButton(
-                          variant: .outline,
-                          onPress: _scanning ? null : _startScan,
-                          prefix: _scanning
-                              ? const FCircularProgress.loader()
-                              : const Icon(AppIcons.refresh, size: 16),
-                          child: Text(_scanning ? text.scanning : text.scanLibrary),
-                        ),
-                        if (_scanStatus != null) ...[
-                          const SizedBox(width: 12),
-                          Text(
-                            _scanStatus!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.appMutedText,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _sectionHeader(text.readerSection),
-                    _labeledField(
-                      '${text.defaultZoom} (${(readerSettings.zoom * 100).round()}%)',
-                      FSlider(
-                        control: .managedContinuous(
-                          initial: FSliderValue(max: readerSettings.zoom),
-                          onChange: (value) => ref
-                              .read(readerSettingsProvider.notifier)
-                              .setZoom(value.max),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _labeledField(
-                      '${text.pageGap} (${readerSettings.pageGap.round()}px)',
-                      FSlider(
-                        control: .managedContinuous(
-                          initial: FSliderValue(max: readerSettings.pageGap / 80),
-                          onChange: (value) => ref
-                              .read(readerSettingsProvider.notifier)
-                              .setPageGap(
-                                (value.max * 80).clamp(0, 80).toDouble(),
-                              ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FSwitch(
-                      label: Text(text.unlimitedScroll),
-                      value: readerSettings.unlimitedScroll,
-                      onChange: (value) => ref
-                          .read(readerSettingsProvider.notifier)
-                          .setUnlimitedScroll(value),
-                    ),
-                    const SizedBox(height: 8),
-                    FSwitch(
-                      label: Text(text.unlimitedScrollUp),
-                      value: readerSettings.unlimitedScrollUp,
-                      onChange: readerSettings.unlimitedScroll
-                          ? (value) => ref
-                              .read(readerSettingsProvider.notifier)
-                              .setUnlimitedScrollUp(value)
-                          : null,
-                    ),
-                    const SizedBox(height: 24),
-                    _sectionHeader(text.applicationSection),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _labeledField(
-                            text.theme,
-                            FSelect<ThemeMode>(
-                              hint: text.theme,
-                              items: {
-                                text.themeLight: ThemeMode.light,
-                                text.themeDark: ThemeMode.dark,
-                                text.themeSystem: ThemeMode.system,
-                              },
-                              control: .managed(
-                                initial: _themeMode,
-                                onChange: (value) async {
-                                  if (value != null) {
-                                    setState(() => _themeMode = value);
-                                    ref
-                                        .read(appSettingsProvider.notifier)
-                                        .setThemeMode(value);
-                                    await ref
-                                        .read(comicRdApiProvider)
-                                        .setSetting(
-                                          'app_theme',
-                                          jsonEncode(themeModeToSetting(value)),
-                                        );
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _labeledField(
-                            text.locale,
-                            FSelect<String>(
-                              hint: text.locale,
-                              items: {
-                                text.english: 'en',
-                                text.indonesian: 'id',
-                              },
-                              control: .managed(
-                                initial: _locale,
-                                onChange: (value) async {
-                                  if (value != null) {
-                                    setState(() => _locale = value);
-                                    ref
-                                        .read(appSettingsProvider.notifier)
-                                        .setLocale(value);
-                                    await ref
-                                        .read(comicRdApiProvider)
-                                        .setSetting(
-                                          'app_locale',
-                                          jsonEncode(value),
-                                        );
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _sectionHeader(text.backupSection),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final buttons = [
-                          FButton(
-                            onPress: _exportBackup,
-                            prefix: const Icon(AppIcons.download, size: 16),
-                            child: Text(text.exportBackup),
-                          ),
-                          FButton(
-                            variant: .outline,
-                            onPress: _importBackup,
-                            prefix: const Icon(AppIcons.upload, size: 16),
-                            child: Text(text.importBackup),
-                          ),
-                        ];
-                        if (constraints.maxWidth < 420) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              buttons[0],
-                              const SizedBox(height: 8),
-                              buttons[1],
-                            ],
-                          );
-                        }
-                        return Row(
-                          children: [
-                            Expanded(child: buttons[0]),
-                            const SizedBox(width: 8),
-                            Expanded(child: buttons[1]),
-                          ],
-                        );
-                      },
-                    ),
-                    if (_message != null) ...[
-                      const SizedBox(height: 12),
-                      FAlert(
-                        icon: const Icon(FLucideIcons.check),
-                        title: Text(_message!),
-                      ),
-                    ],
-                    const SizedBox(height: 32),
-                  ],
-                );
-              },
-              error: (error, _) => Text(error.toString()),
-              loading: () => const Center(child: FCircularProgress.loader()),
-            ),
-          ),
-        ],
-      ),
         );
       },
     );
@@ -375,9 +390,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         label,
-        style: context.appSubtitleStyle.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+        style: context.appSubtitleStyle.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -507,7 +520,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   void _pollScanStatus() {
     _scanPollTimer?.cancel();
-    _scanPollTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+    _scanPollTimer = Timer.periodic(const Duration(milliseconds: 500), (
+      timer,
+    ) async {
       try {
         final api = ref.read(comicRdApiProvider);
         final t = stringsFor(_locale);

@@ -253,6 +253,7 @@ class _FakeComicRdApi extends ComicRdApi {
         isRead: false,
         lastPage: 0,
         totalPages: 12,
+        sizeBytes: 0,
       ),
     ];
   }
@@ -397,6 +398,7 @@ class _PercentPathApi extends _PartiallyIndexedSourceApi {
         isRead: false,
         lastPage: 0,
         totalPages: 12,
+        sizeBytes: 0,
       ),
     ];
   }

@@ -63,6 +63,7 @@ pub struct RawChapter {
     pub is_read: bool,
     pub last_page: i64,
     pub total_pages: i64,
+    pub size_bytes: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -268,6 +269,7 @@ impl From<core::RawChapter> for RawChapter {
             is_read: value.is_read,
             last_page: value.last_page,
             total_pages: value.total_pages,
+            size_bytes: value.size_bytes,
         }
     }
 }

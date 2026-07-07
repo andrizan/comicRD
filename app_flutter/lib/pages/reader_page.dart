@@ -181,9 +181,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       (b) => b.page == _currentPage,
     );
     final currentBookmarkId = isCurrentPageBookmarked
-        ? chapterBookmarks
-            .firstWhere((b) => b.page == _currentPage)
-            .id
+        ? chapterBookmarks.firstWhere((b) => b.page == _currentPage).id
         : null;
     return KeyboardListener(
       autofocus: true,

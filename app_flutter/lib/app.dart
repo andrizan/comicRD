@@ -24,15 +24,15 @@ final _router = GoRouter(
       builder: (context, state, child) => ComicRdShell(child: child),
       routes: [
         GoRoute(path: '/', builder: (context, state) => const LibraryPage()),
-          GoRoute(
-            path: '/comic/:comicPath',
-            builder: (context, state) {
-              final comicPath = decodeRoutePath(
-                state.pathParameters['comicPath'] ?? '',
-              );
-              return ComicPage(comicPath: comicPath);
-            },
-          ),
+        GoRoute(
+          path: '/comic/:comicPath',
+          builder: (context, state) {
+            final comicPath = decodeRoutePath(
+              state.pathParameters['comicPath'] ?? '',
+            );
+            return ComicPage(comicPath: comicPath);
+          },
+        ),
         GoRoute(
           path: '/settings',
           builder: (context, state) => const SettingsPage(),
@@ -83,13 +83,19 @@ class ComicRdApp extends ConsumerWidget {
       themeMode: settings.themeMode,
       theme: ComicReaderFTheme.light.toApproximateMaterialTheme().copyWith(
         extensions: [
-          ...ComicReaderFTheme.light.toApproximateMaterialTheme().extensions.values,
+          ...ComicReaderFTheme.light
+              .toApproximateMaterialTheme()
+              .extensions
+              .values,
           ComicReaderColors.light,
         ],
       ),
       darkTheme: ComicReaderFTheme.dark.toApproximateMaterialTheme().copyWith(
         extensions: [
-          ...ComicReaderFTheme.dark.toApproximateMaterialTheme().extensions.values,
+          ...ComicReaderFTheme.dark
+              .toApproximateMaterialTheme()
+              .extensions
+              .values,
           ComicReaderColors.dark,
         ],
       ),
@@ -159,48 +165,51 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
             ),
           },
           child: ColoredBox(
-        color: context.theme.colors.background,
-        child: Row(
-          children: [
-            _Sidebar(
-              collapsed: _sidebarCollapsed,
-              onToggleCollapse: () => setState(
-                () => _sidebarCollapsed = !_sidebarCollapsed,
-              ),
-              text: text,
-              selectedTab: selectedTab,
-              libraryCount: ref.watch(libraryCountProvider),
-              bookmarkCount: ref.watch(bookmarkCountProvider),
-              onSelectTab: _setSelectedTab,
-            ),
-            Expanded(
-              child: Column(
-                children: [
-                  _TopBar(
-                    text: text,
-                    themeMode: settings.themeMode,
-                    onThemeChanged: (mode) async {
-                      ref.read(appSettingsProvider.notifier).setThemeMode(mode);
-                      await ref
-                          .read(comicRdApiProvider)
-                          .setSetting(
-                            'app_theme',
-                            jsonEncode(themeModeToSetting(mode)),
-                          );
-                    },
-                    onLocaleChanged: (locale) async {
-                      ref.read(appSettingsProvider.notifier).setLocale(locale);
-                      await ref
-                          .read(comicRdApiProvider)
-                          .setSetting('app_locale', jsonEncode(locale));
-                    },
+            color: context.theme.colors.background,
+            child: Row(
+              children: [
+                _Sidebar(
+                  collapsed: _sidebarCollapsed,
+                  onToggleCollapse: () =>
+                      setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+                  text: text,
+                  selectedTab: selectedTab,
+                  libraryCount: ref.watch(libraryCountProvider),
+                  bookmarkCount: ref.watch(bookmarkCountProvider),
+                  onSelectTab: _setSelectedTab,
+                ),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _TopBar(
+                        text: text,
+                        themeMode: settings.themeMode,
+                        onThemeChanged: (mode) async {
+                          ref
+                              .read(appSettingsProvider.notifier)
+                              .setThemeMode(mode);
+                          await ref
+                              .read(comicRdApiProvider)
+                              .setSetting(
+                                'app_theme',
+                                jsonEncode(themeModeToSetting(mode)),
+                              );
+                        },
+                        onLocaleChanged: (locale) async {
+                          ref
+                              .read(appSettingsProvider.notifier)
+                              .setLocale(locale);
+                          await ref
+                              .read(comicRdApiProvider)
+                              .setSetting('app_locale', jsonEncode(locale));
+                        },
+                      ),
+                      Expanded(child: widget.child),
+                    ],
                   ),
-                  Expanded(child: widget.child),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
           ),
         ),
       ),
@@ -233,28 +242,34 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
         ref
             .read(libraryPreferencesProvider.notifier)
             .setSelectedTab(LibraryTab.library);
-        await ref.read(comicRdApiProvider).setSetting(
-          'library_selected_tab',
-          jsonEncode(encodeLibraryTab(LibraryTab.library)),
-        );
+        await ref
+            .read(comicRdApiProvider)
+            .setSetting(
+              'library_selected_tab',
+              jsonEncode(encodeLibraryTab(LibraryTab.library)),
+            );
         if (mounted) context.go('/');
       case SidebarTab.history:
         ref
             .read(libraryPreferencesProvider.notifier)
             .setSelectedTab(LibraryTab.history);
-        await ref.read(comicRdApiProvider).setSetting(
-          'library_selected_tab',
-          jsonEncode(encodeLibraryTab(LibraryTab.history)),
-        );
+        await ref
+            .read(comicRdApiProvider)
+            .setSetting(
+              'library_selected_tab',
+              jsonEncode(encodeLibraryTab(LibraryTab.history)),
+            );
         if (mounted) context.go('/');
       case SidebarTab.bookmarks:
         ref
             .read(libraryPreferencesProvider.notifier)
             .setSelectedTab(LibraryTab.bookmarks);
-        await ref.read(comicRdApiProvider).setSetting(
-          'library_selected_tab',
-          jsonEncode(encodeLibraryTab(LibraryTab.bookmarks)),
-        );
+        await ref
+            .read(comicRdApiProvider)
+            .setSetting(
+              'library_selected_tab',
+              jsonEncode(encodeLibraryTab(LibraryTab.bookmarks)),
+            );
         if (mounted) context.go('/');
       case SidebarTab.settings:
         if (mounted) context.go('/settings');
@@ -298,10 +313,16 @@ class _Sidebar extends StatelessWidget {
         color: colors.card,
         border: Border(right: BorderSide(color: colors.border)),
       ),
-      padding: EdgeInsets.fromLTRB(collapsed ? 8 : 16, 24, collapsed ? 8 : 16, 24),
+      padding: EdgeInsets.fromLTRB(
+        collapsed ? 8 : 16,
+        24,
+        collapsed ? 8 : 16,
+        24,
+      ),
       child: Column(
-        crossAxisAlignment:
-            collapsed ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        crossAxisAlignment: collapsed
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
           _SidebarBrand(
             collapsed: collapsed,
@@ -391,8 +412,9 @@ class _SidebarBrand extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
     return Row(
-      mainAxisAlignment:
-          collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+      mainAxisAlignment: collapsed
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
       children: [
         MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -404,7 +426,11 @@ class _SidebarBrand extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 color: Colors.transparent,
               ),
-              child: Icon(AppIcons.menu, size: 24, color: colors.mutedForeground),
+              child: Icon(
+                AppIcons.menu,
+                size: 24,
+                color: colors.mutedForeground,
+              ),
             ),
           ),
         ),
@@ -474,8 +500,8 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
             color: widget.selected
                 ? colors.secondary
                 : _hovered
-                    ? colors.muted.withValues(alpha: 0.5)
-                    : Colors.transparent,
+                ? colors.muted.withValues(alpha: 0.5)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -498,7 +524,9 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
               Icon(
                 widget.icon,
                 size: 20,
-                color: widget.selected ? colors.primary : colors.mutedForeground,
+                color: widget.selected
+                    ? colors.primary
+                    : colors.mutedForeground,
               ),
               if (!widget.collapsed) ...[
                 const SizedBox(width: 12),
@@ -508,7 +536,9 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: widget.selected ? colors.primary : colors.foreground,
+                      color: widget.selected
+                          ? colors.primary
+                          : colors.foreground,
                     ),
                   ),
                 ),

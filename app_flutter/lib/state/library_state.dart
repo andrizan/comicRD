@@ -127,8 +127,9 @@ class LibraryCountNotifier extends Notifier<int> {
   }
 }
 
-final libraryCountProvider =
-    NotifierProvider<LibraryCountNotifier, int>(LibraryCountNotifier.new);
+final libraryCountProvider = NotifierProvider<LibraryCountNotifier, int>(
+  LibraryCountNotifier.new,
+);
 
 class BookmarkCountNotifier extends Notifier<int> {
   @override
@@ -139,8 +140,9 @@ class BookmarkCountNotifier extends Notifier<int> {
   }
 }
 
-final bookmarkCountProvider =
-    NotifierProvider<BookmarkCountNotifier, int>(BookmarkCountNotifier.new);
+final bookmarkCountProvider = NotifierProvider<BookmarkCountNotifier, int>(
+  BookmarkCountNotifier.new,
+);
 
 final comicsWithProgressProvider = FutureProvider<List<String>>((ref) {
   return ref.watch(comicRdApiProvider).listComicsWithProgress();

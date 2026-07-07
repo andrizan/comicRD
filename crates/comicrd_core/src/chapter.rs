@@ -575,7 +575,8 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
                    COALESCE(r.is_read, 0),
                    COALESCE(r.last_page, 0),
                    COALESCE(r.total_pages, c.page_count),
-                   c.date_modified
+                   c.date_modified,
+                   c.size_bytes
             FROM chapters c
             LEFT JOIN reading_progress r ON r.chapter_id = c.id
             WHERE c.history_key IN ({placeholders})
@@ -597,15 +598,16 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
                     row.get::<_, i64>(3)?,
                     row.get::<_, i64>(4)?,
                     row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
                 ))
             })
             .map_err(|e| format!("failed querying batch progress: {e}"))?;
         for row in rows {
-            let (key, page_count, is_read, last_page, total_pages, date_modified) =
+            let (key, page_count, is_read, last_page, total_pages, date_modified, size_bytes) =
                 row.map_err(|e| format!("failed reading progress row: {e}"))?;
             progress_map.insert(
                 key,
-                (page_count, is_read, last_page, total_pages, date_modified),
+                (page_count, is_read, last_page, total_pages, date_modified, size_bytes),
             );
         }
     }
@@ -616,10 +618,10 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
     {
         let chapter_key = &chapter_keys[i];
         let modified_at = file_modified_ts(Path::new(chapter_path));
-        let (page_count, is_read, last_page, total_pages, date_modified) = progress_map
+        let (page_count, is_read, last_page, total_pages, date_modified, size_bytes) = progress_map
             .get(chapter_key.as_str())
             .copied()
-            .unwrap_or((0, false, 0, 0, modified_at));
+            .unwrap_or((0, false, 0, 0, modified_at, 0));
         out.push(RawChapter {
             key: chapter_path.clone(),
             title: chapter_title.clone(),
@@ -631,6 +633,7 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
             is_read,
             last_page,
             total_pages,
+            size_bytes,
         });
     }
     Ok(out)

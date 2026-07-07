@@ -104,6 +104,7 @@ pub struct RawChapter {
     pub is_read: bool,
     pub last_page: i64,
     pub total_pages: i64,
+    pub size_bytes: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

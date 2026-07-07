@@ -249,6 +249,8 @@ class AppStrings {
     required this.progress,
     // Comic actions
     required this.comicActions,
+    required this.bookmark,
+    required this.bookmarked,
     required this.addBookmark,
     required this.removeBookmark,
     required this.addFavorite,
@@ -266,6 +268,19 @@ class AppStrings {
     required this.librarySubtitleTemplate,
     required this.bookmarksSubtitleTemplate,
     required this.latestReading,
+    // Comic detail labels
+    required this.backToLibrary,
+    required this.directoryPath,
+    required this.lastRead,
+    required this.lastReadTemplate,
+    required this.readingProgress,
+    required this.readingProgressTemplate,
+    required this.startFromBeginning,
+    required this.localChapterList,
+    required this.filterChapters,
+    required this.allChapters,
+    required this.favoriteChapters,
+    required this.downloaded,
     // Settings panel
     required this.librarySection,
     required this.librarySource,
@@ -353,6 +368,8 @@ class AppStrings {
   final String progress;
   // Comic actions
   final String comicActions;
+  final String bookmark;
+  final String bookmarked;
   final String addBookmark;
   final String removeBookmark;
   final String addFavorite;
@@ -370,6 +387,19 @@ class AppStrings {
   final String librarySubtitleTemplate;
   final String bookmarksSubtitleTemplate;
   final String latestReading;
+  // Comic detail labels
+  final String backToLibrary;
+  final String directoryPath;
+  final String lastRead;
+  final String lastReadTemplate;
+  final String readingProgress;
+  final String readingProgressTemplate;
+  final String startFromBeginning;
+  final String localChapterList;
+  final String filterChapters;
+  final String allChapters;
+  final String favoriteChapters;
+  final String downloaded;
   // Settings panel
   final String librarySection;
   final String librarySource;
@@ -449,6 +479,8 @@ class AppStrings {
     all: 'All',
     progress: 'Progress',
     comicActions: 'Comic actions',
+    bookmark: 'Bookmark',
+    bookmarked: 'Bookmarked',
     addBookmark: 'Add bookmark',
     removeBookmark: 'Remove bookmark',
     addFavorite: 'Add favorite',
@@ -465,6 +497,18 @@ class AppStrings {
     librarySubtitleTemplate: '{count} titles saved',
     bookmarksSubtitleTemplate: '{count} titles saved',
     latestReading: 'Latest reading',
+    backToLibrary: 'Back to Library',
+    directoryPath: 'Directory Path',
+    lastRead: 'Last Read',
+    lastReadTemplate: '{chapter} ({date})',
+    readingProgress: 'Reading Progress',
+    readingProgressTemplate: '{percent}% ({read} of {total} chapters)',
+    startFromBeginning: 'Start from Beginning',
+    localChapterList: 'Local Chapter List',
+    filterChapters: 'Filter chapters...',
+    allChapters: 'All Chapters',
+    favoriteChapters: 'Favorites',
+    downloaded: 'Downloaded',
     librarySection: 'Library',
     librarySource: 'Library source',
     browseDirectory: 'Browse directory',
@@ -543,6 +587,8 @@ class AppStrings {
     all: 'Semua',
     progress: 'Progres',
     comicActions: 'Aksi komik',
+    bookmark: 'Bookmark',
+    bookmarked: 'Dibookmark',
     addBookmark: 'Tambah bookmark',
     removeBookmark: 'Hapus bookmark',
     addFavorite: 'Tambah favorit',
@@ -559,6 +605,18 @@ class AppStrings {
     librarySubtitleTemplate: '{count} judul tersimpan',
     bookmarksSubtitleTemplate: '{count} judul disimpan',
     latestReading: 'Bacaan terakhir',
+    backToLibrary: 'Kembali ke Pustaka',
+    directoryPath: 'Path Direktori',
+    lastRead: 'Terakhir Dibaca',
+    lastReadTemplate: '{chapter} ({date})',
+    readingProgress: 'Progres Baca',
+    readingProgressTemplate: '{percent}% ({read} dari {total} Chapter)',
+    startFromBeginning: 'Mulai dari Awal',
+    localChapterList: 'Daftar Chapter Lokal',
+    filterChapters: 'Filter chapter...',
+    allChapters: 'Semua Chapter',
+    favoriteChapters: 'Favorit',
+    downloaded: 'Diunduh',
     librarySection: 'Pustaka',
     librarySource: 'Sumber pustaka',
     browseDirectory: 'Pilih direktori',
@@ -585,6 +643,7 @@ class AppStrings {
     scanning: 'Memindai...',
     scanNoChange: 'Tidak ada perubahan',
     scanProgress: 'Memindai',
-    scanCompleted: 'Pemindaian selesai: {comics} komik, {chapters} chapter ditemukan',
+    scanCompleted:
+        'Pemindaian selesai: {comics} komik, {chapters} chapter ditemukan',
   );
 }

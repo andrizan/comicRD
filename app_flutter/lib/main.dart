@@ -8,16 +8,18 @@ import 'app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
-  const windowOptions = WindowOptions(size: Size(1024, 680), center: true);
+  const windowOptions = WindowOptions(
+    size: Size(1024, 680),
+    center: true,
+    minimumSize: Size(960, 640),
+  );
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
     await windowManager.focus();
   });
   const api = ComicRdApi();
   windowManager.setPreventClose(true);
-  windowManager.addListener(
-    _WindowListener(onClose: () => api.shutdown()),
-  );
+  windowManager.addListener(_WindowListener(onClose: () => api.shutdown()));
   await api.init();
   runApp(const ProviderScope(child: ComicRdApp()));
 }

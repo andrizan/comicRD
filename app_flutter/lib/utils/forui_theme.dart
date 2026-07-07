@@ -242,7 +242,8 @@ extension AppThemeContext on BuildContext {
 
   /// Reader-specific colors.
   ComicReaderColors get appReader {
-    return Theme.of(this).extension<ComicReaderColors>() ?? ComicReaderColors.light;
+    return Theme.of(this).extension<ComicReaderColors>() ??
+        ComicReaderColors.light;
   }
 
   TextStyle get appTitleStyle => theme.typography.display.lg;

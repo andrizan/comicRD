@@ -199,8 +199,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _updateBackToTopVisibility(_activeScrollController());
-        ref.read(libraryCountProvider.notifier).update(comicsState.items.length);
-        ref.read(bookmarkCountProvider.notifier).update(bookmarks.asData?.value.length ?? 0);
+        ref
+            .read(libraryCountProvider.notifier)
+            .update(comicsState.items.length);
+        ref
+            .read(bookmarkCountProvider.notifier)
+            .update(bookmarks.asData?.value.length ?? 0);
       }
     });
 
@@ -300,7 +304,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                       LibraryTab.bookmarks => _BookmarkList(
                         text: text,
                         bookmarks: bookmarks,
-                        comics: ref.watch(rawLibraryComicsProvider).asData?.value ?? const [],
+                        comics:
+                            ref.watch(rawLibraryComicsProvider).asData?.value ??
+                            const [],
                         displayMode: preferences.displayMode,
                         controller: _bookmarksScroll,
                         emptyLabel: text.emptyLibrary,
@@ -402,9 +408,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     bridge.ComicBookmark bookmark,
     bool bookmarked,
   ) async {
-    await ref.read(comicRdApiProvider).removeComicBookmark(
-      bookmark.comicSourcePath,
-    );
+    await ref
+        .read(comicRdApiProvider)
+        .removeComicBookmark(bookmark.comicSourcePath);
     ref.invalidate(allBookmarksProvider);
   }
 
@@ -498,10 +504,7 @@ class _PanelHeader extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             DefaultTextStyle(
-              style: TextStyle(
-                fontSize: 14,
-                color: colors.mutedForeground,
-              ),
+              style: TextStyle(fontSize: 14, color: colors.mutedForeground),
               child: subtitle,
             ),
           ],
@@ -509,11 +512,7 @@ class _PanelHeader extends ConsumerWidget {
         if (constraints.maxWidth < 760) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              titleColumn,
-              const SizedBox(height: 16),
-              toolbar,
-            ],
+            children: [titleColumn, const SizedBox(height: 16), toolbar],
           );
         }
         return Row(
@@ -540,7 +539,10 @@ class _LibrarySubtitle extends ConsumerWidget {
     return FutureBuilder<bridge.LibraryStorageStats>(
       future: api.getLibraryStorageStats(),
       builder: (context, snapshot) {
-        final base = text.librarySubtitleTemplate.replaceAll('{count}', '$count');
+        final base = text.librarySubtitleTemplate.replaceAll(
+          '{count}',
+          '$count',
+        );
         if (!snapshot.hasData || snapshot.data!.totalSizeBytes <= 0) {
           return Text(base);
         }
@@ -603,10 +605,7 @@ class _Toolbar extends StatelessWidget {
           if (!isLibrary && !isBookmarks)
             _FilterSelect<String>(
               value: 'Terbaru',
-              items: const {
-                'Terbaru': 'Terbaru',
-                'Terlama': 'Terlama',
-              },
+              items: const {'Terbaru': 'Terbaru', 'Terlama': 'Terlama'},
               onChanged: (_) {},
             ),
           _ViewToggles(
@@ -676,9 +675,16 @@ class _SearchBox extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(fontSize: 13, color: colors.mutedForeground),
-          prefixIcon: Icon(AppIcons.search, size: 18, color: colors.mutedForeground),
+          prefixIcon: Icon(
+            AppIcons.search,
+            size: 18,
+            color: colors.mutedForeground,
+          ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
         ),
       ),
     );
@@ -719,21 +725,17 @@ class _FilterSelect<T> extends StatelessWidget {
           dropdownColor: colors.card,
           style: TextStyle(fontSize: 13, color: colors.foreground),
           borderRadius: BorderRadius.circular(8),
-          items:
-              items.entries
-                  .map(
-                    (entry) => DropdownMenuItem<T>(
-                      value: entry.value,
-                      child: Text(
-                        entry.key,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: colors.foreground,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
+          items: items.entries
+              .map(
+                (entry) => DropdownMenuItem<T>(
+                  value: entry.value,
+                  child: Text(
+                    entry.key,
+                    style: TextStyle(fontSize: 13, color: colors.foreground),
+                  ),
+                ),
+              )
+              .toList(),
           onChanged: (value) {
             if (value != null) onChanged(value);
           },
@@ -744,10 +746,7 @@ class _FilterSelect<T> extends StatelessWidget {
 }
 
 class _ViewToggles extends StatelessWidget {
-  const _ViewToggles({
-    required this.displayMode,
-    required this.onChanged,
-  });
+  const _ViewToggles({required this.displayMode, required this.onChanged});
 
   final LibraryDisplayMode displayMode;
   final ValueChanged<LibraryDisplayMode> onChanged;
@@ -782,10 +781,7 @@ class _ViewToggles extends StatelessWidget {
 }
 
 class _SortDirToggle extends StatelessWidget {
-  const _SortDirToggle({
-    required this.sortDir,
-    required this.onChanged,
-  });
+  const _SortDirToggle({required this.sortDir, required this.onChanged});
 
   final bridge.SortDir sortDir;
   final ValueChanged<bridge.SortDir> onChanged;
@@ -797,7 +793,8 @@ class _SortDirToggle extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
+        onTap: () =>
+            onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
         child: Container(
           height: 38,
           width: 38,
@@ -954,10 +951,7 @@ class _ComicList extends StatelessWidget {
 }
 
 class _HoverCard extends StatefulWidget {
-  const _HoverCard({
-    required this.child,
-    required this.onTap,
-  });
+  const _HoverCard({required this.child, required this.onTap});
 
   final Widget child;
   final VoidCallback onTap;
@@ -1174,10 +1168,9 @@ class _ComicCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color:
-                              _isNew
-                                  ? colors.primary
-                                  : colors.mutedForeground,
+                          color: _isNew
+                              ? colors.primary
+                              : colors.mutedForeground,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1261,10 +1254,9 @@ class _CoverArea extends StatelessWidget {
       height: isGrid ? double.infinity : 136,
       decoration: BoxDecoration(
         color: colors.muted,
-        borderRadius:
-            isGrid
-                ? const BorderRadius.vertical(top: Radius.circular(14))
-                : const BorderRadius.horizontal(left: Radius.circular(14)),
+        borderRadius: isGrid
+            ? const BorderRadius.vertical(top: Radius.circular(14))
+            : const BorderRadius.horizontal(left: Radius.circular(14)),
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -1277,7 +1269,7 @@ class _CoverArea extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-            color: context.appReader.progress,
+                  color: context.appReader.progress,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -1303,11 +1295,7 @@ class _CoverArea extends StatelessWidget {
               ),
             ),
           if (contextMenu != null && isGrid)
-            Positioned(
-              right: 8,
-              bottom: 8,
-              child: contextMenu!,
-            ),
+            Positioned(right: 8, bottom: 8, child: contextMenu!),
         ],
       ),
     );
@@ -1337,21 +1325,19 @@ class _BookmarkButton extends StatelessWidget {
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-            color:
-                isGrid
-                    ? Colors.black.withValues(alpha: 0.35)
-                    : colors.secondary,
+            color: isGrid
+                ? Colors.black.withValues(alpha: 0.35)
+                : colors.secondary,
             shape: BoxShape.circle,
           ),
           child: Icon(
             AppIcons.bookmark,
             size: 14,
-            color:
-                bookmarked
-                    ? context.appReader.star
-                    : (isGrid
-                        ? Colors.white.withValues(alpha: 0.9)
-                        : colors.mutedForeground),
+            color: bookmarked
+                ? context.appReader.star
+                : (isGrid
+                      ? Colors.white.withValues(alpha: 0.9)
+                      : colors.mutedForeground),
           ),
         ),
       ),
@@ -1577,8 +1563,7 @@ class _BookmarkList extends StatelessWidget {
               ? GridView.builder(
                   controller: controller,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 180,
                     mainAxisExtent: 290,
                     crossAxisSpacing: 20,
@@ -1890,11 +1875,7 @@ class _CardContextMenu extends StatelessWidget {
               color: Colors.black.withValues(alpha: 0.35),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              AppIcons.more,
-              size: 14,
-              color: Colors.white,
-            ),
+            child: const Icon(AppIcons.more, size: 14, color: Colors.white),
           ),
         ),
       ),

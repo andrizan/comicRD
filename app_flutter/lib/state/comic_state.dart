@@ -17,6 +17,83 @@ final chapterFavoritesProvider = FutureProvider.family<List<String>, String>((
   return ref.watch(comicRdApiProvider).listChapterFavorites(comicPath);
 });
 
+final comicReadingHistoryProvider =
+    FutureProvider.family<List<bridge.ReadingHistoryEntry>, String>((
+      ref,
+      comicPath,
+    ) async {
+      final history = await ref.watch(comicRdApiProvider).listReadingHistory();
+      return history
+          .where((entry) => entry.comicSourcePath == comicPath)
+          .toList();
+    });
+
+class ComicStats {
+  const ComicStats({
+    required this.totalSize,
+    required this.chapterCount,
+    required this.readCount,
+    required this.inProgressCount,
+    required this.continueChapterTitle,
+  });
+
+  final int totalSize;
+  final int chapterCount;
+  final int readCount;
+  final int inProgressCount;
+  final String? continueChapterTitle;
+
+  int get effectiveReadCount => readCount + inProgressCount;
+}
+
+final comicStatsProvider =
+    Provider.family<ComicStats, String>((ref, comicPath) {
+      final chapters = ref.watch(comicChaptersProvider(comicPath)).asData?.value;
+      if (chapters == null) {
+        return const ComicStats(
+          totalSize: 0,
+          chapterCount: 0,
+          readCount: 0,
+          inProgressCount: 0,
+          continueChapterTitle: null,
+        );
+      }
+      final totalSize =
+          chapters.fold<int>(0, (sum, c) => sum + c.sizeBytes.toInt());
+      final readCount = chapters.where((c) => c.isRead).length;
+      final inProgressCount =
+          chapters.where((c) => c.lastPage > 0 && !c.isRead).length;
+      String? continueTitle;
+      for (final c in chapters) {
+        if (c.lastPage > 0 && !c.isRead) {
+          continueTitle = c.title;
+          break;
+        }
+      }
+      if (continueTitle == null) {
+        for (final c in chapters) {
+          if (!c.isRead) {
+            continueTitle = c.title;
+            break;
+          }
+        }
+        continueTitle ??=
+            chapters.isNotEmpty ? chapters.first.title : null;
+      }
+      return ComicStats(
+        totalSize: totalSize,
+        chapterCount: chapters.length,
+        readCount: readCount,
+        inProgressCount: inProgressCount,
+        continueChapterTitle: continueTitle,
+      );
+    });
+
+final comicBookmarkedProvider = FutureProvider.family<bool, String>(
+  (ref, comicPath) =>
+      ref.watch(comicRdApiProvider).isComicBookmarked(comicPath),
+);
+
 final filteredComicChaptersProvider =
     Provider.family<AsyncValue<List<bridge.RawChapter>>, String>((
       ref,
@@ -37,10 +114,11 @@ final filteredComicChaptersProvider =
               query.isEmpty ||
               chapter.title.toLowerCase().contains(query) ||
               chapter.sourcePath.toLowerCase().contains(query);
-          final matchesFavorite =
-              !preferences.favoritesOnly ||
-              favorites.contains(chapter.sourcePath);
-          return matchesQuery && matchesFavorite;
+          final matchesTab = switch (preferences.selectedTab) {
+            ChapterTab.all => true,
+            ChapterTab.favorites => favorites.contains(chapter.sourcePath),
+          };
+          return matchesQuery && matchesTab;
         }).toList();
         filtered.sort((a, b) {
           final order = switch (preferences.sortBy) {
@@ -76,35 +154,31 @@ final lastOpenedChapterProvider =
 
 enum ChapterSortBy { chapterIndex, name, folderDate }
 
-enum ChapterDisplayMode { grid, list }
+enum ChapterTab { all, favorites }
 
 class ComicPreferences {
   const ComicPreferences({
     this.query = '',
     this.sortBy = ChapterSortBy.chapterIndex,
     this.sortDir = bridge.SortDir.asc,
-    this.displayMode = ChapterDisplayMode.list,
-    this.favoritesOnly = false,
+    this.selectedTab = ChapterTab.all,
   });
 
   final String query;
   final ChapterSortBy sortBy;
   final bridge.SortDir sortDir;
-  final ChapterDisplayMode displayMode;
-  final bool favoritesOnly;
+  final ChapterTab selectedTab;
 
   ComicPreferences copyWith({
     String? query,
     ChapterSortBy? sortBy,
     bridge.SortDir? sortDir,
-    ChapterDisplayMode? displayMode,
-    bool? favoritesOnly,
+    ChapterTab? selectedTab,
   }) => ComicPreferences(
     query: query ?? this.query,
     sortBy: sortBy ?? this.sortBy,
     sortDir: sortDir ?? this.sortDir,
-    displayMode: displayMode ?? this.displayMode,
-    favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+    selectedTab: selectedTab ?? this.selectedTab,
   );
 }
 
@@ -154,17 +228,10 @@ class ComicPreferencesNotifier extends Notifier<Map<String, ComicPreferences>> {
     );
   }
 
-  void setDisplayMode(String comicPath, ChapterDisplayMode displayMode) {
+  void setSelectedTab(String comicPath, ChapterTab selectedTab) {
     update(
       comicPath,
-      preferencesFor(comicPath).copyWith(displayMode: displayMode),
-    );
-  }
-
-  void setFavoritesOnly(String comicPath, bool favoritesOnly) {
-    update(
-      comicPath,
-      preferencesFor(comicPath).copyWith(favoritesOnly: favoritesOnly),
+      preferencesFor(comicPath).copyWith(selectedTab: selectedTab),
     );
   }
 }
