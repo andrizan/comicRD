@@ -622,6 +622,7 @@ class _Toolbar extends StatelessWidget {
             ),
           if (!isHistory)
             _ViewToggles(
+              text: text,
               displayMode: preferences.displayMode,
               onChanged: onSetDisplayMode,
             ),
@@ -649,6 +650,7 @@ class _Toolbar extends StatelessWidget {
               onChanged: (sortBy) => onSetSort(sortBy, preferences.sortDir),
             ),
             _SortDirToggle(
+              text: text,
               sortDir: preferences.sortDir,
               onChanged: (sortDir) => onSetSort(preferences.sortBy, sortDir),
             ),
@@ -759,8 +761,13 @@ class _FilterSelect<T> extends StatelessWidget {
 }
 
 class _ViewToggles extends StatelessWidget {
-  const _ViewToggles({required this.displayMode, required this.onChanged});
+  const _ViewToggles({
+    required this.text,
+    required this.displayMode,
+    required this.onChanged,
+  });
 
+  final AppStrings text;
   final LibraryDisplayMode displayMode;
   final ValueChanged<LibraryDisplayMode> onChanged;
 
@@ -780,11 +787,13 @@ class _ViewToggles extends StatelessWidget {
           _ViewToggleButton(
             icon: AppIcons.gridView,
             selected: displayMode == LibraryDisplayMode.grid,
+            tooltip: text.grid,
             onTap: () => onChanged(LibraryDisplayMode.grid),
           ),
           _ViewToggleButton(
             icon: AppIcons.list,
             selected: displayMode == LibraryDisplayMode.list,
+            tooltip: text.list,
             onTap: () => onChanged(LibraryDisplayMode.list),
           ),
         ],
@@ -794,8 +803,13 @@ class _ViewToggles extends StatelessWidget {
 }
 
 class _SortDirToggle extends StatelessWidget {
-  const _SortDirToggle({required this.sortDir, required this.onChanged});
+  const _SortDirToggle({
+    required this.text,
+    required this.sortDir,
+    required this.onChanged,
+  });
 
+  final AppStrings text;
   final bridge.SortDir sortDir;
   final ValueChanged<bridge.SortDir> onChanged;
 
@@ -803,23 +817,26 @@ class _SortDirToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
     final isAsc = sortDir == bridge.SortDir.asc;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () =>
-            onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
-        child: Container(
-          height: 38,
-          width: 38,
-          decoration: BoxDecoration(
-            color: colors.card,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            isAsc ? AppIcons.sortUp : AppIcons.sortDown,
-            size: 16,
-            color: colors.foreground,
+    return Tooltip(
+      message: text.sortDirection,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () =>
+              onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
+          child: Container(
+            height: 38,
+            width: 38,
+            decoration: BoxDecoration(
+              color: colors.card,
+              border: Border.all(color: colors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isAsc ? AppIcons.sortUp : AppIcons.sortDown,
+              size: 16,
+              color: colors.foreground,
+            ),
           ),
         ),
       ),
@@ -832,30 +849,35 @@ class _ViewToggleButton extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    required this.tooltip,
   });
 
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 34,
-          height: 30,
-          decoration: BoxDecoration(
-            color: selected ? colors.secondary : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: selected ? colors.primary : colors.mutedForeground,
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 34,
+            height: 30,
+            decoration: BoxDecoration(
+              color: selected ? colors.secondary : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: selected ? colors.primary : colors.mutedForeground,
+            ),
           ),
         ),
       ),
@@ -1224,6 +1246,7 @@ class _ComicCard extends StatelessWidget {
                     bookmarked: bookmarked,
                     onToggle: onToggleBookmark,
                     isGrid: false,
+                    tooltip: bookmarked ? text.removeBookmark : text.addBookmark,
                   ),
                   const SizedBox(width: 4),
                   _CardContextMenu(
@@ -1337,6 +1360,7 @@ class _CoverArea extends ConsumerWidget {
                 bookmarked: bookmarked,
                 onToggle: onToggleBookmark,
                 isGrid: isGrid,
+                tooltip: bookmarked ? text.removeBookmark : text.addBookmark,
               ),
             ),
           if (contextMenu != null && isGrid)
@@ -1353,36 +1377,41 @@ class _BookmarkButton extends StatelessWidget {
     required this.bookmarked,
     required this.onToggle,
     required this.isGrid,
+    required this.tooltip,
   });
 
   final bool bookmarked;
   final VoidCallback onToggle;
   final bool isGrid;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onToggle,
-        child: Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: isGrid
-                ? Colors.black.withValues(alpha: 0.35)
-                : colors.secondary,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            AppIcons.bookmark,
-            size: 14,
-            color: bookmarked
-                ? context.appReader.star
-                : (isGrid
-                      ? Colors.white.withValues(alpha: 0.9)
-                      : colors.mutedForeground),
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onToggle,
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: isGrid
+                  ? Colors.black.withValues(alpha: 0.35)
+                  : colors.secondary,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              AppIcons.bookmark,
+              size: 14,
+              color: bookmarked
+                  ? context.appReader.star
+                  : (isGrid
+                        ? Colors.white.withValues(alpha: 0.9)
+                        : colors.mutedForeground),
+            ),
           ),
         ),
       ),
@@ -1904,6 +1933,7 @@ class _BookmarkCard extends StatelessWidget {
                 bookmarked: true,
                 onToggle: onToggleBookmark,
                 isGrid: false,
+                tooltip: text.removeBookmark,
               ),
             ),
           ),
@@ -1952,19 +1982,22 @@ class _CardContextMenu extends StatelessWidget {
           ],
         ),
       ],
-      builder: (_, controller, _) => MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: controller.toggle,
-          child: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.35),
-              shape: BoxShape.circle,
+      builder: (_, controller, _) => Tooltip(
+        message: text.menu,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: controller.toggle,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(AppIcons.more, size: 14, color: Colors.white),
             ),
-            child: const Icon(AppIcons.more, size: 14, color: Colors.white),
           ),
         ),
       ),

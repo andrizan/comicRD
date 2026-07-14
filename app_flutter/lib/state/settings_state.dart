@@ -238,6 +238,9 @@ class AppStrings {
     // Library view modes
     required this.all,
     required this.progress,
+    required this.grid,
+    required this.list,
+    required this.sortDirection,
     // Comic actions
     required this.bookmark,
     required this.bookmarked,
@@ -339,6 +342,9 @@ class AppStrings {
   // Library view modes
   final String all;
   final String progress;
+  final String grid;
+  final String list;
+  final String sortDirection;
   // Comic actions
   final String bookmark;
   final String bookmarked;
@@ -433,6 +439,9 @@ class AppStrings {
     folderDate: 'Folder Date',
     all: 'All',
     progress: 'Progress',
+    grid: 'Grid',
+    list: 'List',
+    sortDirection: 'Sort Direction',
     bookmark: 'Bookmark',
     bookmarked: 'Bookmarked',
     addBookmark: 'Add Bookmark',
@@ -523,6 +532,9 @@ class AppStrings {
     folderDate: 'Tanggal Folder',
     all: 'Semua',
     progress: 'Progres',
+    grid: 'Kisi',
+    list: 'Daftar',
+    sortDirection: 'Arah Urutan',
     bookmark: 'Bookmark',
     bookmarked: 'Dibookmark',
     addBookmark: 'Tambah Bookmark',

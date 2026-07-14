@@ -877,6 +877,7 @@ class _ChapterSectionHeader extends StatelessWidget {
       ),
       const SizedBox(width: 8),
       _SortDirToggle(
+        text: text,
         sortDir: preferences.sortDir,
         onChanged: (sortDir) => onSetSort(preferences.sortBy, sortDir),
       ),
@@ -1141,8 +1142,13 @@ class _SortSelect<T> extends StatelessWidget {
 }
 
 class _SortDirToggle extends StatelessWidget {
-  const _SortDirToggle({required this.sortDir, required this.onChanged});
+  const _SortDirToggle({
+    required this.text,
+    required this.sortDir,
+    required this.onChanged,
+  });
 
+  final AppStrings text;
   final bridge.SortDir sortDir;
   final ValueChanged<bridge.SortDir> onChanged;
 
@@ -1150,23 +1156,26 @@ class _SortDirToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
     final isAsc = sortDir == bridge.SortDir.asc;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () =>
-            onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
-        child: Container(
-          height: 38,
-          width: 38,
-          decoration: BoxDecoration(
-            color: colors.background,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            isAsc ? AppIcons.sortUp : AppIcons.sortDown,
-            size: 16,
-            color: colors.foreground,
+    return Tooltip(
+      message: text.sortDirection,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () =>
+              onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
+          child: Container(
+            height: 38,
+            width: 38,
+            decoration: BoxDecoration(
+              color: colors.background,
+              border: Border.all(color: colors.border),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isAsc ? AppIcons.sortUp : AppIcons.sortDown,
+              size: 16,
+              color: colors.foreground,
+            ),
           ),
         ),
       ),
