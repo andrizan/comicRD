@@ -28,7 +28,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('No library source configured'), findsOneWidget);
+    expect(find.text('No Library Source Configured'), findsOneWidget);
     expect(find.byType(FCircularProgress), findsNothing);
   });
 
@@ -56,20 +56,24 @@ void main() {
 
     expect(find.text('8Kaijuu'), findsOneWidget);
     expect(find.text('Other Comic'), findsOneWidget);
-    expect(find.text('2 titles saved'), findsOneWidget);
+    expect(find.text('2 Titles Saved'), findsOneWidget);
   });
 
   testWidgets('opens comic paths that contain URL special characters', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
     await tester.pumpWidget(_testApp(api: const _PercentPathApi()));
     await tester.pumpAndSettle();
 
     final comic = find.text('100% Comic #1 [A+B] %20?x=y&z');
-    final comicCard = find.ancestor(
-      of: comic,
-      matching: find.byType(GestureDetector),
-    ).first;
+    final comicCard = find
+        .ancestor(of: comic, matching: find.byType(GestureDetector))
+        .first;
     await tester.tap(comicCard, warnIfMissed: false);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -448,9 +452,9 @@ class _ManyComicsApi extends _PartiallyIndexedSourceApi {
           sourceType: 'folder',
           dateModified: index,
           chapterCount: 12,
-        readChapterCount: 0,
-        inProgressChapterCount: 0,
-        sizeBytes: 0,
+          readChapterCount: 0,
+          inProgressChapterCount: 0,
+          sizeBytes: 0,
         ),
     ];
   }

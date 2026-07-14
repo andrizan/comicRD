@@ -227,122 +227,126 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 0),
             child: Column(
               children: [
-            _PanelHeader(
-              text: text,
-              preferences: preferences,
-              comicsState: comicsState,
-              historyCount: history.asData?.value.length ?? 0,
-              bookmarksCount: bookmarks.asData?.value.length ?? 0,
-              searchController: _search,
-              onSearchChanged: (value) {
-                _searchDebounce?.cancel();
-                _searchDebounce = Timer(
-                  const Duration(milliseconds: 300),
-                  () => ref
-                      .read(libraryPreferencesProvider.notifier)
-                      .setQuery(value),
-                );
-              },
-              onRefresh: _refreshLibrary,
-              onSetViewMode: _setViewMode,
-              onSetSort: _setSort,
-              onSetDisplayMode: _setDisplayMode,
-            ),
-            const SizedBox(height: 8),
-            sourceStatus.when(
-              data: (status) {
-                if (status.configured && status.error == null) {
-                  return const SizedBox.shrink();
-                }
-                final message = status.configured
-                    ? status.error!
-                    : text.noLibrarySource;
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      message,
-                      style: TextStyle(color: context.appAccent),
+                _PanelHeader(
+                  text: text,
+                  preferences: preferences,
+                  comicsState: comicsState,
+                  historyCount: history.asData?.value.length ?? 0,
+                  bookmarksCount: bookmarks.asData?.value.length ?? 0,
+                  searchController: _search,
+                  onSearchChanged: (value) {
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(
+                      const Duration(milliseconds: 300),
+                      () => ref
+                          .read(libraryPreferencesProvider.notifier)
+                          .setQuery(value),
+                    );
+                  },
+                  onRefresh: _refreshLibrary,
+                  onSetViewMode: _setViewMode,
+                  onSetSort: _setSort,
+                  onSetDisplayMode: _setDisplayMode,
+                ),
+                const SizedBox(height: 8),
+                sourceStatus.when(
+                  data: (status) {
+                    if (status.configured && status.error == null) {
+                      return const SizedBox.shrink();
+                    }
+                    final message = status.configured
+                        ? status.error!
+                        : text.noLibrarySource;
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          message,
+                          style: TextStyle(color: context.appAccent),
+                        ),
+                      ),
+                    );
+                  },
+                  error: (error, _) => Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        error.toString(),
+                        style: TextStyle(color: context.appAccent),
+                      ),
                     ),
                   ),
-                );
-              },
-              error: (error, _) => Padding(
-                padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    error.toString(),
-                    style: TextStyle(color: context.appAccent),
+                  loading: () => const SizedBox.shrink(),
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: switch (preferences.selectedTab) {
+                          LibraryTab.history => _HistoryList(
+                            text: text,
+                            history: history,
+                            controller: _historyScroll,
+                            emptyLabel: text.emptyLibrary,
+                          ),
+                          LibraryTab.library => _ComicList(
+                            text: text,
+                            comics: comicsState.items,
+                            visibleCount: comicsState.visibleCount,
+                            hasMore: comicsState.hasMore,
+                            onLoadMore: () => ref
+                                .read(libraryPaginationProvider.notifier)
+                                .loadMore(),
+                            displayMode: preferences.displayMode,
+                            bookmarkedPaths: bookmarkedPaths,
+                            controller: _libraryScroll,
+                            emptyLabel: text.emptyLibrary,
+                            onToggleBookmark: _toggleComicBookmark,
+                            onCopyTitle: _copyComicTitle,
+                            onCopyPath: _copyComicPath,
+                            onOpenFolder: _openContainingFolder,
+                          ),
+                          LibraryTab.bookmarks => _BookmarkList(
+                            text: text,
+                            bookmarks: bookmarks,
+                            comics:
+                                ref
+                                    .watch(rawLibraryComicsProvider)
+                                    .asData
+                                    ?.value ??
+                                const [],
+                            displayMode: preferences.displayMode,
+                            controller: _bookmarksScroll,
+                            emptyLabel: text.emptyLibrary,
+                            onToggleBookmark: _toggleBookmarkBookmark,
+                            onCopyTitle: _copyBookmarkTitle,
+                            onCopyPath: _copyBookmarkPath,
+                            onOpenFolder: _openBookmarkContainingFolder,
+                          ),
+                        },
+                      ),
+                      if (_showBackToTop)
+                        Positioned(
+                          right: 24,
+                          bottom: 24,
+                          child: BackToTopButton(
+                            key: const ValueKey('library-back-to-top-button'),
+                            visible: true,
+                            tooltip: text.backToTop,
+                            onPressed: _scrollActiveToTop,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-              loading: () => const SizedBox.shrink(),
+              ],
             ),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: switch (preferences.selectedTab) {
-                      LibraryTab.history => _HistoryList(
-                        text: text,
-                        history: history,
-                        controller: _historyScroll,
-                        emptyLabel: text.emptyLibrary,
-                      ),
-                      LibraryTab.library => _ComicList(
-                        text: text,
-                        comics: comicsState.items,
-                        visibleCount: comicsState.visibleCount,
-                        hasMore: comicsState.hasMore,
-                        onLoadMore: () => ref
-                            .read(libraryPaginationProvider.notifier)
-                            .loadMore(),
-                        displayMode: preferences.displayMode,
-                        bookmarkedPaths: bookmarkedPaths,
-                        controller: _libraryScroll,
-                        emptyLabel: text.emptyLibrary,
-                        onToggleBookmark: _toggleComicBookmark,
-                        onCopyTitle: _copyComicTitle,
-                        onCopyPath: _copyComicPath,
-                        onOpenFolder: _openContainingFolder,
-                      ),
-                      LibraryTab.bookmarks => _BookmarkList(
-                        text: text,
-                        bookmarks: bookmarks,
-                        comics:
-                            ref.watch(rawLibraryComicsProvider).asData?.value ??
-                            const [],
-                        displayMode: preferences.displayMode,
-                        controller: _bookmarksScroll,
-                        emptyLabel: text.emptyLibrary,
-                        onToggleBookmark: _toggleBookmarkBookmark,
-                        onCopyTitle: _copyBookmarkTitle,
-                        onCopyPath: _copyBookmarkPath,
-                        onOpenFolder: _openBookmarkContainingFolder,
-                      ),
-                    },
-                  ),
-                  if (_showBackToTop)
-                    Positioned(
-                      right: 24,
-                      bottom: 24,
-                      child: BackToTopButton(
-                        key: const ValueKey('library-back-to-top-button'),
-                        visible: true,
-                        tooltip: text.backToTop,
-                        onPressed: _scrollActiveToTop,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ));
-      },
-    ),
-  );
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) async {
@@ -609,10 +613,10 @@ class _Toolbar extends StatelessWidget {
           if (isLibrary)
             _FilterSelect<LibraryViewMode>(
               value: preferences.viewMode,
-              items: const {
-                'Semua': LibraryViewMode.all,
-                'Belum dibaca': LibraryViewMode.unread,
-                'Progres': LibraryViewMode.reading,
+              items: {
+                text.all: LibraryViewMode.all,
+                text.unread: LibraryViewMode.unread,
+                text.progress: LibraryViewMode.reading,
               },
               onChanged: onSetViewMode,
             ),
@@ -1448,11 +1452,7 @@ class _HistoryItem extends StatelessWidget {
         color: colors.muted,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(
-        AppIcons.image,
-        size: 24,
-        color: colors.mutedForeground,
-      ),
+      child: Icon(AppIcons.image, size: 24, color: colors.mutedForeground),
     );
     final textColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1471,30 +1471,18 @@ class _HistoryItem extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           item.chapterTitle,
-          style: TextStyle(
-            fontSize: 13,
-            color: colors.mutedForeground,
-          ),
+          style: TextStyle(fontSize: 13, color: colors.mutedForeground),
         ),
       ],
     );
     final continueButton = OutlinedButton(
-      onPressed: () =>
-          context.go('/reader/${item.chapterId}'),
+      onPressed: () => context.go('/reader/${item.chapterId}'),
       style: OutlinedButton.styleFrom(
         foregroundColor: colors.primary,
         side: BorderSide(color: colors.primary),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 8,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
       ),
       child: Text(text.continueReading),
     );

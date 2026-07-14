@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
@@ -78,8 +79,13 @@ class ComicRdApp extends ConsumerWidget {
     return MaterialApp.router(
       title: stringsFor(settings.localeCode).appName,
       debugShowCheckedModeBanner: false,
-      locale: const Locale('en'),
-      supportedLocales: const [Locale('en')],
+      locale: Locale(settings.localeCode),
+      supportedLocales: const [Locale('en'), Locale('id')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       themeMode: settings.themeMode,
       theme: ComicReaderFTheme.light.toApproximateMaterialTheme().copyWith(
         extensions: [
@@ -596,8 +602,8 @@ class _TopBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              const Spacer(),
               _ThemeMenuButton(
                 text: text,
                 themeMode: themeMode,

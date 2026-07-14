@@ -543,7 +543,7 @@ pub(crate) fn discover_chapter_entries_for_comic(
             1,
         )]);
     }
-    Err("comic source tidak valid".to_string())
+    Err("invalid comic source".to_string())
 }
 
 pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
@@ -645,7 +645,7 @@ pub(crate) fn find_library_for_comic(
 ) -> Result<(i64, String), String> {
     let library_path = get_library_source_setting(conn)?;
     if !comic_source_path.starts_with(library_path.as_str()) {
-        return Err("comic bukan bagian dari library_source_input saat ini".to_string());
+        return Err("comic is not under the current library source".to_string());
     }
     let ts = now_ts();
     conn.execute(
@@ -725,7 +725,7 @@ pub(crate) fn open_chapter_for_reading_conn(
     .map_err(|e| format!("failed updating comic size_bytes: {e}"))?;
     tx.commit()
         .map_err(|e| format!("failed committing chapter transaction: {e}"))?;
-    selected_chapter_id.ok_or_else(|| "chapter tidak ditemukan".to_string())
+    selected_chapter_id.ok_or_else(|| "chapter not found".to_string())
 }
 
 pub(crate) fn chapter_source(

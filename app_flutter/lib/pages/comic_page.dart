@@ -99,11 +99,13 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     );
     final chaptersRaw = ref.watch(comicChaptersProvider(widget.comicPath));
     final favorites = ref.watch(chapterFavoritesProvider(widget.comicPath));
-    final chapters = chaptersRaw.whenData((data) => filterAndSortChapters(
-      chapters: data,
-      favorites: favorites.asData?.value ?? [],
-      preferences: preferences,
-    ));
+    final chapters = chaptersRaw.whenData(
+      (data) => filterAndSortChapters(
+        chapters: data,
+        favorites: favorites.asData?.value ?? [],
+        preferences: preferences,
+      ),
+    );
     final stats = ref.watch(comicStatsProvider(widget.comicPath));
     final history = ref.watch(comicReadingHistoryProvider(widget.comicPath));
     final bookmarkedAsync = ref.watch(
@@ -359,7 +361,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   void _scrollToChapter(String chapterSourcePath) {
     final chaptersRaw = ref.read(comicChaptersProvider(widget.comicPath));
     final favs = ref.read(chapterFavoritesProvider(widget.comicPath));
-    final prefs = ref.read(comicPreferencesProvider.notifier).preferencesFor(widget.comicPath);
+    final prefs = ref
+        .read(comicPreferencesProvider.notifier)
+        .preferencesFor(widget.comicPath);
     final items = chaptersRaw.asData?.value;
     if (items == null) return;
     final filtered = filterAndSortChapters(
@@ -402,7 +406,7 @@ String _encodeChapterSortBy(ChapterSortBy sortBy) {
   };
 }
 
-const double _chapterListItemExtent = 64;
+const double _chapterListItemExtent = 70;
 
 // ---------------------------------------------------------------------------
 // Back button
@@ -599,17 +603,28 @@ class _PrimaryActionButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
             color: colors.primary,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colors.primaryForeground,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.primaryForeground,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -637,28 +652,34 @@ class _OutlineActionButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
             color: colors.card,
             border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 16, color: colors.mutedForeground),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: colors.foreground,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16, color: colors.mutedForeground),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.foreground,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -716,12 +737,16 @@ class _InfoItem extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: colors.mutedForeground),
         const SizedBox(width: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: colors.foreground,
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: colors.foreground,
+            ),
           ),
         ),
       ],
@@ -818,7 +843,7 @@ class _ChapterSectionHeader extends StatelessWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 700;
+            final isCompact = constraints.maxWidth < 900;
             if (isCompact) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1192,7 +1217,7 @@ class _ChapterListRowState extends State<_ChapterListRow> {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         widget.chapter.title,

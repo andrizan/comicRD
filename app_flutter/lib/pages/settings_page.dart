@@ -353,12 +353,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 ],
                               );
                             }
-                            return Row(
-                              children: [
-                                Expanded(child: buttons[0]),
-                                const SizedBox(width: 8),
-                                Expanded(child: buttons[1]),
-                              ],
+                            return Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: buttons,
                             );
                           },
                         ),

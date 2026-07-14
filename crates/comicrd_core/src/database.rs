@@ -352,14 +352,14 @@ pub(crate) fn set_setting_conn(
 pub(crate) fn get_library_source_setting(conn: &Connection) -> Result<String, String> {
     let raw = get_setting_conn(conn, "library_source_input")?;
     let Some(raw_value) = raw else {
-        return Err("library_source_input belum diset".to_string());
+        return Err("library_source_input is not set".to_string());
     };
     serde_json::from_str::<String>(&raw_value)
         .map(|v| v.trim().to_string())
         .map_err(|e| format!("library_source_input invalid: {e}"))
         .and_then(|v| {
             if v.is_empty() {
-                Err("library_source_input kosong".to_string())
+                Err("library_source_input is empty".to_string())
             } else {
                 Ok(v)
             }

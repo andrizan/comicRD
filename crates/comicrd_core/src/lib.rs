@@ -817,7 +817,7 @@ impl ComicRdCore {
     pub fn export_database_backup(&self, output_path: impl AsRef<Path>) -> Result<(), String> {
         let output_path = output_path.as_ref();
         if output_path.as_os_str().is_empty() {
-            return Err("output path kosong".to_string());
+            return Err("output path is empty".to_string());
         }
 
         {
@@ -857,10 +857,10 @@ impl ComicRdCore {
     pub fn import_database_backup(&self, input_path: impl AsRef<Path>) -> Result<(), String> {
         let input_path = input_path.as_ref();
         if input_path.as_os_str().is_empty() {
-            return Err("input path kosong".to_string());
+            return Err("input path is empty".to_string());
         }
         if !input_path.exists() || !input_path.is_file() {
-            return Err("file backup tidak ditemukan".to_string());
+            return Err("backup file not found".to_string());
         }
 
         let temp_dir = std::env::temp_dir().join(format!("comicrd-import-{}", now_ts()));
