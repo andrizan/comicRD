@@ -404,3 +404,66 @@ fn size_bytes_uses_archive_file_size_for_top_level_archive() {
     assert_eq!(stats.total_size_bytes, payload.len() as i64);
     assert_eq!(stats.comic_count, 1);
 }
+
+#[test]
+fn size_bytes_uses_archive_file_size_before_scan() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    fs::create_dir_all(&library).expect("library");
+    let archive_path = library.join("Top Comic.cbz");
+    let payload = vec![0u8; 4096];
+    fs::write(&archive_path, &payload).expect("write cbz");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+
+    let comics = core
+        .list_library_comics_raw(SortBy::Name, SortDir::Asc)
+        .expect("list raw comics");
+    assert_eq!(comics.len(), 1);
+    assert_eq!(comics[0].size_bytes, payload.len() as i64);
+
+    let stats = core.get_library_storage_stats().expect("storage stats");
+    assert_eq!(stats.total_size_bytes, payload.len() as i64);
+    assert_eq!(stats.comic_count, 1);
+}
+
+#[test]
+fn size_bytes_preserved_after_rescan() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter_1 = comic.join("Chapter 1");
+    let chapter_2 = comic.join("Chapter 2");
+    fs::create_dir_all(&chapter_1).expect("chapter 1");
+    fs::create_dir_all(&chapter_2).expect("chapter 2");
+    fs::write(chapter_1.join("001.png"), vec![0u8; 2048]).expect("page 1");
+    fs::write(chapter_2.join("001.png"), vec![0u8; 4096]).expect("page 2");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+
+    core.scan_libraries().expect("first scan");
+    let after_first = core
+        .list_library_comics_raw(SortBy::Name, SortDir::Asc)
+        .expect("list after first scan");
+    assert_eq!(after_first[0].size_bytes, 2048 + 4096);
+
+    core.scan_libraries().expect("second scan");
+    let after_second = core
+        .list_library_comics_raw(SortBy::Name, SortDir::Asc)
+        .expect("list after second scan");
+    assert_eq!(after_second[0].size_bytes, 2048 + 4096);
+}

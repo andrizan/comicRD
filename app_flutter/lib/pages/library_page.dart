@@ -42,6 +42,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     visibleCount: 0,
     hasMore: false,
   );
+  int _totalSizeBytes = 0;
 
   @override
   void initState() {
@@ -74,6 +75,23 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             });
           }
         }, fireImmediately: true);
+        ref.listenManual<AsyncValue<List<bridge.RawComic>>>(
+          rawLibraryComicsProvider,
+          (prev, next) {
+            final comics = next.asData?.value;
+            if (comics == null || !mounted) return;
+            final total = comics.fold<int>(
+              0,
+              (sum, comic) => sum + comic.sizeBytes.toInt(),
+            );
+            if (total != _totalSizeBytes) {
+              setState(() {
+                _totalSizeBytes = total;
+              });
+            }
+          },
+          fireImmediately: true,
+        );
         unawaited(ref.refresh(rawLibraryComicsProvider.future));
         unawaited(ref.refresh(comicsWithProgressProvider.future));
         unawaited(ref.refresh(readingHistoryProvider.future));
@@ -231,6 +249,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   text: text,
                   preferences: preferences,
                   comicsState: comicsState,
+                  totalSizeBytes: _totalSizeBytes,
                   historyCount: history.asData?.value.length ?? 0,
                   bookmarksCount: bookmarks.asData?.value.length ?? 0,
                   searchController: _search,
@@ -448,6 +467,7 @@ class _PanelHeader extends ConsumerWidget {
     required this.text,
     required this.preferences,
     required this.comicsState,
+    required this.totalSizeBytes,
     required this.historyCount,
     required this.bookmarksCount,
     required this.searchController,
@@ -461,6 +481,7 @@ class _PanelHeader extends ConsumerWidget {
   final AppStrings text;
   final LibraryPreferences preferences;
   final LibraryComicsState comicsState;
+  final int totalSizeBytes;
   final int historyCount;
   final int bookmarksCount;
   final TextEditingController searchController;
@@ -482,6 +503,7 @@ class _PanelHeader extends ConsumerWidget {
       LibraryTab.library => _LibrarySubtitle(
         text: text,
         count: comicsState.filteredTotal,
+        totalSizeBytes: totalSizeBytes,
       ),
       LibraryTab.history => Text(text.latestReading),
       LibraryTab.bookmarks => Text(
@@ -544,30 +566,24 @@ class _PanelHeader extends ConsumerWidget {
   }
 }
 
-class _LibrarySubtitle extends ConsumerWidget {
-  const _LibrarySubtitle({required this.text, required this.count});
+class _LibrarySubtitle extends StatelessWidget {
+  const _LibrarySubtitle({
+    required this.text,
+    required this.count,
+    required this.totalSizeBytes,
+  });
 
   final AppStrings text;
   final int count;
+  final int totalSizeBytes;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final api = ref.watch(comicRdApiProvider);
-    return FutureBuilder<bridge.LibraryStorageStats>(
-      future: api.getLibraryStorageStats(),
-      builder: (context, snapshot) {
-        final base = text.librarySubtitleTemplate.replaceAll(
-          '{count}',
-          '$count',
-        );
-        if (!snapshot.hasData || snapshot.data!.totalSizeBytes <= 0) {
-          return Text(base);
-        }
-        return Text(
-          '$base · ${text.totalSize}: ${formatBytes(snapshot.data!.totalSizeBytes.toInt())}',
-        );
-      },
-    );
+  Widget build(BuildContext context) {
+    final base = text.librarySubtitleTemplate.replaceAll('{count}', '$count');
+    if (totalSizeBytes <= 0) {
+      return Text(base);
+    }
+    return Text('$base · ${text.totalSize}: ${formatBytes(totalSizeBytes)}');
   }
 }
 
@@ -1246,7 +1262,9 @@ class _ComicCard extends StatelessWidget {
                     bookmarked: bookmarked,
                     onToggle: onToggleBookmark,
                     isGrid: false,
-                    tooltip: bookmarked ? text.removeBookmark : text.addBookmark,
+                    tooltip: bookmarked
+                        ? text.removeBookmark
+                        : text.addBookmark,
                   ),
                   const SizedBox(width: 4),
                   _CardContextMenu(
