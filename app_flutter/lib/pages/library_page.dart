@@ -579,6 +579,7 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLibrary = preferences.selectedTab == LibraryTab.library;
     final isBookmarks = preferences.selectedTab == LibraryTab.bookmarks;
+    final isHistory = preferences.selectedTab == LibraryTab.history;
 
     return Material(
       type: MaterialType.transparency,
@@ -602,16 +603,11 @@ class _Toolbar extends StatelessWidget {
               },
               onChanged: onSetViewMode,
             ),
-          if (!isLibrary && !isBookmarks)
-            _FilterSelect<String>(
-              value: 'Terbaru',
-              items: const {'Terbaru': 'Terbaru', 'Terlama': 'Terlama'},
-              onChanged: (_) {},
+          if (!isHistory)
+            _ViewToggles(
+              displayMode: preferences.displayMode,
+              onChanged: onSetDisplayMode,
             ),
-          _ViewToggles(
-            displayMode: preferences.displayMode,
-            onChanged: onSetDisplayMode,
-          ),
           FTooltip(
             tipBuilder: (context, _) => Text(text.refresh),
             child: FButton.icon(

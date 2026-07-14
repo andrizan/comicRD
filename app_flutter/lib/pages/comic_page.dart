@@ -101,7 +101,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     final stats = ref.watch(comicStatsProvider(widget.comicPath));
     final favorites = ref.watch(chapterFavoritesProvider(widget.comicPath));
     final history = ref.watch(comicReadingHistoryProvider(widget.comicPath));
-    final bookmarkedAsync = ref.watch(comicBookmarkedProvider(widget.comicPath));
+    final bookmarkedAsync = ref.watch(
+      comicBookmarkedProvider(widget.comicPath),
+    );
     final favoritePaths = favorites.asData?.value.toSet() ?? const <String>{};
     final title = widget.comicPath.split(RegExp(r'[/\\]')).last;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -331,7 +333,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         .remember(widget.comicPath, chapter.sourcePath);
 
     final start = chapter.lastPage > 0 ? chapter.lastPage : 0;
-    final maxPage = chapter.totalPages > 0 ? chapter.totalPages : chapter.pageCount;
+    final maxPage = chapter.totalPages > 0
+        ? chapter.totalPages
+        : chapter.pageCount;
     final pages = [
       for (var index = start; index < maxPage && index < start + 4; index++)
         index,
@@ -477,7 +481,10 @@ class _ComicHero extends StatelessWidget {
     final lastReadText = lastEntry != null
         ? text.lastReadTemplate
               .replaceAll('{chapter}', lastEntry.chapterTitle)
-              .replaceAll('{date}', formatModifiedDate(lastEntry.updatedAt.toInt()))
+              .replaceAll(
+                '{date}',
+                formatModifiedDate(lastEntry.updatedAt.toInt()),
+              )
         : '-';
 
     final continueLabel = stats.continueChapterTitle != null
@@ -905,7 +912,9 @@ class _ChapterTabState extends State<_ChapterTab> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: widget.selected ? colors.foreground : colors.mutedForeground,
+                color: widget.selected
+                    ? colors.foreground
+                    : colors.mutedForeground,
               ),
             ),
             const SizedBox(height: 6),
@@ -914,7 +923,9 @@ class _ChapterTabState extends State<_ChapterTab> {
               height: 3,
               width: 24,
               decoration: BoxDecoration(
-                color: widget.selected || _hovered ? colors.primary : Colors.transparent,
+                color: widget.selected || _hovered
+                    ? colors.primary
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -956,9 +967,16 @@ class _ChapterSearchBox extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(fontSize: 13, color: colors.mutedForeground),
-            prefixIcon: Icon(AppIcons.search, size: 18, color: colors.mutedForeground),
+            prefixIcon: Icon(
+              AppIcons.search,
+              size: 18,
+              color: colors.mutedForeground,
+            ),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
           ),
         ),
       ),
@@ -992,7 +1010,11 @@ class _SortSelect<T> extends StatelessWidget {
         child: DropdownButton<T>(
           value: value,
           isDense: true,
-          icon: Icon(AppIcons.chevronDown, size: 14, color: colors.mutedForeground),
+          icon: Icon(
+            AppIcons.chevronDown,
+            size: 14,
+            color: colors.mutedForeground,
+          ),
           dropdownColor: colors.card,
           style: TextStyle(fontSize: 13, color: colors.foreground),
           borderRadius: BorderRadius.circular(10),
@@ -1029,7 +1051,8 @@ class _SortDirToggle extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
+        onTap: () =>
+            onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
         child: Container(
           height: 38,
           width: 38,
@@ -1070,7 +1093,8 @@ class _ChapterList extends StatelessWidget {
   final ScrollController controller;
   final String emptyLabel;
   final Future<void> Function(bridge.RawChapter chapter) onOpen;
-  final Future<void> Function(bridge.RawChapter chapter, bool favorite) onToggleFavorite;
+  final Future<void> Function(bridge.RawChapter chapter, bool favorite)
+  onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -1141,9 +1165,7 @@ class _ChapterListRowState extends State<_ChapterListRow> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: _hovered ? colors.card : Colors.transparent,
-              border: Border(
-                bottom: BorderSide(color: colors.border),
-              ),
+              border: Border(bottom: BorderSide(color: colors.border)),
             ),
             child: Row(
               children: [
@@ -1174,7 +1196,10 @@ class _ChapterListRowState extends State<_ChapterListRow> {
                       const SizedBox(height: 4),
                       Text(
                         '${widget.text.downloaded}: ${formatModifiedDate(widget.chapter.dateModified.toInt())}',
-                        style: TextStyle(fontSize: 12, color: colors.mutedForeground),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.mutedForeground,
+                        ),
                       ),
                     ],
                   ),
@@ -1182,7 +1207,11 @@ class _ChapterListRowState extends State<_ChapterListRow> {
                 if (widget.chapter.isRead)
                   Padding(
                     padding: const EdgeInsets.only(right: 12),
-                    child: Icon(AppIcons.check, size: 18, color: context.appAccent),
+                    child: Icon(
+                      AppIcons.check,
+                      size: 18,
+                      color: context.appAccent,
+                    ),
                   ),
                 Padding(
                   padding: const EdgeInsets.only(right: 12),

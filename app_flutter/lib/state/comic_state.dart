@@ -46,48 +46,52 @@ class ComicStats {
   int get effectiveReadCount => readCount + inProgressCount;
 }
 
-final comicStatsProvider =
-    Provider.family<ComicStats, String>((ref, comicPath) {
-      final chapters = ref.watch(comicChaptersProvider(comicPath)).asData?.value;
-      if (chapters == null) {
-        return const ComicStats(
-          totalSize: 0,
-          chapterCount: 0,
-          readCount: 0,
-          inProgressCount: 0,
-          continueChapterTitle: null,
-        );
+final comicStatsProvider = Provider.family<ComicStats, String>((
+  ref,
+  comicPath,
+) {
+  final chapters = ref.watch(comicChaptersProvider(comicPath)).asData?.value;
+  if (chapters == null) {
+    return const ComicStats(
+      totalSize: 0,
+      chapterCount: 0,
+      readCount: 0,
+      inProgressCount: 0,
+      continueChapterTitle: null,
+    );
+  }
+  final totalSize = chapters.fold<int>(
+    0,
+    (sum, c) => sum + c.sizeBytes.toInt(),
+  );
+  final readCount = chapters.where((c) => c.isRead).length;
+  final inProgressCount = chapters
+      .where((c) => c.lastPage > 0 && !c.isRead)
+      .length;
+  String? continueTitle;
+  for (final c in chapters) {
+    if (c.lastPage > 0 && !c.isRead) {
+      continueTitle = c.title;
+      break;
+    }
+  }
+  if (continueTitle == null) {
+    for (final c in chapters) {
+      if (!c.isRead) {
+        continueTitle = c.title;
+        break;
       }
-      final totalSize =
-          chapters.fold<int>(0, (sum, c) => sum + c.sizeBytes.toInt());
-      final readCount = chapters.where((c) => c.isRead).length;
-      final inProgressCount =
-          chapters.where((c) => c.lastPage > 0 && !c.isRead).length;
-      String? continueTitle;
-      for (final c in chapters) {
-        if (c.lastPage > 0 && !c.isRead) {
-          continueTitle = c.title;
-          break;
-        }
-      }
-      if (continueTitle == null) {
-        for (final c in chapters) {
-          if (!c.isRead) {
-            continueTitle = c.title;
-            break;
-          }
-        }
-        continueTitle ??=
-            chapters.isNotEmpty ? chapters.first.title : null;
-      }
-      return ComicStats(
-        totalSize: totalSize,
-        chapterCount: chapters.length,
-        readCount: readCount,
-        inProgressCount: inProgressCount,
-        continueChapterTitle: continueTitle,
-      );
-    });
+    }
+    continueTitle ??= chapters.isNotEmpty ? chapters.first.title : null;
+  }
+  return ComicStats(
+    totalSize: totalSize,
+    chapterCount: chapters.length,
+    readCount: readCount,
+    inProgressCount: inProgressCount,
+    continueChapterTitle: continueTitle,
+  );
+});
 
 final comicBookmarkedProvider = FutureProvider.family<bool, String>(
   (ref, comicPath) =>
