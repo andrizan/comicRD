@@ -1479,7 +1479,8 @@ class _HistoryItem extends StatelessWidget {
       ],
     );
     final continueButton = OutlinedButton(
-      onPressed: onOpen,
+      onPressed: () =>
+          context.go('/reader/${item.chapterId}'),
       style: OutlinedButton.styleFrom(
         foregroundColor: colors.primary,
         side: BorderSide(color: colors.primary),
