@@ -196,7 +196,6 @@ class AppStrings {
     // App identity
     required this.appName,
     // Navigation
-    required this.home,
     required this.theme,
     required this.themeSystem,
     required this.themeLight,
@@ -209,12 +208,9 @@ class AppStrings {
     required this.search,
     required this.refresh,
     required this.backToTop,
-    required this.totalComics,
     required this.totalChapters,
-    required this.showingComics,
     required this.emptyLibrary,
     required this.comic,
-    required this.reader,
     // Language names
     required this.english,
     required this.indonesian,
@@ -235,20 +231,19 @@ class AppStrings {
     required this.read,
     required this.reading,
     required this.unread,
-    required this.page,
-    required this.pages,
     // Sort/filter
-    required this.favorites,
     required this.chapter,
     required this.name,
     required this.folderDate,
-    required this.ascending,
-    required this.descending,
     // Library view modes
     required this.all,
     required this.progress,
+    required this.grid,
+    required this.list,
+    required this.sortDirection,
     // Comic actions
-    required this.comicActions,
+    required this.bookmark,
+    required this.bookmarked,
     required this.addBookmark,
     required this.removeBookmark,
     required this.addFavorite,
@@ -257,6 +252,27 @@ class AppStrings {
     required this.copyTitle,
     required this.copyPath,
     required this.noLibrarySource,
+    // Redesign labels
+    required this.menu,
+    required this.newBadge,
+    required this.continueReading,
+    required this.totalSize,
+    required this.chapterCountLabel,
+    required this.librarySubtitleTemplate,
+    required this.bookmarksSubtitleTemplate,
+    required this.latestReading,
+    // Comic detail labels
+    required this.backToLibrary,
+    required this.directoryPath,
+    required this.lastRead,
+    required this.lastReadTemplate,
+    required this.readingProgress,
+    required this.readingProgressTemplate,
+    required this.startFromBeginning,
+    required this.filterChapters,
+    required this.allChapters,
+    required this.favoriteChapters,
+    required this.downloaded,
     // Settings panel
     required this.librarySection,
     required this.librarySource,
@@ -265,27 +281,25 @@ class AppStrings {
     required this.readerSection,
     required this.defaultZoom,
     required this.pageGap,
-    required this.imagePipelineProfile,
-    required this.performance,
-    required this.balanced,
-    required this.quality,
     required this.applicationSection,
     required this.backupSection,
     required this.exportBackup,
     required this.importBackup,
-    required this.cancel,
     required this.save,
     required this.settingsSaved,
     required this.backupExported,
     required this.backupImported,
-    required this.sqliteDatabase,
-    required this.modified,
+    // Scan
+    required this.scanLibrary,
+    required this.scanning,
+    required this.scanNoChange,
+    required this.scanProgress,
+    required this.scanCompleted,
   });
 
   // App identity
   final String appName;
   // Navigation
-  final String home;
   final String theme;
   final String themeSystem;
   final String themeLight;
@@ -298,12 +312,9 @@ class AppStrings {
   final String search;
   final String refresh;
   final String backToTop;
-  final String totalComics;
   final String totalChapters;
-  final String showingComics;
   final String emptyLibrary;
   final String comic;
-  final String reader;
   // Language names
   final String english;
   final String indonesian;
@@ -324,20 +335,19 @@ class AppStrings {
   final String read;
   final String reading;
   final String unread;
-  final String page;
-  final String pages;
   // Sort/filter
-  final String favorites;
   final String chapter;
   final String name;
   final String folderDate;
-  final String ascending;
-  final String descending;
   // Library view modes
   final String all;
   final String progress;
+  final String grid;
+  final String list;
+  final String sortDirection;
   // Comic actions
-  final String comicActions;
+  final String bookmark;
+  final String bookmarked;
   final String addBookmark;
   final String removeBookmark;
   final String addFavorite;
@@ -346,6 +356,27 @@ class AppStrings {
   final String copyTitle;
   final String copyPath;
   final String noLibrarySource;
+  // Redesign labels
+  final String menu;
+  final String newBadge;
+  final String continueReading;
+  final String totalSize;
+  final String chapterCountLabel;
+  final String librarySubtitleTemplate;
+  final String bookmarksSubtitleTemplate;
+  final String latestReading;
+  // Comic detail labels
+  final String backToLibrary;
+  final String directoryPath;
+  final String lastRead;
+  final String lastReadTemplate;
+  final String readingProgress;
+  final String readingProgressTemplate;
+  final String startFromBeginning;
+  final String filterChapters;
+  final String allChapters;
+  final String favoriteChapters;
+  final String downloaded;
   // Settings panel
   final String librarySection;
   final String librarySource;
@@ -354,25 +385,23 @@ class AppStrings {
   final String readerSection;
   final String defaultZoom;
   final String pageGap;
-  final String imagePipelineProfile;
-  final String performance;
-  final String balanced;
-  final String quality;
   final String applicationSection;
   final String backupSection;
   final String exportBackup;
   final String importBackup;
-  final String cancel;
   final String save;
   final String settingsSaved;
   final String backupExported;
   final String backupImported;
-  final String sqliteDatabase;
-  final String modified;
+  // Scan
+  final String scanLibrary;
+  final String scanning;
+  final String scanNoChange;
+  final String scanProgress;
+  final String scanCompleted;
 
   static const en = AppStrings(
     appName: 'ComicRD',
-    home: 'Home',
     theme: 'Theme',
     themeSystem: 'System',
     themeLight: 'Light',
@@ -383,23 +412,20 @@ class AppStrings {
     library: 'Library',
     bookmarks: 'Bookmarks',
     search: 'Search',
-    refresh: 'Perbarui',
-    backToTop: 'Back to top',
-    totalComics: 'Total comics',
+    refresh: 'Refresh',
+    backToTop: 'Back to Top',
     totalChapters: 'chapters',
-    showingComics: 'Showing',
-    emptyLibrary: 'No comics found',
+    emptyLibrary: 'No Comics Found',
     comic: 'Comic',
-    reader: 'Reader',
     english: 'English',
     indonesian: 'Indonesian',
-    noPages: 'No pages',
+    noPages: 'No Pages',
     close: 'Close',
-    previousChapter: 'Previous chapter',
-    previousPage: 'Previous page',
-    nextPage: 'Next page',
-    nextChapter: 'Next chapter',
-    readerControls: 'Reader controls',
+    previousChapter: 'Previous Chapter',
+    previousPage: 'Previous Page',
+    nextPage: 'Next Page',
+    nextChapter: 'Next Chapter',
+    readerControls: 'Reader Controls',
     gap: 'Gap',
     zoom: 'Zoom',
     fullscreen: 'Fullscreen',
@@ -408,52 +434,67 @@ class AppStrings {
     read: 'Read',
     reading: 'Reading',
     unread: 'Unread',
-    page: 'page',
-    pages: 'pages',
-    favorites: 'Favorites',
     chapter: 'Chapter',
     name: 'Name',
-    folderDate: 'Folder date',
-    ascending: 'Ascending',
-    descending: 'Descending',
+    folderDate: 'Folder Date',
     all: 'All',
     progress: 'Progress',
-    comicActions: 'Comic actions',
-    addBookmark: 'Add bookmark',
-    removeBookmark: 'Remove bookmark',
-    addFavorite: 'Add favorite',
-    removeFavorite: 'Remove favorite',
-    openFolder: 'Open folder',
-    copyTitle: 'Copy title',
-    copyPath: 'Copy path',
-    noLibrarySource: 'No library source configured',
+    grid: 'Grid',
+    list: 'List',
+    sortDirection: 'Sort Direction',
+    bookmark: 'Bookmark',
+    bookmarked: 'Bookmarked',
+    addBookmark: 'Add Bookmark',
+    removeBookmark: 'Remove Bookmark',
+    addFavorite: 'Add Favorite',
+    removeFavorite: 'Remove Favorite',
+    openFolder: 'Open Folder',
+    copyTitle: 'Copy Title',
+    copyPath: 'Copy Path',
+    noLibrarySource: 'No Library Source Configured',
+    menu: 'Menu',
+    newBadge: 'New',
+    continueReading: 'Continue',
+    totalSize: 'Total Size',
+    chapterCountLabel: 'Ch.',
+    librarySubtitleTemplate: '{count} Titles Saved',
+    bookmarksSubtitleTemplate: '{count} Titles Saved',
+    latestReading: 'Latest Reading',
+    backToLibrary: 'Back to Library',
+    directoryPath: 'Directory Path',
+    lastRead: 'Last Read',
+    lastReadTemplate: '{chapter} ({date})',
+    readingProgress: 'Reading Progress',
+    readingProgressTemplate: '{percent}% ({read} of {total} chapters)',
+    startFromBeginning: 'Start from Beginning',
+    filterChapters: 'Filter Chapters...',
+    allChapters: 'All Chapters',
+    favoriteChapters: 'Favorites',
+    downloaded: 'Downloaded',
     librarySection: 'Library',
-    librarySource: 'Library source',
-    browseDirectory: 'Browse directory',
-    refreshSourceStatus: 'Refresh source status',
+    librarySource: 'Library Source',
+    browseDirectory: 'Browse Directory',
+    refreshSourceStatus: 'Refresh Source Status',
     readerSection: 'Reader',
-    defaultZoom: 'Default zoom',
-    pageGap: 'Page gap',
-    imagePipelineProfile: 'Image pipeline profile',
-    performance: 'Performance',
-    balanced: 'Balanced',
-    quality: 'Quality',
+    defaultZoom: 'Default Zoom',
+    pageGap: 'Page Gap',
     applicationSection: 'Application',
     backupSection: 'Backup',
-    exportBackup: 'Export backup',
-    importBackup: 'Import backup',
-    cancel: 'Cancel',
+    exportBackup: 'Export Backup',
+    importBackup: 'Import Backup',
     save: 'Save',
-    settingsSaved: 'Settings saved',
-    backupExported: 'Backup exported',
-    backupImported: 'Backup imported',
-    sqliteDatabase: 'SQLite database',
-    modified: 'Modified',
+    settingsSaved: 'Settings Saved',
+    backupExported: 'Backup Exported',
+    backupImported: 'Backup Imported',
+    scanLibrary: 'Scan Library',
+    scanning: 'Scanning...',
+    scanNoChange: 'No Changes Detected',
+    scanProgress: 'Scanning',
+    scanCompleted: 'Scan Complete: {comics} Comics, {chapters} Chapters Found',
   );
 
   static const id = AppStrings(
     appName: 'ComicRD',
-    home: 'Beranda',
     theme: 'Tema',
     themeSystem: 'Sistem',
     themeLight: 'Terang',
@@ -464,71 +505,85 @@ class AppStrings {
     library: 'Pustaka',
     bookmarks: 'Bookmark',
     search: 'Cari',
-    refresh: 'Refresh',
-    backToTop: 'Kembali ke atas',
-    totalComics: 'Total komik',
+    refresh: 'Perbarui',
+    backToTop: 'Kembali ke Atas',
     totalChapters: 'chapter',
-    showingComics: 'Menampilkan',
-    emptyLibrary: 'Komik tidak ditemukan',
+    emptyLibrary: 'Tidak Ada Komik',
     comic: 'Komik',
-    reader: 'Reader',
     english: 'Inggris',
     indonesian: 'Indonesia',
-    noPages: 'Tidak ada halaman',
+    noPages: 'Tidak Ada Halaman',
     close: 'Tutup',
-    previousChapter: 'Chapter sebelumnya',
-    previousPage: 'Halaman sebelumnya',
-    nextPage: 'Halaman berikutnya',
-    nextChapter: 'Chapter berikutnya',
-    readerControls: 'Kontrol reader',
+    previousChapter: 'Chapter Sebelumnya',
+    previousPage: 'Halaman Sebelumnya',
+    nextPage: 'Halaman Berikutnya',
+    nextChapter: 'Chapter Berikutnya',
+    readerControls: 'Kontrol Reader',
     gap: 'Jarak',
     zoom: 'Perbesar',
-    fullscreen: 'Layar penuh',
+    fullscreen: 'Layar Penuh',
     unlimitedScroll: 'Scroll Tanpa Batas',
     unlimitedScrollUp: 'Scroll Tanpa Batas ke Atas',
     read: 'Dibaca',
-    reading: 'Sedang dibaca',
-    unread: 'Belum dibaca',
-    page: 'halaman',
-    pages: 'halaman',
-    favorites: 'Favorit',
+    reading: 'Sedang Dibaca',
+    unread: 'Belum Dibaca',
     chapter: 'Chapter',
     name: 'Nama',
-    folderDate: 'Tanggal folder',
-    ascending: 'Naik',
-    descending: 'Menurun',
+    folderDate: 'Tanggal Folder',
     all: 'Semua',
     progress: 'Progres',
-    comicActions: 'Aksi komik',
-    addBookmark: 'Tambah bookmark',
-    removeBookmark: 'Hapus bookmark',
-    addFavorite: 'Tambah favorit',
-    removeFavorite: 'Hapus favorit',
-    openFolder: 'Buka folder',
-    copyTitle: 'Salin judul',
-    copyPath: 'Salin path',
-    noLibrarySource: 'Sumber pustaka belum dikonfigurasi',
+    grid: 'Kisi',
+    list: 'Daftar',
+    sortDirection: 'Arah Urutan',
+    bookmark: 'Bookmark',
+    bookmarked: 'Dibookmark',
+    addBookmark: 'Tambah Bookmark',
+    removeBookmark: 'Hapus Bookmark',
+    addFavorite: 'Tambah Favorit',
+    removeFavorite: 'Hapus Favorit',
+    openFolder: 'Buka Folder',
+    copyTitle: 'Salin Judul',
+    copyPath: 'Salin Path',
+    noLibrarySource: 'Sumber Pustaka Belum Dikonfigurasi',
+    menu: 'Menu',
+    newBadge: 'Baru',
+    continueReading: 'Lanjut',
+    totalSize: 'Total Ukuran',
+    chapterCountLabel: 'Ch.',
+    librarySubtitleTemplate: '{count} Judul Tersimpan',
+    bookmarksSubtitleTemplate: '{count} Judul Disimpan',
+    latestReading: 'Bacaan Terakhir',
+    backToLibrary: 'Kembali ke Pustaka',
+    directoryPath: 'Path Direktori',
+    lastRead: 'Terakhir Dibaca',
+    lastReadTemplate: '{chapter} ({date})',
+    readingProgress: 'Progres Baca',
+    readingProgressTemplate: '{percent}% ({read} dari {total} chapter)',
+    startFromBeginning: 'Mulai dari Awal',
+    filterChapters: 'Filter Chapter...',
+    allChapters: 'Semua Chapter',
+    favoriteChapters: 'Favorit',
+    downloaded: 'Diunduh',
     librarySection: 'Pustaka',
-    librarySource: 'Sumber pustaka',
-    browseDirectory: 'Pilih direktori',
-    refreshSourceStatus: 'Perbarui status sumber',
+    librarySource: 'Sumber Pustaka',
+    browseDirectory: 'Pilih Direktori',
+    refreshSourceStatus: 'Perbarui Status Sumber',
     readerSection: 'Reader',
-    defaultZoom: 'Zoom default',
-    pageGap: 'Jarak halaman',
-    imagePipelineProfile: 'Profil pipeline gambar',
-    performance: 'Performa',
-    balanced: 'Seimbang',
-    quality: 'Kualitas',
+    defaultZoom: 'Zoom Default',
+    pageGap: 'Jarak Halaman',
     applicationSection: 'Aplikasi',
     backupSection: 'Cadangan',
-    exportBackup: 'Ekspor cadangan',
-    importBackup: 'Impor cadangan',
-    cancel: 'Batal',
+    exportBackup: 'Ekspor Cadangan',
+    importBackup: 'Impor Cadangan',
     save: 'Simpan',
-    settingsSaved: 'Pengaturan disimpan',
-    backupExported: 'Cadangan diekspor',
-    backupImported: 'Cadangan diimpor',
-    sqliteDatabase: 'Database SQLite',
-    modified: 'Diubah',
+    settingsSaved: 'Pengaturan Disimpan',
+    backupExported: 'Cadangan Diekspor',
+    backupImported: 'Cadangan Diimpor',
+    scanLibrary: 'Pindai Pustaka',
+    scanning: 'Memindai...',
+    scanNoChange: 'Tidak Ada Perubahan',
+    scanProgress: 'Memindai',
+    scanCompleted:
+        'Pemindaian Selesai: {comics} Komik, {chapters} Chapter Ditemukan',
   );
 }

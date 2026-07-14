@@ -21,7 +21,7 @@ void main() {
         ? MaterialApp(home: child)
         : MaterialApp.router(routerConfig: router);
     return FTheme(
-      data: FThemes.zinc.light.desktop,
+      data: ComicReaderFTheme.light,
       child: FToaster(
         child: FTooltipGroup(child: core),
       ),

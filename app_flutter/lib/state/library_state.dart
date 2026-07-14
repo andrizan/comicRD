@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -118,9 +119,54 @@ final allBookmarksProvider = FutureProvider<List<bridge.ComicBookmark>>((ref) {
   return ref.watch(comicRdApiProvider).listAllBookmarks();
 });
 
+class LibraryCountNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void update(int count) {
+    state = count;
+  }
+}
+
+final libraryCountProvider = NotifierProvider<LibraryCountNotifier, int>(
+  LibraryCountNotifier.new,
+);
+
+class BookmarkCountNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void update(int count) {
+    state = count;
+  }
+}
+
+final bookmarkCountProvider = NotifierProvider<BookmarkCountNotifier, int>(
+  BookmarkCountNotifier.new,
+);
+
 final comicsWithProgressProvider = FutureProvider<List<String>>((ref) {
   return ref.watch(comicRdApiProvider).listComicsWithProgress();
 });
+
+final comicThumbnailProvider = FutureProvider.autoDispose
+    .family<Uint8List?, ({String sourcePath, int maxWidth, int maxHeight})>((
+      ref,
+      key,
+    ) async {
+      try {
+        return await ref
+            .watch(comicRdApiProvider)
+            .getComicThumbnail(
+              key.sourcePath,
+              maxWidth: key.maxWidth,
+              maxHeight: key.maxHeight,
+            );
+      } catch (e, st) {
+        debugPrint('thumbnail error for ${key.sourcePath}: $e\n$st');
+        return null;
+      }
+    });
 
 enum LibraryViewMode { all, unread, reading }
 

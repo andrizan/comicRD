@@ -63,6 +63,7 @@ pub struct RawChapter {
     pub is_read: bool,
     pub last_page: i64,
     pub total_pages: i64,
+    pub size_bytes: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -268,6 +269,7 @@ impl From<core::RawChapter> for RawChapter {
             is_read: value.is_read,
             last_page: value.last_page,
             total_pages: value.total_pages,
+            size_bytes: value.size_bytes,
         }
     }
 }
@@ -502,6 +504,15 @@ pub fn list_library_comics_raw(
         .into_iter()
         .map(Into::into)
         .collect())
+}
+
+pub fn get_comic_thumbnail(
+    source_path: String,
+    max_width: u32,
+    max_height: u32,
+) -> Result<Vec<u8>, String> {
+    let bytes = core()?.get_comic_thumbnail(&source_path, max_width, max_height)?;
+    Ok((*bytes).clone())
 }
 
 pub fn get_library_storage_stats() -> Result<LibraryStorageStats, String> {

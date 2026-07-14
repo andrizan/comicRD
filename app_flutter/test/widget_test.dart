@@ -4,6 +4,7 @@ import 'package:comicrd_flutter/app.dart';
 import 'package:comicrd_flutter/api/comicrd_api.dart';
 import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/library_page.dart';
+import 'package:comicrd_flutter/pages/settings_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +28,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('No library source configured'), findsOneWidget);
+    expect(find.text('No Library Source Configured'), findsOneWidget);
     expect(find.byType(FCircularProgress), findsNothing);
   });
 
@@ -55,17 +56,25 @@ void main() {
 
     expect(find.text('8Kaijuu'), findsOneWidget);
     expect(find.text('Other Comic'), findsOneWidget);
-    expect(find.text('Total comics: 2'), findsOneWidget);
+    expect(find.text('2 Titles Saved'), findsOneWidget);
   });
 
   testWidgets('opens comic paths that contain URL special characters', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
     await tester.pumpWidget(_testApp(api: const _PercentPathApi()));
     await tester.pumpAndSettle();
 
     final comic = find.text('100% Comic #1 [A+B] %20?x=y&z');
-    await tester.tap(comic, warnIfMissed: false);
+    final comicCard = find
+        .ancestor(of: comic, matching: find.byType(GestureDetector))
+        .first;
+    await tester.tap(comicCard, warnIfMissed: false);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
@@ -75,30 +84,39 @@ void main() {
     expect(find.text('Chapter 1'), findsOneWidget);
   });
 
-  testWidgets('settings panel exposes unlimited scroll switches', (
+  testWidgets('settings page exposes unlimited scroll switches', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
     final api = _SettingsPanelApi();
     await tester.pumpWidget(_testApp(api: api));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(AppIcons.settings));
+    expect(find.byIcon(AppIcons.settings), findsOneWidget);
+    final context = tester.element(find.byType(ComicRdShell));
+    GoRouter.of(context).go('/settings');
     await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Unlimited Scroll'),
       400,
       scrollable: find.byType(Scrollable).last,
     );
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('Unlimited Scroll'), findsOneWidget);
     expect(find.text('Unlimited Scroll Up'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FSwitch, 'Unlimited Scroll'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FSwitch, 'Unlimited Scroll Up'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FSwitch).first);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    await tester.tap(find.byType(FSwitch).last);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(api.savedSettings['unlimited_scroll'], 'true');
     expect(api.savedSettings['unlimited_scroll_up'], 'false');
@@ -239,6 +257,7 @@ class _FakeComicRdApi extends ComicRdApi {
         isRead: false,
         lastPage: 0,
         totalPages: 12,
+        sizeBytes: 0,
       ),
     ];
   }
@@ -383,6 +402,7 @@ class _PercentPathApi extends _PartiallyIndexedSourceApi {
         isRead: false,
         lastPage: 0,
         totalPages: 12,
+        sizeBytes: 0,
       ),
     ];
   }
@@ -432,9 +452,9 @@ class _ManyComicsApi extends _PartiallyIndexedSourceApi {
           sourceType: 'folder',
           dateModified: index,
           chapterCount: 12,
-        readChapterCount: 0,
-        inProgressChapterCount: 0,
-        sizeBytes: 0,
+          readChapterCount: 0,
+          inProgressChapterCount: 0,
+          sizeBytes: 0,
         ),
     ];
   }

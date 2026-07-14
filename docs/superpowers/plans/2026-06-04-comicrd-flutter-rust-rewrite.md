@@ -79,6 +79,7 @@ Library APIs:
 - `startScanLibraries() -> bool`
 - `getLibraryScanStatus() -> LibraryScanStatus`
 - `listLibraryComicsRaw(sortBy: SortBy, sortDir: SortDir) -> List<RawComic>`
+- `getComicThumbnail(sourcePath: String, maxWidth: int, maxHeight: int) -> Uint8List`
 - `listComicsWithProgress() -> List<String>`
 - `listReadingHistory() -> List<ReadingHistoryEntry>`
 
@@ -227,6 +228,7 @@ Important data types:
 - [x] Implement history tab using `listReadingHistory`, deduped by comic source path.
 - [x] Implement bookmarks tab using `listAllBookmarks`.
 - [x] Preserve scroll position per tab.
+- [x] Add on-demand comic thumbnail generation with a bounded in-memory LRU cache plus persistent disk cache (200 MB, LRU cleanup), and display covers in library/bookmarks grid/list views and on the comic detail page.
 
 ### Task 6: Comic Page
 

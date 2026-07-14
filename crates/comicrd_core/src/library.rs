@@ -101,16 +101,20 @@ pub(crate) fn comics_from_fs_entries(
             });
         } else if entry.is_file() && is_archive(entry) {
             let source_path = entry.to_string_lossy().to_string();
+            let source_type = source_type_for_path(entry);
             let (read_chapter_count, in_progress_chapter_count) =
                 archive_progress.get(archive_idx).copied().unwrap_or((0, 0));
             archive_idx += 1;
             let key = comic_history_key(library_path, &source_path);
-            let size_bytes = comic_size_by_key.get(&key).copied().unwrap_or(0);
+            let size_bytes = comic_size_by_key
+                .get(&key)
+                .copied()
+                .unwrap_or_else(|| chapter_size_bytes(entry, &source_type));
             comics.push(RawComic {
                 key: source_path.clone(),
                 title: comic_title_for_path(entry),
                 source_path,
-                source_type: source_type_for_path(entry),
+                source_type,
                 library_path: library_path.to_string(),
                 date_modified: file_modified_ts(entry),
                 chapter_count: 1,
@@ -338,12 +342,14 @@ pub(crate) fn scan_comic_dir(
     for (chapter_title, chapter_path, chapter_type, idx) in chapter_entries {
         let chapter_key = chapter_history_key(library_path, &chapter_path, idx);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
+
         let mut cached_page_count = 0i64;
-        if let Some((existing_page_count, cached_modified_at)) =
+        if let Some((existing_page_count, cached_modified_at, cached_size)) =
             chapter_snapshot_by_history_key(conn, &chapter_key)?
         {
             cached_page_count = existing_page_count;
             if cached_modified_at == modified_at {
+                total_size_bytes = total_size_bytes.saturating_add(cached_size);
                 chapter_count += 1;
                 continue;
             }
@@ -412,18 +418,19 @@ pub(crate) fn scan_library_entries(
             )?;
             let chapter_key = chapter_history_key(library_path, &source_path, 1);
             let mut should_upsert_chapter = true;
-            let page_count = if let Some((cached_page_count, cached_modified_at)) =
-                chapter_snapshot_by_history_key(&tx, &chapter_key)?
-            {
-                if cached_modified_at == modified_at {
-                    should_upsert_chapter = false;
-                    cached_page_count as usize
+            let page_count =
+                if let Some((cached_page_count, cached_modified_at, _cached_size)) =
+                    chapter_snapshot_by_history_key(&tx, &chapter_key)?
+                {
+                    if cached_modified_at == modified_at {
+                        should_upsert_chapter = false;
+                        cached_page_count as usize
+                    } else {
+                        cached_page_count.max(0) as usize
+                    }
                 } else {
-                    cached_page_count.max(0) as usize
-                }
-            } else {
-                0
-            };
+                    0
+                };
             let archive_size = chapter_size_bytes(entry, &source_type);
             if should_upsert_chapter {
                 upsert_chapter(

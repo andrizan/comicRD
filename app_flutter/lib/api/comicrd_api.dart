@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:path_provider/path_provider.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -38,6 +40,16 @@ class ComicRdApi {
 
   Future<bridge.LibraryStorageStats> getLibraryStorageStats() =>
       bridge.getLibraryStorageStats();
+
+  Future<Uint8List> getComicThumbnail(
+    String sourcePath, {
+    int maxWidth = 200,
+    int maxHeight = 300,
+  }) => bridge.getComicThumbnail(
+    sourcePath: sourcePath,
+    maxWidth: maxWidth,
+    maxHeight: maxHeight,
+  );
 
   Future<List<String>> listComicsWithProgress() =>
       bridge.listComicsWithProgress();

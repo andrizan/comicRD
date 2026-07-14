@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -17,48 +15,130 @@ final chapterFavoritesProvider = FutureProvider.family<List<String>, String>((
   return ref.watch(comicRdApiProvider).listChapterFavorites(comicPath);
 });
 
-final filteredComicChaptersProvider =
-    Provider.family<AsyncValue<List<bridge.RawChapter>>, String>((
+final comicReadingHistoryProvider =
+    FutureProvider.family<List<bridge.ReadingHistoryEntry>, String>((
       ref,
       comicPath,
-    ) {
-      final chaptersAsync = ref.watch(comicChaptersProvider(comicPath));
-      final favoritesAsync = ref.watch(chapterFavoritesProvider(comicPath));
-      final preferences = ref.watch(
-        comicPreferencesProvider.select(
-          (state) => state[comicPath] ?? const ComicPreferences(),
-        ),
-      );
-      return chaptersAsync.whenData((chapters) {
-        final favorites = favoritesAsync.asData?.value.toSet() ?? const {};
-        final query = preferences.query.trim().toLowerCase();
-        final filtered = chapters.where((chapter) {
-          final matchesQuery =
-              query.isEmpty ||
-              chapter.title.toLowerCase().contains(query) ||
-              chapter.sourcePath.toLowerCase().contains(query);
-          final matchesFavorite =
-              !preferences.favoritesOnly ||
-              favorites.contains(chapter.sourcePath);
-          return matchesQuery && matchesFavorite;
-        }).toList();
-        filtered.sort((a, b) {
-          final order = switch (preferences.sortBy) {
-            ChapterSortBy.name => a.title.toLowerCase().compareTo(
-              b.title.toLowerCase(),
-            ),
-            ChapterSortBy.folderDate => a.dateModified.compareTo(
-              b.dateModified,
-            ),
-            ChapterSortBy.chapterIndex => a.chapterIndex.compareTo(
-              b.chapterIndex,
-            ),
-          };
-          return preferences.sortDir == bridge.SortDir.asc ? order : -order;
-        });
-        return filtered;
-      });
+    ) async {
+      final history = await ref.watch(comicRdApiProvider).listReadingHistory();
+      return history
+          .where((entry) => entry.comicSourcePath == comicPath)
+          .toList();
     });
+
+class ComicStats {
+  const ComicStats({
+    required this.totalSize,
+    required this.chapterCount,
+    required this.readCount,
+    required this.inProgressCount,
+    required this.continueChapterTitle,
+  });
+
+  final int totalSize;
+  final int chapterCount;
+  final int readCount;
+  final int inProgressCount;
+  final String? continueChapterTitle;
+
+  int get effectiveReadCount => readCount + inProgressCount;
+}
+
+final comicStatsProvider = Provider.family<ComicStats, String>((
+  ref,
+  comicPath,
+) {
+  final chapters = ref.watch(comicChaptersProvider(comicPath)).asData?.value;
+  if (chapters == null) {
+    return const ComicStats(
+      totalSize: 0,
+      chapterCount: 0,
+      readCount: 0,
+      inProgressCount: 0,
+      continueChapterTitle: null,
+    );
+  }
+  final totalSize = chapters.fold<int>(
+    0,
+    (sum, c) => sum + c.sizeBytes.toInt(),
+  );
+  final readCount = chapters.where((c) => c.isRead).length;
+  final inProgressCount = chapters
+      .where((c) => c.lastPage > 0 && !c.isRead)
+      .length;
+
+  String? continueTitle;
+  final lastOpened = ref.watch(lastOpenedChapterProvider)[comicPath];
+  if (lastOpened != null) {
+    for (final c in chapters) {
+      if (c.sourcePath == lastOpened) {
+        continueTitle = c.title;
+        break;
+      }
+    }
+  }
+
+  if (continueTitle == null) {
+    for (final c in chapters) {
+      if (c.lastPage > 0 && !c.isRead) {
+        continueTitle = c.title;
+        break;
+      }
+    }
+  }
+  if (continueTitle == null) {
+    for (final c in chapters) {
+      if (!c.isRead) {
+        continueTitle = c.title;
+        break;
+      }
+    }
+    continueTitle ??= chapters.isNotEmpty ? chapters.first.title : null;
+  }
+  return ComicStats(
+    totalSize: totalSize,
+    chapterCount: chapters.length,
+    readCount: readCount,
+    inProgressCount: inProgressCount,
+    continueChapterTitle: continueTitle,
+  );
+});
+
+final comicBookmarkedProvider = FutureProvider.family<bool, String>(
+  (ref, comicPath) =>
+      ref.watch(comicRdApiProvider).isComicBookmarked(comicPath),
+);
+
+List<bridge.RawChapter> filterAndSortChapters({
+  required List<bridge.RawChapter> chapters,
+  required List<String> favorites,
+  required ComicPreferences preferences,
+}) {
+  final favSet = favorites.toSet();
+  final query = preferences.query.trim().toLowerCase();
+  var filtered = chapters.where((chapter) {
+    final matchesQuery =
+        query.isEmpty ||
+        chapter.title.toLowerCase().contains(query) ||
+        chapter.sourcePath.toLowerCase().contains(query);
+    final matchesTab = switch (preferences.selectedTab) {
+      ChapterTab.all => true,
+      ChapterTab.favorites => favSet.contains(chapter.sourcePath),
+    };
+    return matchesQuery && matchesTab;
+  }).toList();
+  filtered.sort((a, b) {
+    final order = switch (preferences.sortBy) {
+      ChapterSortBy.name => a.title.toLowerCase().compareTo(
+        b.title.toLowerCase(),
+      ),
+      ChapterSortBy.folderDate => a.dateModified.compareTo(b.dateModified),
+      ChapterSortBy.chapterIndex => a.chapterIndex.compareTo(b.chapterIndex),
+    };
+    return preferences.sortDir == bridge.SortDir.asc ? order : -order;
+  });
+  return filtered;
+}
 
 final comicScrollKeyProvider = Provider.family<String, String>(
   (ref, comicPath) => 'comic:$comicPath',
@@ -76,35 +156,31 @@ final lastOpenedChapterProvider =
 
 enum ChapterSortBy { chapterIndex, name, folderDate }
 
-enum ChapterDisplayMode { grid, list }
+enum ChapterTab { all, favorites }
 
 class ComicPreferences {
   const ComicPreferences({
     this.query = '',
     this.sortBy = ChapterSortBy.chapterIndex,
     this.sortDir = bridge.SortDir.asc,
-    this.displayMode = ChapterDisplayMode.list,
-    this.favoritesOnly = false,
+    this.selectedTab = ChapterTab.all,
   });
 
   final String query;
   final ChapterSortBy sortBy;
   final bridge.SortDir sortDir;
-  final ChapterDisplayMode displayMode;
-  final bool favoritesOnly;
+  final ChapterTab selectedTab;
 
   ComicPreferences copyWith({
     String? query,
     ChapterSortBy? sortBy,
     bridge.SortDir? sortDir,
-    ChapterDisplayMode? displayMode,
-    bool? favoritesOnly,
+    ChapterTab? selectedTab,
   }) => ComicPreferences(
     query: query ?? this.query,
     sortBy: sortBy ?? this.sortBy,
     sortDir: sortDir ?? this.sortDir,
-    displayMode: displayMode ?? this.displayMode,
-    favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+    selectedTab: selectedTab ?? this.selectedTab,
   );
 }
 
@@ -154,45 +230,27 @@ class ComicPreferencesNotifier extends Notifier<Map<String, ComicPreferences>> {
     );
   }
 
-  void setDisplayMode(String comicPath, ChapterDisplayMode displayMode) {
+  void setSelectedTab(String comicPath, ChapterTab selectedTab) {
     update(
       comicPath,
-      preferencesFor(comicPath).copyWith(displayMode: displayMode),
+      preferencesFor(comicPath).copyWith(selectedTab: selectedTab),
     );
   }
 
-  void setFavoritesOnly(String comicPath, bool favoritesOnly) {
-    update(
-      comicPath,
-      preferencesFor(comicPath).copyWith(favoritesOnly: favoritesOnly),
-    );
+  ChapterSortBy _decodeChapterSortBy(String? value) {
+    return switch (value) {
+      'name' => ChapterSortBy.name,
+      'folder_date' => ChapterSortBy.folderDate,
+      _ => ChapterSortBy.chapterIndex,
+    };
   }
-}
 
-ChapterSortBy _decodeChapterSortBy(String? raw) {
-  return switch (_decodeString(raw, 'chapter_index')) {
-    'name' => ChapterSortBy.name,
-    'folder_date' => ChapterSortBy.folderDate,
-    _ => ChapterSortBy.chapterIndex,
-  };
-}
-
-bridge.SortDir _decodeSortDir(String? raw) {
-  return switch (_decodeString(raw, 'asc')) {
-    'desc' => bridge.SortDir.desc,
-    _ => bridge.SortDir.asc,
-  };
-}
-
-String _decodeString(String? raw, String fallback) {
-  if (raw == null) {
-    return fallback;
-  }
-  try {
-    final decoded = jsonDecode(raw);
-    return decoded is String ? decoded : fallback;
-  } catch (_) {
-    return fallback;
+  bridge.SortDir _decodeSortDir(String? value) {
+    return switch (value) {
+      'asc' => bridge.SortDir.asc,
+      'desc' => bridge.SortDir.desc,
+      _ => bridge.SortDir.asc,
+    };
   }
 }
 

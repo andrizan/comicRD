@@ -70,4 +70,15 @@ if (!(Test-Path -LiteralPath $Artifact)) {
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 Copy-Item -LiteralPath $Artifact -Destination (Join-Path $Destination $LibraryName) -Force
 
+if ($Platform -eq "windows" -and -not [string]::IsNullOrWhiteSpace($VcpkgRoot)) {
+  $Dav1dDir = if ($Profile -eq "release") { "bin" } else { "debug\bin" }
+  $Dav1dDll = Join-Path $VcpkgRoot "installed\x64-windows\$Dav1dDir\dav1d.dll"
+  if (Test-Path -LiteralPath $Dav1dDll) {
+    Copy-Item -LiteralPath $Dav1dDll -Destination $Destination -Force
+    Write-Host "Bundled dav1d.dll from $Dav1dDll to $Destination"
+  } else {
+    Write-Warning "dav1d.dll not found at $Dav1dDll; the app may fail to load the native bridge at runtime."
+  }
+}
+
 Write-Host "Bundled $LibraryName from target/$Profile to $Destination"

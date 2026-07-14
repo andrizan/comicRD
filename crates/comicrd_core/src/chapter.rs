@@ -187,11 +187,17 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
 pub(crate) fn chapter_snapshot_by_history_key(
     conn: &Connection,
     history_key: &str,
-) -> Result<Option<(i64, i64)>, String> {
+) -> Result<Option<(i64, i64, i64)>, String> {
     conn.query_row(
-        "SELECT page_count, date_modified FROM chapters WHERE history_key = ?1",
+        "SELECT page_count, date_modified, size_bytes FROM chapters WHERE history_key = ?1",
         params![history_key],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        },
     )
     .map(Some)
     .or_else(|e| {
@@ -368,7 +374,7 @@ pub(crate) fn image_entries_in_dir(path: &Path) -> Vec<PathBuf> {
     image_entries_in_dir_with_depth(path, 3)
 }
 
-fn image_entries_in_dir_shallow(path: &Path) -> Vec<PathBuf> {
+pub(crate) fn image_entries_in_dir_shallow(path: &Path) -> Vec<PathBuf> {
     image_entries_in_dir_with_depth(path, 1)
 }
 
@@ -543,7 +549,7 @@ pub(crate) fn discover_chapter_entries_for_comic(
             1,
         )]);
     }
-    Err("comic source tidak valid".to_string())
+    Err("invalid comic source".to_string())
 }
 
 pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
@@ -575,7 +581,8 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
                    COALESCE(r.is_read, 0),
                    COALESCE(r.last_page, 0),
                    COALESCE(r.total_pages, c.page_count),
-                   c.date_modified
+                   c.date_modified,
+                   c.size_bytes
             FROM chapters c
             LEFT JOIN reading_progress r ON r.chapter_id = c.id
             WHERE c.history_key IN ({placeholders})
@@ -597,15 +604,16 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
                     row.get::<_, i64>(3)?,
                     row.get::<_, i64>(4)?,
                     row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
                 ))
             })
             .map_err(|e| format!("failed querying batch progress: {e}"))?;
         for row in rows {
-            let (key, page_count, is_read, last_page, total_pages, date_modified) =
+            let (key, page_count, is_read, last_page, total_pages, date_modified, size_bytes) =
                 row.map_err(|e| format!("failed reading progress row: {e}"))?;
             progress_map.insert(
                 key,
-                (page_count, is_read, last_page, total_pages, date_modified),
+                (page_count, is_read, last_page, total_pages, date_modified, size_bytes),
             );
         }
     }
@@ -616,10 +624,10 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
     {
         let chapter_key = &chapter_keys[i];
         let modified_at = file_modified_ts(Path::new(chapter_path));
-        let (page_count, is_read, last_page, total_pages, date_modified) = progress_map
+        let (page_count, is_read, last_page, total_pages, date_modified, size_bytes) = progress_map
             .get(chapter_key.as_str())
             .copied()
-            .unwrap_or((0, false, 0, 0, modified_at));
+            .unwrap_or((0, false, 0, 0, modified_at, 0));
         out.push(RawChapter {
             key: chapter_path.clone(),
             title: chapter_title.clone(),
@@ -631,6 +639,7 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
             is_read,
             last_page,
             total_pages,
+            size_bytes,
         });
     }
     Ok(out)
@@ -642,7 +651,7 @@ pub(crate) fn find_library_for_comic(
 ) -> Result<(i64, String), String> {
     let library_path = get_library_source_setting(conn)?;
     if !comic_source_path.starts_with(library_path.as_str()) {
-        return Err("comic bukan bagian dari library_source_input saat ini".to_string());
+        return Err("comic is not under the current library source".to_string());
     }
     let ts = now_ts();
     conn.execute(
@@ -693,7 +702,7 @@ pub(crate) fn open_chapter_for_reading_conn(
         let chapter_key = chapter_history_key(&library_path, &chapter_path, chapter_index);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
         let cached_page_count = chapter_snapshot_by_history_key(&tx, &chapter_key)?
-            .map(|(pc, _)| pc.max(0) as usize)
+            .map(|(pc, _, _)| pc.max(0) as usize)
             .unwrap_or(0);
         let chapter_size = chapter_size_bytes(Path::new(&chapter_path), &chapter_type);
         total_size_bytes = total_size_bytes.saturating_add(chapter_size);
@@ -722,7 +731,7 @@ pub(crate) fn open_chapter_for_reading_conn(
     .map_err(|e| format!("failed updating comic size_bytes: {e}"))?;
     tx.commit()
         .map_err(|e| format!("failed committing chapter transaction: {e}"))?;
-    selected_chapter_id.ok_or_else(|| "chapter tidak ditemukan".to_string())
+    selected_chapter_id.ok_or_else(|| "chapter not found".to_string())
 }
 
 pub(crate) fn chapter_source(

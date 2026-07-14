@@ -1,3 +1,4 @@
+import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:comicrd_flutter/widgets/back_to_top_button.dart';
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
@@ -8,7 +9,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: FTheme(
-          data: FThemes.zinc.light.desktop,
+          data: ComicReaderFTheme.light,
           child: FTooltipGroup(
             child: Scaffold(
               body: Center(

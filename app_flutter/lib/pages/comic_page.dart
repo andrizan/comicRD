@@ -11,11 +11,13 @@ import 'package:go_router/go_router.dart';
 import '../bridge_generated.dart' as bridge;
 import '../state/api_state.dart';
 import '../state/comic_state.dart';
+import '../state/library_state.dart';
 import '../state/scroll_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
 import '../utils/date_format.dart';
 import '../utils/forui_theme.dart';
+import '../utils/format_size.dart';
 import '../widgets/back_to_top_button.dart';
 
 class ComicPage extends ConsumerStatefulWidget {
@@ -50,21 +52,15 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         (state) => state[widget.comicPath]?.query ?? '',
       ),
     );
-    if (savedQuery.isNotEmpty) {
-      _search.text = savedQuery;
-    }
+    if (savedQuery.isNotEmpty) _search.text = savedQuery;
     _focusNode = FocusNode(debugLabel: 'ComicPage');
   }
 
   void _onScroll() {
-    if (!_scroll.hasClients) {
-      return;
-    }
+    if (!_scroll.hasClients) return;
     _updateBackToTopVisibility();
     final now = DateTime.now();
-    if (now.difference(_lastScrollSave).inMilliseconds < 200) {
-      return;
-    }
+    if (now.difference(_lastScrollSave).inMilliseconds < 200) return;
     _lastScrollSave = now;
     final key = ref.read(comicScrollKeyProvider(widget.comicPath));
     ref.read(scrollOffsetsProvider.notifier).save(key, _scroll.offset);
@@ -88,9 +84,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     ref.listen<AsyncValue<Map<String, String>>>(settingsMapProvider, (_, next) {
       next.whenData((values) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) {
-            return;
-          }
+          if (!mounted) return;
           ref
               .read(comicPreferencesProvider.notifier)
               .hydrateFromSettings(widget.comicPath, values);
@@ -104,8 +98,20 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         (state) => state[widget.comicPath] ?? const ComicPreferences(),
       ),
     );
-    final chapters = ref.watch(filteredComicChaptersProvider(widget.comicPath));
+    final chaptersRaw = ref.watch(comicChaptersProvider(widget.comicPath));
     final favorites = ref.watch(chapterFavoritesProvider(widget.comicPath));
+    final chapters = chaptersRaw.whenData(
+      (data) => filterAndSortChapters(
+        chapters: data,
+        favorites: favorites.asData?.value ?? [],
+        preferences: preferences,
+      ),
+    );
+    final stats = ref.watch(comicStatsProvider(widget.comicPath));
+    final history = ref.watch(comicReadingHistoryProvider(widget.comicPath));
+    final bookmarkedAsync = ref.watch(
+      comicBookmarkedProvider(widget.comicPath),
+    );
     final favoritePaths = favorites.asData?.value.toSet() ?? const <String>{};
     final title = widget.comicPath.split(RegExp(r'[/\\]')).last;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -134,164 +140,43 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         }
       },
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(48, 32, 48, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                FTooltip(
-                  tipBuilder: (context, _) => Text(text.home),
-                  child: FButton.icon(
-                    variant: .ghost,
-                    onPress: () => context.go('/'),
-                    child: const Icon(AppIcons.back),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SelectableText(
-                    title.isEmpty ? text.comic : title,
-                    maxLines: 1,
-                    style: context.appTitleStyle,
-                  ),
-                ),
-              ],
+            _BackButton(text: text, onBack: () => context.go('/')),
+            const SizedBox(height: 20),
+            _ComicHero(
+              text: text,
+              comicPath: widget.comicPath,
+              title: title.isEmpty ? text.comic : title,
+              stats: stats,
+              history: history,
+              bookmarked: bookmarkedAsync.asData?.value ?? false,
+              onContinueReading: _continueReading,
+              onStartFromBeginning: _startFromBeginning,
+              onToggleBookmark: _toggleComicBookmark,
+              onOpenFolder: _openContainingFolder,
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: FTextField(
-                    control: .managed(
-                      controller: _search,
-                      onChange: (value) {
-                        _searchDebounce?.cancel();
-                        _searchDebounce = Timer(
-                          const Duration(milliseconds: 300),
-                          () => ref
-                              .read(comicPreferencesProvider.notifier)
-                              .setQuery(widget.comicPath, value.text),
-                        );
-                      },
-                    ),
-                    hint: text.search,
-                    prefixBuilder: (context, style, variants) => Padding(
-                      padding: const EdgeInsets.only(left: 12),
-                      child: Icon(
-                        AppIcons.search,
-                        size: 16,
-                        color: context.appMutedText,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FButton(
-                  variant: .outline,
-                  selected: preferences.displayMode == ChapterDisplayMode.grid,
-                  onPress: () => ref
+            const SizedBox(height: 24),
+            _ChapterSectionHeader(
+              text: text,
+              preferences: preferences,
+              searchController: _search,
+              onSearchChanged: (value) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(
+                  const Duration(milliseconds: 300),
+                  () => ref
                       .read(comicPreferencesProvider.notifier)
-                      .setDisplayMode(
-                        widget.comicPath,
-                        ChapterDisplayMode.grid,
-                      ),
-                  child: const Icon(AppIcons.gridView),
-                ),
-                const SizedBox(width: 4),
-                FButton(
-                  variant: .outline,
-                  selected: preferences.displayMode == ChapterDisplayMode.list,
-                  onPress: () => ref
-                      .read(comicPreferencesProvider.notifier)
-                      .setDisplayMode(
-                        widget.comicPath,
-                        ChapterDisplayMode.list,
-                      ),
-                  child: const Icon(AppIcons.list),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        FButton(
-                          variant: .outline,
-                          selected: preferences.favoritesOnly,
-                          onPress: () => ref
-                              .read(comicPreferencesProvider.notifier)
-                              .setFavoritesOnly(
-                                widget.comicPath,
-                                !preferences.favoritesOnly,
-                              ),
-                          prefix: const Icon(AppIcons.star, size: 18),
-                          child: Text(text.favorites),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 180,
-                          height: 38,
-                          child: FSelect<ChapterSortBy>(
-                            hint: text.chapter,
-                            items: {
-                              text.chapter: ChapterSortBy.chapterIndex,
-                              text.name: ChapterSortBy.name,
-                              text.folderDate: ChapterSortBy.folderDate,
-                            },
-                            control: .managed(
-                              initial: preferences.sortBy,
-                              onChange: (value) {
-                                if (value != null) {
-                                  _setSort(value, preferences.sortDir);
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        FButton(
-                          variant: .outline,
-                          selected: preferences.sortDir == bridge.SortDir.asc,
-                          onPress: () => _setSort(
-                            preferences.sortBy,
-                            preferences.sortDir == bridge.SortDir.asc
-                                ? bridge.SortDir.desc
-                                : bridge.SortDir.asc,
-                          ),
-                          prefix: Icon(
-                            preferences.sortDir == bridge.SortDir.asc
-                                ? AppIcons.sortUp
-                                : AppIcons.sortDown,
-                            size: 16,
-                          ),
-                          child: Text(
-                            preferences.sortDir == bridge.SortDir.asc
-                                ? text.ascending
-                                : text.descending,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                chapters.when(
-                  data: (items) => Text(
-                    '${items.length} ${text.totalChapters}',
-                    style: context.appCaptionStyle.copyWith(
-                      color: context.appMutedText,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  error: (_, _) => const SizedBox.shrink(),
-                  loading: () => const SizedBox.shrink(),
-                ),
-              ],
+                      .setQuery(widget.comicPath, value),
+                );
+              },
+              onSetSort: _setSort,
+              onSetTab: (tab) => ref
+                  .read(comicPreferencesProvider.notifier)
+                  .setSelectedTab(widget.comicPath, tab),
+              onRefresh: _refreshChapters,
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -305,12 +190,10 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                           text: text,
                           chapters: items,
                           favorites: favoritePaths,
-                          displayMode: preferences.displayMode,
                           controller: _scroll,
                           emptyLabel: text.emptyLibrary,
                           onOpen: _openChapter,
                           onToggleFavorite: _toggleFavorite,
-                          onOpenFolder: _openChapterFolder,
                         );
                       },
                       error: (error, _) => Align(
@@ -328,8 +211,8 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                   ),
                   if (_showBackToTop)
                     Positioned(
-                      right: 16,
-                      bottom: 16,
+                      right: 20,
+                      bottom: 20,
                       child: BackToTopButton(
                         key: const ValueKey('chapter-back-to-top-button'),
                         visible: true,
@@ -344,6 +227,11 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _refreshChapters() async {
+    ref.invalidate(comicChaptersProvider(widget.comicPath));
+    final _ = await ref.refresh(comicChaptersProvider(widget.comicPath).future);
   }
 
   Future<void> _setSort(ChapterSortBy sortBy, bridge.SortDir sortDir) async {
@@ -379,7 +267,58 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       );
     }
     ref.invalidate(chapterFavoritesProvider(widget.comicPath));
-    ref.invalidate(filteredComicChaptersProvider(widget.comicPath));
+  }
+
+  Future<void> _toggleComicBookmark(bool bookmarked) async {
+    final api = ref.read(comicRdApiProvider);
+    if (bookmarked) {
+      await api.removeComicBookmark(widget.comicPath);
+    } else {
+      await api.addComicBookmark(widget.comicPath);
+    }
+    ref.invalidate(comicBookmarkedProvider(widget.comicPath));
+  }
+
+  Future<void> _openContainingFolder() async {
+    await ref.read(comicRdApiProvider).openContainingFolder(widget.comicPath);
+  }
+
+  Future<void> _continueReading() async {
+    final items = await ref.read(
+      comicChaptersProvider(widget.comicPath).future,
+    );
+    if (items.isEmpty) return;
+
+    final lastOpened = ref.read(lastOpenedChapterProvider)[widget.comicPath];
+    if (lastOpened != null) {
+      final match = items.firstWhere(
+        (chapter) => chapter.sourcePath == lastOpened,
+        orElse: () => items.first,
+      );
+      await _openChapter(match);
+      return;
+    }
+
+    bridge.RawChapter? target;
+    for (final chapter in items) {
+      if (chapter.lastPage > 0 && !chapter.isRead) {
+        target = chapter;
+        break;
+      }
+    }
+    target ??= items.firstWhere(
+      (chapter) => !chapter.isRead,
+      orElse: () => items.first,
+    );
+    await _openChapter(target);
+  }
+
+  Future<void> _startFromBeginning() async {
+    final items = await ref.read(
+      comicChaptersProvider(widget.comicPath).future,
+    );
+    if (items.isEmpty) return;
+    await _openChapter(items.first);
   }
 
   void _scrollBy(double delta) {
@@ -420,10 +359,6 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         chapterSourcePath: chapter.sourcePath,
       ),
     );
-    ref
-        .read(lastOpenedChapterProvider.notifier)
-        .remember(widget.comicPath, chapter.sourcePath);
-
     final start = chapter.lastPage > 0 ? chapter.lastPage : 0;
     final maxPage = chapter.totalPages > 0
         ? chapter.totalPages
@@ -441,88 +376,45 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       );
     }
 
-    if (mounted) {
-      context.go('/reader/$chapterId');
-    }
-  }
-
-  Future<void> _openChapterFolder(bridge.RawChapter chapter) async {
-    await ref.read(comicRdApiProvider).openContainingFolder(chapter.sourcePath);
+    if (mounted) context.go('/reader/$chapterId');
   }
 
   void _scrollToChapter(String chapterSourcePath) {
-    final chapters = ref.read(filteredComicChaptersProvider(widget.comicPath));
-    final preferences = ref.read(
-      comicPreferencesProvider.select(
-        (state) => state[widget.comicPath] ?? const ComicPreferences(),
-      ),
-    );
-    final items = chapters.asData?.value;
+    final chaptersRaw = ref.read(comicChaptersProvider(widget.comicPath));
+    final favs = ref.read(chapterFavoritesProvider(widget.comicPath));
+    final prefs = ref
+        .read(comicPreferencesProvider.notifier)
+        .preferencesFor(widget.comicPath);
+    final items = chaptersRaw.asData?.value;
     if (items == null) return;
-    final index = items.indexWhere(
+    final filtered = filterAndSortChapters(
+      chapters: items,
+      favorites: favs.asData?.value ?? [],
+      preferences: prefs,
+    );
+    final index = filtered.indexWhere(
       (chapter) => chapter.sourcePath == chapterSourcePath,
     );
     if (index < 0) return;
-    final signature = [
-      chapterSourcePath,
-      preferences.displayMode.name,
-      preferences.sortBy.name,
-      preferences.sortDir.name,
-      preferences.query,
-      preferences.favoritesOnly,
-      items.length,
-      index,
-    ].join('|');
-    if (_lastAutoScrollSignature == signature) {
-      return;
-    }
+    final signature = '$chapterSourcePath|${filtered.length}|$index';
+    if (_lastAutoScrollSignature == signature) return;
     _lastAutoScrollSignature = signature;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      final offset = _chapterScrollOffset(
-        index: index,
-        itemCount: items.length,
-        displayMode: preferences.displayMode,
-      );
+      final offset = (index * _chapterListItemExtent).toDouble();
       _scroll.animateTo(
-        offset.clamp(0, _scroll.position.maxScrollExtent).toDouble(),
+        offset.clamp(0, _scroll.position.maxScrollExtent),
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
     });
   }
 
-  double _chapterScrollOffset({
-    required int index,
-    required int itemCount,
-    required ChapterDisplayMode displayMode,
-  }) {
-    final position = _scroll.position;
-    final totalExtent = position.maxScrollExtent + position.viewportDimension;
-    if (itemCount <= 0 || totalExtent <= 0) {
-      return 0;
-    }
-    if (displayMode == ChapterDisplayMode.list) {
-      return index * _chapterListItemExtent;
-    }
-
-    final estimatedRows =
-        ((totalExtent + _chapterGridMainAxisSpacing) /
-                (_chapterGridMainAxisExtent + _chapterGridMainAxisSpacing))
-            .round()
-            .clamp(1, itemCount);
-    final columns = (itemCount / estimatedRows).ceil().clamp(1, itemCount);
-    final row = index ~/ columns;
-    return row * (totalExtent / estimatedRows);
-  }
-
   void _restoreLastOpenedChapter() {
     final chapterSourcePath = ref
         .read(lastOpenedChapterProvider.notifier)
         .sourcePathFor(widget.comicPath);
-    if (chapterSourcePath == null) {
-      return;
-    }
+    if (chapterSourcePath == null) return;
     _scrollToChapter(chapterSourcePath);
   }
 }
@@ -535,29 +427,785 @@ String _encodeChapterSortBy(ChapterSortBy sortBy) {
   };
 }
 
+const double _chapterListItemExtent = 70;
+
+// ---------------------------------------------------------------------------
+// Back button
+// ---------------------------------------------------------------------------
+
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.text, required this.onBack});
+
+  final AppStrings text;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onBack,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: colors.card,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(AppIcons.back, size: 16, color: colors.foreground),
+              const SizedBox(width: 8),
+              Text(
+                text.backToLibrary,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: colors.foreground,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Comic hero — cover, title, info, metadata, actions
+// ---------------------------------------------------------------------------
+
+class _ComicHero extends StatelessWidget {
+  const _ComicHero({
+    required this.text,
+    required this.comicPath,
+    required this.title,
+    required this.stats,
+    required this.history,
+    required this.bookmarked,
+    required this.onContinueReading,
+    required this.onStartFromBeginning,
+    required this.onToggleBookmark,
+    required this.onOpenFolder,
+  });
+
+  final AppStrings text;
+  final String comicPath;
+  final String title;
+  final ComicStats stats;
+  final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
+  final bool bookmarked;
+  final VoidCallback onContinueReading;
+  final VoidCallback onStartFromBeginning;
+  final void Function(bool bookmarked) onToggleBookmark;
+  final VoidCallback onOpenFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    final progressPercent = stats.chapterCount > 0
+        ? ((stats.effectiveReadCount / stats.chapterCount) * 100).round()
+        : 0;
+
+    final lastEntry = history.asData?.value.fold<bridge.ReadingHistoryEntry?>(
+      null,
+      (latest, entry) {
+        if (latest == null) return entry;
+        return entry.updatedAt > latest.updatedAt ? entry : latest;
+      },
+    );
+    final lastReadText = lastEntry != null
+        ? text.lastReadTemplate
+              .replaceAll('{chapter}', lastEntry.chapterTitle)
+              .replaceAll(
+                '{date}',
+                formatModifiedDate(lastEntry.updatedAt.toInt()),
+              )
+        : '-';
+
+    final continueLabel = stats.continueChapterTitle != null
+        ? '${text.continueReading} ${stats.continueChapterTitle}'
+        : text.continueReading;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ComicCover(comicPath: comicPath),
+        const SizedBox(width: 20),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectableText(
+                title,
+                maxLines: 2,
+                style: TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 24,
+                  height: 1.15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.02,
+                  color: colors.foreground,
+                ),
+              ),
+              const SizedBox(height: 6),
+              _InfoBar(
+                text: text,
+                totalSize: stats.totalSize,
+                chapterCount: stats.chapterCount,
+              ),
+              const SizedBox(height: 14),
+              _MetadataRow(label: '${text.directoryPath}:', value: comicPath),
+              const SizedBox(height: 8),
+              _MetadataRow(label: '${text.lastRead}:', value: lastReadText),
+              const SizedBox(height: 8),
+              _MetadataRow(
+                label: '${text.readingProgress}:',
+                value: text.readingProgressTemplate
+                    .replaceAll('{percent}', '$progressPercent')
+                    .replaceAll('{read}', '${stats.effectiveReadCount}')
+                    .replaceAll('{total}', '${stats.chapterCount}'),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _PrimaryActionButton(
+                    label: continueLabel,
+                    onPressed: onContinueReading,
+                  ),
+                  _OutlineActionButton(
+                    label: text.startFromBeginning,
+                    onPressed: onStartFromBeginning,
+                  ),
+                  _OutlineActionButton(
+                    label: bookmarked ? text.bookmarked : text.bookmark,
+                    icon: AppIcons.bookmark,
+                    onPressed: () => onToggleBookmark(bookmarked),
+                  ),
+                  _OutlineActionButton(
+                    label: text.openFolder,
+                    icon: AppIcons.folderOpen,
+                    onPressed: onOpenFolder,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ComicCover extends ConsumerWidget {
+  const _ComicCover({required this.comicPath});
+
+  final String comicPath;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.theme.colors;
+    final thumbnail = ref.watch(
+      comicThumbnailProvider((
+        sourcePath: comicPath,
+        maxWidth: 260,
+        maxHeight: 400,
+      )),
+    );
+
+    return Container(
+      width: 170,
+      height: 240,
+      decoration: BoxDecoration(
+        color: colors.muted,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: thumbnail.when(
+        data: (bytes) {
+          if (bytes == null) {
+            return Icon(
+              AppIcons.image,
+              size: 48,
+              color: colors.mutedForeground,
+            );
+          }
+          return Image.memory(bytes, fit: BoxFit.cover);
+        },
+        loading: () =>
+            Icon(AppIcons.image, size: 48, color: colors.mutedForeground),
+        error: (_, _) =>
+            Icon(AppIcons.image, size: 48, color: colors.mutedForeground),
+      ),
+    );
+  }
+}
+
+class _PrimaryActionButton extends StatelessWidget {
+  const _PrimaryActionButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.primary,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.primaryForeground,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OutlineActionButton extends StatelessWidget {
+  const _OutlineActionButton({
+    required this.label,
+    required this.onPressed,
+    this.icon,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.card,
+            border: Border.all(color: colors.border),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16, color: colors.mutedForeground),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.foreground,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoBar extends StatelessWidget {
+  const _InfoBar({
+    required this.text,
+    required this.totalSize,
+    required this.chapterCount,
+  });
+
+  final AppStrings text;
+  final int totalSize;
+  final int chapterCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Wrap(
+        spacing: 14,
+        runSpacing: 2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _InfoItem(icon: AppIcons.folderOpen, value: formatBytes(totalSize)),
+          _InfoItem(
+            icon: AppIcons.download,
+            value: '$chapterCount ${text.totalChapters}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoItem extends StatelessWidget {
+  const _InfoItem({required this.icon, required this.value});
+
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: colors.mutedForeground),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: colors.foreground,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetadataRow extends StatelessWidget {
+  const _MetadataRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return SelectableText.rich(
+      TextSpan(
+        style: TextStyle(fontSize: 14, color: colors.foreground),
+        children: [
+          TextSpan(
+            text: label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const TextSpan(text: ' '),
+          TextSpan(
+            text: value,
+            style: TextStyle(color: colors.mutedForeground),
+          ),
+        ],
+      ),
+      maxLines: 1,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chapter section header — tabs, search, sort
+// ---------------------------------------------------------------------------
+
+class _ChapterSectionHeader extends StatelessWidget {
+  const _ChapterSectionHeader({
+    required this.text,
+    required this.preferences,
+    required this.searchController,
+    required this.onSearchChanged,
+    required this.onSetSort,
+    required this.onSetTab,
+    required this.onRefresh,
+  });
+
+  final AppStrings text;
+  final ComicPreferences preferences;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearchChanged;
+  final void Function(ChapterSortBy sortBy, bridge.SortDir sortDir) onSetSort;
+  final ValueChanged<ChapterTab> onSetTab;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    final filterControls = <Widget>[
+      _SortSelect<ChapterSortBy>(
+        value: preferences.sortBy,
+        items: {
+          text.chapter: ChapterSortBy.chapterIndex,
+          text.name: ChapterSortBy.name,
+          text.folderDate: ChapterSortBy.folderDate,
+        },
+        onChanged: (sortBy) => onSetSort(sortBy, preferences.sortDir),
+      ),
+      const SizedBox(width: 8),
+      _SortDirToggle(
+        text: text,
+        sortDir: preferences.sortDir,
+        onChanged: (sortDir) => onSetSort(preferences.sortBy, sortDir),
+      ),
+      const SizedBox(width: 8),
+      Container(width: 1, height: 24, color: colors.border),
+      const SizedBox(width: 8),
+      _ChapterSearchBox(
+        controller: searchController,
+        hint: text.filterChapters,
+        onChanged: onSearchChanged,
+      ),
+      const SizedBox(width: 8),
+      Container(width: 1, height: 24, color: colors.border),
+      const SizedBox(width: 8),
+      IconButton(
+        icon: Icon(AppIcons.refresh, size: 18),
+        tooltip: text.refresh,
+        color: colors.mutedForeground,
+        onPressed: onRefresh,
+      ),
+    ];
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 900;
+            if (isCompact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ChapterTabs(
+                    text: text,
+                    selectedTab: preferences.selectedTab,
+                    onSetTab: onSetTab,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: filterControls,
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                _ChapterTabs(
+                  text: text,
+                  selectedTab: preferences.selectedTab,
+                  onSetTab: onSetTab,
+                ),
+                const Spacer(),
+                ...filterControls,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ChapterTabs extends StatelessWidget {
+  const _ChapterTabs({
+    required this.text,
+    required this.selectedTab,
+    required this.onSetTab,
+  });
+
+  final AppStrings text;
+  final ChapterTab selectedTab;
+  final ValueChanged<ChapterTab> onSetTab;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ChapterTab(
+          label: text.allChapters,
+          selected: selectedTab == ChapterTab.all,
+          onTap: () => onSetTab(ChapterTab.all),
+        ),
+        const SizedBox(width: 20),
+        _ChapterTab(
+          label: text.favoriteChapters,
+          selected: selectedTab == ChapterTab.favorites,
+          onTap: () => onSetTab(ChapterTab.favorites),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChapterTab extends StatefulWidget {
+  const _ChapterTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  State<_ChapterTab> createState() => _ChapterTabState();
+}
+
+class _ChapterTabState extends State<_ChapterTab> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: widget.selected
+                    ? colors.foreground
+                    : colors.mutedForeground,
+              ),
+            ),
+            const SizedBox(height: 6),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 3,
+              width: 24,
+              decoration: BoxDecoration(
+                color: widget.selected || _hovered
+                    ? colors.primary
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChapterSearchBox extends StatelessWidget {
+  const _ChapterSearchBox({
+    required this.controller,
+    required this.hint,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        width: 220,
+        height: 38,
+        decoration: BoxDecoration(
+          color: colors.background,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: TextField(
+          controller: controller,
+          onChanged: onChanged,
+          style: TextStyle(fontSize: 13, color: colors.foreground),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(fontSize: 13, color: colors.mutedForeground),
+            prefixIcon: Icon(
+              AppIcons.search,
+              size: 18,
+              color: colors.mutedForeground,
+            ),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SortSelect<T> extends StatelessWidget {
+  const _SortSelect({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final T value;
+  final Map<String, T> items;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          icon: Icon(
+            AppIcons.chevronDown,
+            size: 14,
+            color: colors.mutedForeground,
+          ),
+          dropdownColor: colors.card,
+          style: TextStyle(fontSize: 13, color: colors.foreground),
+          borderRadius: BorderRadius.circular(10),
+          items: items.entries
+              .map(
+                (entry) => DropdownMenuItem<T>(
+                  value: entry.value,
+                  child: Text(
+                    entry.key,
+                    style: TextStyle(fontSize: 13, color: colors.foreground),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) onChanged(value);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _SortDirToggle extends StatelessWidget {
+  const _SortDirToggle({
+    required this.text,
+    required this.sortDir,
+    required this.onChanged,
+  });
+
+  final AppStrings text;
+  final bridge.SortDir sortDir;
+  final ValueChanged<bridge.SortDir> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    final isAsc = sortDir == bridge.SortDir.asc;
+    return Tooltip(
+      message: text.sortDirection,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () =>
+              onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
+          child: Container(
+            height: 38,
+            width: 38,
+            decoration: BoxDecoration(
+              color: colors.background,
+              border: Border.all(color: colors.border),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isAsc ? AppIcons.sortUp : AppIcons.sortDown,
+              size: 16,
+              color: colors.foreground,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chapter list
+// ---------------------------------------------------------------------------
+
 class _ChapterList extends StatelessWidget {
   const _ChapterList({
     required this.text,
     required this.chapters,
     required this.favorites,
-    required this.displayMode,
     required this.controller,
     required this.emptyLabel,
     required this.onOpen,
     required this.onToggleFavorite,
-    required this.onOpenFolder,
   });
 
   final AppStrings text;
   final List<bridge.RawChapter> chapters;
   final Set<String> favorites;
-  final ChapterDisplayMode displayMode;
   final ScrollController controller;
   final String emptyLabel;
   final Future<void> Function(bridge.RawChapter chapter) onOpen;
   final Future<void> Function(bridge.RawChapter chapter, bool favorite)
   onToggleFavorite;
-  final Future<void> Function(bridge.RawChapter chapter) onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -567,64 +1215,33 @@ class _ChapterList extends StatelessWidget {
         child: Text(emptyLabel, style: context.appBodyStrongStyle),
       );
     }
-    if (displayMode == ChapterDisplayMode.grid) {
-      return GridView.builder(
-        controller: controller,
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 240,
-          mainAxisExtent: 160,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: chapters.length,
-        itemBuilder: (context, index) {
-          final chapter = chapters[index];
-          final favorite = favorites.contains(chapter.sourcePath);
-          return _ChapterGridTile(
-            text: text,
-            chapter: chapter,
-            favorite: favorite,
-            onOpen: () {
-              onOpen(chapter);
-            },
-            onToggleFavorite: () {
-              onToggleFavorite(chapter, favorite);
-            },
-            onOpenFolder: () {
-              onOpenFolder(chapter);
-            },
-          );
-        },
-      );
-    }
     return ListView.builder(
       controller: controller,
+      padding: const EdgeInsets.only(bottom: 32),
       itemExtent: _chapterListItemExtent,
       itemCount: chapters.length,
       itemBuilder: (context, index) {
         final chapter = chapters[index];
         final favorite = favorites.contains(chapter.sourcePath);
-        return _ChapterListItem(
+        return _ChapterListRow(
           chapter: chapter,
           favorite: favorite,
           text: text,
           onOpen: () => onOpen(chapter),
           onToggleFavorite: () => onToggleFavorite(chapter, favorite),
-          onOpenFolder: () => onOpenFolder(chapter),
         );
       },
     );
   }
 }
 
-class _ChapterListItem extends StatelessWidget {
-  const _ChapterListItem({
+class _ChapterListRow extends StatefulWidget {
+  const _ChapterListRow({
     required this.chapter,
     required this.favorite,
     required this.text,
     required this.onOpen,
     required this.onToggleFavorite,
-    required this.onOpenFolder,
   });
 
   final bridge.RawChapter chapter;
@@ -632,218 +1249,117 @@ class _ChapterListItem extends StatelessWidget {
   final AppStrings text;
   final VoidCallback onOpen;
   final VoidCallback onToggleFavorite;
-  final VoidCallback onOpenFolder;
+
+  @override
+  State<_ChapterListRow> createState() => _ChapterListRowState();
+}
+
+class _ChapterListRowState extends State<_ChapterListRow> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return FTappable(
-      onPress: onOpen,
-      builder: (context, states, child) => DecoratedBox(
-        decoration: BoxDecoration(
-          color: states.contains(FTappableVariant.hovered)
-              ? context.appSecondarySurface
-              : null,
-          border: Border(bottom: BorderSide(color: context.appBorder)),
-          borderRadius: BorderRadius.circular(4),
-        ),
+    final colors = context.theme.colors;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onOpen,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              FButton.icon(
-                variant: .ghost,
-                onPress: onToggleFavorite,
-                child: Icon(
-                  AppIcons.star,
-                  color: favorite ? context.appAccent : null,
+          padding: const EdgeInsets.only(bottom: 6),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            height: _chapterListItemExtent,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: _hovered ? colors.card : Colors.transparent,
+              border: Border(bottom: BorderSide(color: colors.border)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _statusColor(context),
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(chapter.title),
-                    if (chapter.dateModified > 0)
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        formatModifiedDate(chapter.dateModified),
-                        style: context.appCaptionStyle.copyWith(
-                          color: context.appMutedText,
+                        widget.chapter.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: colors.foreground,
                         ),
                       ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        '${widget.text.downloaded}: ${formatModifiedDate(widget.chapter.dateModified.toInt())}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              _ChapterStatusBadge(text: text, chapter: chapter),
-              const SizedBox(width: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FButton.icon(
-                    variant: .ghost,
-                    onPress: onOpenFolder,
-                    child: const Icon(AppIcons.folderOpen, size: 20),
-                  ),
-                  const Icon(AppIcons.chevronRight),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-const double _chapterListItemExtent = 66;
-const double _chapterGridMainAxisExtent = 160;
-const double _chapterGridMainAxisSpacing = 12;
-
-class _ChapterGridTile extends StatelessWidget {
-  const _ChapterGridTile({
-    required this.text,
-    required this.chapter,
-    required this.favorite,
-    required this.onOpen,
-    required this.onToggleFavorite,
-    required this.onOpenFolder,
-  });
-
-  final AppStrings text;
-  final bridge.RawChapter chapter;
-  final bool favorite;
-  final VoidCallback onOpen;
-  final VoidCallback onToggleFavorite;
-  final VoidCallback onOpenFolder;
-
-  @override
-  Widget build(BuildContext context) {
-    return FCard.raw(
-      child: FTappable(
-        onPress: onOpen,
-        builder: (context, states, child) => Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: states.contains(FTappableVariant.hovered)
-                ? context.appSecondarySurface
-                : null,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(chapter.isRead ? AppIcons.check : AppIcons.read),
-                  const Spacer(),
-                  FButton.icon(
-                    variant: .ghost,
-                    onPress: onOpenFolder,
-                    child: const Icon(AppIcons.folderOpen, size: 20),
-                  ),
-                  FButton.icon(
-                    variant: .ghost,
-                    onPress: onToggleFavorite,
+                if (widget.chapter.isRead)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
                     child: Icon(
-                      AppIcons.star,
-                      color: favorite ? context.appAccent : null,
+                      AppIcons.check,
+                      size: 18,
+                      color: context.appAccent,
                     ),
                   ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                chapter.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: context.appBodyStrongStyle,
-              ),
-              const SizedBox(height: 6),
-              _ChapterStatusBadge(text: text, chapter: chapter),
-              if (chapter.dateModified > 0)
-                Text(
-                  formatModifiedDate(chapter.dateModified),
-                  style: context.appCaptionStyle.copyWith(
-                    color: context.appMutedText,
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.onToggleFavorite,
+                      child: Icon(
+                        AppIcons.star,
+                        size: 16,
+                        color: widget.favorite
+                            ? context.appReader.star
+                            : colors.mutedForeground.withValues(alpha: 0.3),
+                      ),
+                    ),
                   ),
                 ),
-            ],
+                Text(
+                  formatBytes(widget.chapter.sizeBytes.toInt()),
+                  style: TextStyle(fontSize: 13, color: colors.mutedForeground),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-class _ChapterStatusBadge extends StatelessWidget {
-  const _ChapterStatusBadge({required this.text, required this.chapter});
-
-  final AppStrings text;
-  final bridge.RawChapter chapter;
-
-  @override
-  Widget build(BuildContext context) {
-    if (chapter.isRead) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: context.appAccent.withAlpha(40),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          text.read,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: context.appAccent,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      );
+  Color _statusColor(BuildContext context) {
+    if (widget.chapter.isRead) {
+      return context.theme.colors.mutedForeground.withValues(alpha: 0.4);
     }
-    if (chapter.lastPage > 0) {
-      final total = chapter.totalPages > 0
-          ? chapter.totalPages
-          : chapter.pageCount;
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: context.appAccent.withAlpha(30),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          '${text.reading} ${chapter.lastPage + 1}/$total',
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: context.appAccent,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      );
+    if (widget.chapter.lastPage > 0) {
+      return context.appAccent.withValues(alpha: 0.6);
     }
-    final unit = chapter.pageCount == 1 ? text.page : text.pages;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: context.appSecondarySurface,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        '${text.unread} - ${chapter.pageCount} $unit',
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: context.appMutedText,
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
+    return context.appAccent;
   }
 }

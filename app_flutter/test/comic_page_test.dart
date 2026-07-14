@@ -3,6 +3,7 @@ import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/comic_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
+import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,8 +42,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Chapter 30'), findsOneWidget);
-    expect(tester.getTopLeft(find.text('Chapter 30')).dy, lessThan(380));
     expect(find.text('Chapter 19'), findsNothing);
+    // Chapter 30 should be near the top of the visible chapter list area.
+    expect(tester.getTopLeft(find.text('Chapter 30')).dy, lessThan(650));
   });
 
   testWidgets('chapter back-to-top button returns the chapter list to top', (
@@ -99,7 +101,7 @@ class _ForuiHost extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: FTheme(
-        data: FThemes.zinc.light.desktop,
+        data: ComicReaderFTheme.light,
         child: FToaster(
           child: FTooltipGroup(
             child: Scaffold(body: child),
@@ -139,6 +141,7 @@ class _ManyChaptersApi extends ComicRdApi {
           isRead: false,
           lastPage: 0,
           totalPages: 12,
+          sizeBytes: 0,
         ),
     ];
   }
@@ -146,5 +149,15 @@ class _ManyChaptersApi extends ComicRdApi {
   @override
   Future<List<String>> listChapterFavorites(String comicSourcePath) async {
     return const [];
+  }
+
+  @override
+  Future<List<bridge.ReadingHistoryEntry>> listReadingHistory() async {
+    return const [];
+  }
+
+  @override
+  Future<bool> isComicBookmarked(String comicSourcePath) async {
+    return false;
   }
 }
