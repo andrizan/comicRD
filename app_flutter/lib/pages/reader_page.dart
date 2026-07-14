@@ -723,7 +723,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     ref.invalidate(comicChaptersProvider(comicPath));
-    ref.invalidate(filteredComicChaptersProvider(comicPath));
   }
 
   Future<void> _prefetchWindow(int start, int end) async {

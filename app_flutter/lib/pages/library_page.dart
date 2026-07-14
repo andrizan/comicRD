@@ -216,10 +216,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           _handleKey(event.logicalKey);
         }
       },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(48, 32, 48, 0),
-        child: Column(
-          children: [
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final hPad = constraints.maxWidth < 600
+              ? 16.0
+              : constraints.maxWidth < 900
+              ? 32.0
+              : 48.0;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 0),
+            child: Column(
+              children: [
             _PanelHeader(
               text: text,
               preferences: preferences,
@@ -332,9 +339,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
+        ));
+      },
+    ),
+  );
   }
 
   Future<void> _setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) async {
@@ -477,48 +485,53 @@ class _PanelHeader extends ConsumerWidget {
       ),
     };
 
+    final toolbar = _Toolbar(
+      text: text,
+      preferences: preferences,
+      searchController: searchController,
+      onSearchChanged: onSearchChanged,
+      onRefresh: onRefresh,
+      onSetViewMode: onSetViewMode,
+      onSetSort: onSetSort,
+      onSetDisplayMode: onSetDisplayMode,
+    );
+    final titleColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontFamily: appFontFamily,
+            fontSize: 24,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.01,
+            color: colors.foreground,
+          ),
+        ),
+        const SizedBox(height: 4),
+        DefaultTextStyle(
+          style: TextStyle(fontSize: 14, color: colors.mutedForeground),
+          child: subtitle,
+        ),
+      ],
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final toolbar = _Toolbar(
-          text: text,
-          preferences: preferences,
-          searchController: searchController,
-          onSearchChanged: onSearchChanged,
-          onRefresh: onRefresh,
-          onSetViewMode: onSetViewMode,
-          onSetSort: onSetSort,
-          onSetDisplayMode: onSetDisplayMode,
-        );
-        final titleColumn = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontFamily: appFontFamily,
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.01,
-                color: colors.foreground,
-              ),
-            ),
-            const SizedBox(height: 4),
-            DefaultTextStyle(
-              style: TextStyle(fontSize: 14, color: colors.mutedForeground),
-              child: subtitle,
-            ),
-          ],
-        );
-        if (constraints.maxWidth < 760) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [titleColumn, const SizedBox(height: 16), toolbar],
+        if (constraints.maxWidth < 800) {
+          return Wrap(
+            spacing: 24,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.start,
+            children: [titleColumn, toolbar],
           );
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: titleColumn),
+            const SizedBox(width: 24),
             toolbar,
           ],
         );
@@ -1428,6 +1441,62 @@ class _HistoryItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
+    final cover = Container(
+      width: 60,
+      height: 80,
+      decoration: BoxDecoration(
+        color: colors.muted,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        AppIcons.image,
+        size: 24,
+        color: colors.mutedForeground,
+      ),
+    );
+    final textColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          item.comicTitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: colors.foreground,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          item.chapterTitle,
+          style: TextStyle(
+            fontSize: 13,
+            color: colors.mutedForeground,
+          ),
+        ),
+      ],
+    );
+    final continueButton = OutlinedButton(
+      onPressed: onOpen,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: colors.primary,
+        side: BorderSide(color: colors.primary),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 8,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      child: Text(text.continueReading),
+    );
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -1447,68 +1516,33 @@ class _HistoryItem extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: colors.muted,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  AppIcons.image,
-                  size: 24,
-                  color: colors.mutedForeground,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 380) {
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.comicTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: colors.foreground,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.chapterTitle,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: colors.mutedForeground,
-                      ),
+                    cover,
+                    const SizedBox(height: 12),
+                    textColumn,
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: continueButton,
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              OutlinedButton(
-                onPressed: onOpen,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colors.primary,
-                  side: BorderSide(color: colors.primary),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 8,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                child: Text(text.continueReading),
-              ),
-            ],
+                );
+              }
+              return Row(
+                children: [
+                  cover,
+                  const SizedBox(width: 16),
+                  Expanded(child: textColumn),
+                  const SizedBox(width: 16),
+                  continueButton,
+                ],
+              );
+            },
           ),
         ),
       ),

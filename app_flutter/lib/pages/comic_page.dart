@@ -97,9 +97,14 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         (state) => state[widget.comicPath] ?? const ComicPreferences(),
       ),
     );
-    final chapters = ref.watch(filteredComicChaptersProvider(widget.comicPath));
-    final stats = ref.watch(comicStatsProvider(widget.comicPath));
+    final chaptersRaw = ref.watch(comicChaptersProvider(widget.comicPath));
     final favorites = ref.watch(chapterFavoritesProvider(widget.comicPath));
+    final chapters = chaptersRaw.whenData((data) => filterAndSortChapters(
+      chapters: data,
+      favorites: favorites.asData?.value ?? [],
+      preferences: preferences,
+    ));
+    final stats = ref.watch(comicStatsProvider(widget.comicPath));
     final history = ref.watch(comicReadingHistoryProvider(widget.comicPath));
     final bookmarkedAsync = ref.watch(
       comicBookmarkedProvider(widget.comicPath),
@@ -252,7 +257,6 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       );
     }
     ref.invalidate(chapterFavoritesProvider(widget.comicPath));
-    ref.invalidate(filteredComicChaptersProvider(widget.comicPath));
   }
 
   Future<void> _toggleComicBookmark(bool bookmarked) async {
@@ -353,14 +357,21 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   }
 
   void _scrollToChapter(String chapterSourcePath) {
-    final chapters = ref.read(filteredComicChaptersProvider(widget.comicPath));
-    final items = chapters.asData?.value;
+    final chaptersRaw = ref.read(comicChaptersProvider(widget.comicPath));
+    final favs = ref.read(chapterFavoritesProvider(widget.comicPath));
+    final prefs = ref.read(comicPreferencesProvider.notifier).preferencesFor(widget.comicPath);
+    final items = chaptersRaw.asData?.value;
     if (items == null) return;
-    final index = items.indexWhere(
+    final filtered = filterAndSortChapters(
+      chapters: items,
+      favorites: favs.asData?.value ?? [],
+      preferences: prefs,
+    );
+    final index = filtered.indexWhere(
       (chapter) => chapter.sourcePath == chapterSourcePath,
     );
     if (index < 0) return;
-    final signature = '$chapterSourcePath|${items.length}|$index';
+    final signature = '$chapterSourcePath|${filtered.length}|$index';
     if (_lastAutoScrollSignature == signature) return;
     _lastAutoScrollSignature = signature;
     WidgetsBinding.instance.addPostFrameCallback((_) {
