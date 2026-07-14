@@ -176,6 +176,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
               onSetTab: (tab) => ref
                   .read(comicPreferencesProvider.notifier)
                   .setSelectedTab(widget.comicPath, tab),
+              onRefresh: _refreshChapters,
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -226,6 +227,11 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _refreshChapters() async {
+    ref.invalidate(comicChaptersProvider(widget.comicPath));
+    final _ = await ref.refresh(comicChaptersProvider(widget.comicPath).future);
   }
 
   Future<void> _setSort(ChapterSortBy sortBy, bridge.SortDir sortDir) async {
@@ -845,6 +851,7 @@ class _ChapterSectionHeader extends StatelessWidget {
     required this.onSearchChanged,
     required this.onSetSort,
     required this.onSetTab,
+    required this.onRefresh,
   });
 
   final AppStrings text;
@@ -853,6 +860,7 @@ class _ChapterSectionHeader extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final void Function(ChapterSortBy sortBy, bridge.SortDir sortDir) onSetSort;
   final ValueChanged<ChapterTab> onSetTab;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -879,6 +887,15 @@ class _ChapterSectionHeader extends StatelessWidget {
         controller: searchController,
         hint: text.filterChapters,
         onChanged: onSearchChanged,
+      ),
+      const SizedBox(width: 8),
+      Container(width: 1, height: 24, color: colors.border),
+      const SizedBox(width: 8),
+      IconButton(
+        icon: Icon(AppIcons.refresh, size: 18),
+        tooltip: text.refresh,
+        color: colors.mutedForeground,
+        onPressed: onRefresh,
       ),
     ];
 
