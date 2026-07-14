@@ -506,6 +506,15 @@ pub fn list_library_comics_raw(
         .collect())
 }
 
+pub fn get_comic_thumbnail(
+    source_path: String,
+    max_width: u32,
+    max_height: u32,
+) -> Result<Vec<u8>, String> {
+    let bytes = core()?.get_comic_thumbnail(&source_path, max_width, max_height)?;
+    Ok((*bytes).clone())
+}
+
 pub fn get_library_storage_stats() -> Result<LibraryStorageStats, String> {
     Ok(core()?.get_library_storage_stats()?.into())
 }

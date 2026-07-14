@@ -3,6 +3,7 @@ import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/comic_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
+import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -100,7 +101,7 @@ class _ForuiHost extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: FTheme(
-        data: FThemes.zinc.light.desktop,
+        data: ComicReaderFTheme.light,
         child: FToaster(
           child: FTooltipGroup(
             child: Scaffold(body: child),

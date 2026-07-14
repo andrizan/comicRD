@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import '../bridge_generated.dart' as bridge;
 import '../state/api_state.dart';
 import '../state/comic_state.dart';
+import '../state/library_state.dart';
 import '../state/scroll_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
@@ -155,6 +156,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
               onContinueReading: _continueReading,
               onStartFromBeginning: _startFromBeginning,
               onToggleBookmark: _toggleComicBookmark,
+              onOpenFolder: _openContainingFolder,
             ),
             const SizedBox(height: 24),
             _ChapterSectionHeader(
@@ -271,10 +273,26 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     ref.invalidate(comicBookmarkedProvider(widget.comicPath));
   }
 
+  Future<void> _openContainingFolder() async {
+    await ref.read(comicRdApiProvider).openContainingFolder(widget.comicPath);
+  }
+
   Future<void> _continueReading() async {
-    final chapters = ref.read(comicChaptersProvider(widget.comicPath));
-    final items = chapters.asData?.value;
-    if (items == null || items.isEmpty) return;
+    final items = await ref.read(
+      comicChaptersProvider(widget.comicPath).future,
+    );
+    if (items.isEmpty) return;
+
+    final lastOpened = ref.read(lastOpenedChapterProvider)[widget.comicPath];
+    if (lastOpened != null) {
+      final match = items.firstWhere(
+        (chapter) => chapter.sourcePath == lastOpened,
+        orElse: () => items.first,
+      );
+      await _openChapter(match);
+      return;
+    }
+
     bridge.RawChapter? target;
     for (final chapter in items) {
       if (chapter.lastPage > 0 && !chapter.isRead) {
@@ -290,9 +308,10 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   }
 
   Future<void> _startFromBeginning() async {
-    final chapters = ref.read(comicChaptersProvider(widget.comicPath));
-    final items = chapters.asData?.value;
-    if (items == null || items.isEmpty) return;
+    final items = await ref.read(
+      comicChaptersProvider(widget.comicPath).future,
+    );
+    if (items.isEmpty) return;
     await _openChapter(items.first);
   }
 
@@ -334,10 +353,6 @@ class _ComicPageState extends ConsumerState<ComicPage> {
         chapterSourcePath: chapter.sourcePath,
       ),
     );
-    ref
-        .read(lastOpenedChapterProvider.notifier)
-        .remember(widget.comicPath, chapter.sourcePath);
-
     final start = chapter.lastPage > 0 ? chapter.lastPage : 0;
     final maxPage = chapter.totalPages > 0
         ? chapter.totalPages
@@ -467,6 +482,7 @@ class _ComicHero extends StatelessWidget {
     required this.onContinueReading,
     required this.onStartFromBeginning,
     required this.onToggleBookmark,
+    required this.onOpenFolder,
   });
 
   final AppStrings text;
@@ -478,6 +494,7 @@ class _ComicHero extends StatelessWidget {
   final VoidCallback onContinueReading;
   final VoidCallback onStartFromBeginning;
   final void Function(bool bookmarked) onToggleBookmark;
+  final VoidCallback onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -509,35 +526,35 @@ class _ComicHero extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _CoverPlaceholder(),
-        const SizedBox(width: 28),
+        _ComicCover(comicPath: comicPath),
+        const SizedBox(width: 20),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              SelectableText(
                 title,
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: appFontFamily,
-                  fontSize: 32,
+                  fontSize: 24,
+                  height: 1.15,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.02,
                   color: colors.foreground,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 6),
               _InfoBar(
                 text: text,
                 totalSize: stats.totalSize,
                 chapterCount: stats.chapterCount,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               _MetadataRow(label: '${text.directoryPath}:', value: comicPath),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               _MetadataRow(label: '${text.lastRead}:', value: lastReadText),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               _MetadataRow(
                 label: '${text.readingProgress}:',
                 value: text.readingProgressTemplate
@@ -545,7 +562,7 @@ class _ComicHero extends StatelessWidget {
                     .replaceAll('{read}', '${stats.effectiveReadCount}')
                     .replaceAll('{total}', '${stats.chapterCount}'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -563,6 +580,11 @@ class _ComicHero extends StatelessWidget {
                     icon: AppIcons.bookmark,
                     onPressed: () => onToggleBookmark(bookmarked),
                   ),
+                  _OutlineActionButton(
+                    label: text.openFolder,
+                    icon: AppIcons.folderOpen,
+                    onPressed: onOpenFolder,
+                  ),
                 ],
               ),
             ],
@@ -573,18 +595,46 @@ class _ComicHero extends StatelessWidget {
   }
 }
 
-class _CoverPlaceholder extends StatelessWidget {
+class _ComicCover extends ConsumerWidget {
+  const _ComicCover({required this.comicPath});
+
+  final String comicPath;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.theme.colors;
+    final thumbnail = ref.watch(
+      comicThumbnailProvider((
+        sourcePath: comicPath,
+        maxWidth: 260,
+        maxHeight: 400,
+      )),
+    );
+
     return Container(
-      width: 220,
-      height: 300,
+      width: 170,
+      height: 240,
       decoration: BoxDecoration(
         color: colors.muted,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Icon(AppIcons.image, size: 48, color: colors.mutedForeground),
+      clipBehavior: Clip.antiAlias,
+      child: thumbnail.when(
+        data: (bytes) {
+          if (bytes == null) {
+            return Icon(
+              AppIcons.image,
+              size: 48,
+              color: colors.mutedForeground,
+            );
+          }
+          return Image.memory(bytes, fit: BoxFit.cover);
+        },
+        loading: () =>
+            Icon(AppIcons.image, size: 48, color: colors.mutedForeground),
+        error: (_, _) =>
+            Icon(AppIcons.image, size: 48, color: colors.mutedForeground),
+      ),
     );
   }
 }
@@ -702,14 +752,14 @@ class _InfoBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: colors.card,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Wrap(
-        spacing: 20,
-        runSpacing: 8,
+        spacing: 14,
+        runSpacing: 2,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           _InfoItem(icon: AppIcons.folderOpen, value: formatBytes(totalSize)),
@@ -763,10 +813,8 @@ class _MetadataRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return RichText(
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
+    return SelectableText.rich(
+      TextSpan(
         style: TextStyle(fontSize: 14, color: colors.foreground),
         children: [
           TextSpan(
@@ -780,6 +828,7 @@ class _MetadataRow extends StatelessWidget {
           ),
         ],
       ),
+      maxLines: 1,
     );
   }
 }

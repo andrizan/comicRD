@@ -368,7 +368,7 @@ pub(crate) fn image_entries_in_dir(path: &Path) -> Vec<PathBuf> {
     image_entries_in_dir_with_depth(path, 3)
 }
 
-fn image_entries_in_dir_shallow(path: &Path) -> Vec<PathBuf> {
+pub(crate) fn image_entries_in_dir_shallow(path: &Path) -> Vec<PathBuf> {
     image_entries_in_dir_with_depth(path, 1)
 }
 

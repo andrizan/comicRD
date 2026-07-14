@@ -834,16 +834,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     final comicPath = data.context?.comicSourcePath;
     final chapterPath = data.context?.chapterSourcePath;
-    if (comicPath == null || comicPath.isEmpty) {
-      context.go('/');
-    } else {
-      if (chapterPath != null && chapterPath.isNotEmpty) {
-        ref
-            .read(lastOpenedChapterProvider.notifier)
-            .remember(comicPath, chapterPath);
-      }
-      context.go('/comic/${encodeRoutePath(comicPath)}');
+    if (chapterPath != null &&
+        chapterPath.isNotEmpty &&
+        comicPath != null &&
+        comicPath.isNotEmpty) {
+      ref
+          .read(lastOpenedChapterProvider.notifier)
+          .remember(comicPath, chapterPath);
     }
+
+    // Defer navigation so provider invalidations finish before the comic page
+    // is rebuilt. This avoids "setState during build" errors in Riverpod 3.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = comicPath;
+      if (target == null || target.isEmpty) {
+        context.go('/');
+      } else {
+        context.go('/comic/${encodeRoutePath(target)}');
+      }
+    });
   }
 
   Future<void> _switchChapter(

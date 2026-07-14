@@ -40,6 +40,16 @@ Future<List<RawComic>> listLibraryComicsRaw({
   sortDir: sortDir,
 );
 
+Future<Uint8List> getComicThumbnail({
+  required String sourcePath,
+  required int maxWidth,
+  required int maxHeight,
+}) => RustLib.instance.api.crateApiGetComicThumbnail(
+  sourcePath: sourcePath,
+  maxWidth: maxWidth,
+  maxHeight: maxHeight,
+);
+
 Future<LibraryStorageStats> getLibraryStorageStats() =>
     RustLib.instance.api.crateApiGetLibraryStorageStats();
 

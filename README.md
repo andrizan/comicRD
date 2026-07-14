@@ -23,19 +23,22 @@ history, backup/import, and the reader image pipeline.
 - Automatic progress save
 - Previous/next chapter navigation
 - On-demand page byte loading with bounded prefetch/cache around the current viewport
+- On-demand comic thumbnail generation with persistent disk cache (200 MB LRU) and cover display in library, history, and comic detail pages
+- Selectable title/path and open-folder action on comic detail page
 - SQLite-backed settings, metadata, reading progress, bookmarks, and history
 - Database backup export/import
 - Linux packaging scripts, GitHub release assets, and AUR publishing support
 
 ## Status
 
-ComicRD is in a slower maintenance phase. The main Flutter/Rust application
-flows are implemented, including library listing, scan, chapter discovery,
-reader flow, progress, bookmarks, history, settings, and backup/import. New work
-is mostly focused on fixes, dependency updates, packaging, and platform
-verification. Linux packaging is available. The application has been smoke
-tested directly on Windows and Linux. The macOS build target is present, but
-still needs a native macOS smoke test before release claims for that platform.
+The main Flutter/Rust application flows are implemented, including library
+listing, scan, chapter discovery, reader flow, progress, bookmarks, history,
+settings, backup/import, and comic thumbnails. Recent work has focused on UI
+polish (library/history/detail covers, selectable metadata, open-folder action),
+performance (persistent thumbnail cache), and dependency updates. Linux
+packaging is available and the application has been smoke tested directly on
+Windows and Linux. The macOS build target is present, but still needs a native
+macOS smoke test before release claims for that platform.
 
 ## Install
 
@@ -75,7 +78,7 @@ sudo pacman -U dist/arch/comicrd-bin-1.1.1-1-x86_64.pkg.tar.zst
 ### Requirements
 
 - Flutter desktop SDK
-- Rust toolchain, currently `rust-version = "1.95"` in the workspace
+- Rust toolchain, currently `rustc 1.96`
 - `flutter_rust_bridge_codegen` 2.12.0
 - `cargo-expand`
 - Platform desktop build tools

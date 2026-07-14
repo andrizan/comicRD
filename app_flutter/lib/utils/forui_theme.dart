@@ -25,8 +25,8 @@ class ComicReaderFTheme {
   /// Light palette — warm cream background, violet accent.
   static final FThemeData light = FThemeData(
     touch: false,
-    typography: _buildTypography(FColors.zincLight),
-    colors: FColors.zincLight.copyWith(
+    typography: _buildTypography(FColors.neutralLight),
+    colors: FColors.neutralLight.copyWith(
       // Background / Foreground — 14.9:1
       background: const Color(0xFFF7F6F3),
       foreground: const Color(0xFF221F2C),
@@ -55,8 +55,8 @@ class ComicReaderFTheme {
   /// Dark palette — charcoal background, light violet accent.
   static final FThemeData dark = FThemeData(
     touch: false,
-    typography: _buildTypography(FColors.zincDark),
-    colors: FColors.zincDark.copyWith(
+    typography: _buildTypography(FColors.neutralDark),
+    colors: FColors.neutralDark.copyWith(
       // Background / Foreground — 15.3:1
       background: const Color(0xFF17151C),
       foreground: const Color(0xFFEDEBF5),

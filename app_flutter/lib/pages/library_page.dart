@@ -1076,6 +1076,7 @@ class _ComicCard extends StatelessWidget {
         Expanded(
           child: _CoverArea(
             text: text,
+            sourcePath: comic.sourcePath,
             isGrid: true,
             isNew: _isNew,
             bookmarked: bookmarked,
@@ -1150,6 +1151,7 @@ class _ComicCard extends StatelessWidget {
         children: [
           _CoverArea(
             text: text,
+            sourcePath: comic.sourcePath,
             isGrid: false,
             isNew: _isNew,
             bookmarked: bookmarked,
@@ -1240,9 +1242,10 @@ class _ComicCard extends StatelessWidget {
   }
 }
 
-class _CoverArea extends StatelessWidget {
+class _CoverArea extends ConsumerWidget {
   const _CoverArea({
     required this.text,
+    required this.sourcePath,
     required this.isGrid,
     required this.isNew,
     required this.bookmarked,
@@ -1252,6 +1255,7 @@ class _CoverArea extends StatelessWidget {
   });
 
   final AppStrings text;
+  final String sourcePath;
   final bool isGrid;
   final bool isNew;
   final bool bookmarked;
@@ -1260,21 +1264,49 @@ class _CoverArea extends StatelessWidget {
   final Widget? contextMenu;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.theme.colors;
+    final thumbnail = ref.watch(
+      comicThumbnailProvider((
+        sourcePath: sourcePath,
+        maxWidth: 200,
+        maxHeight: 300,
+      )),
+    );
+    final borderRadius = isGrid
+        ? const BorderRadius.vertical(top: Radius.circular(14))
+        : const BorderRadius.horizontal(left: Radius.circular(14));
     final cover = Container(
       width: isGrid ? double.infinity : 110,
       height: isGrid ? double.infinity : 136,
       decoration: BoxDecoration(
         color: colors.muted,
-        borderRadius: isGrid
-            ? const BorderRadius.vertical(top: Radius.circular(14))
-            : const BorderRadius.horizontal(left: Radius.circular(14)),
+        borderRadius: borderRadius,
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Icon(AppIcons.image, size: 28, color: colors.mutedForeground),
+          thumbnail.when(
+            data: (bytes) {
+              if (bytes == null) {
+                return Icon(
+                  AppIcons.image,
+                  size: 28,
+                  color: colors.mutedForeground,
+                );
+              }
+              return Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: borderRadius,
+                  child: Image.memory(bytes, fit: BoxFit.cover),
+                ),
+              );
+            },
+            loading: () =>
+                Icon(AppIcons.image, size: 28, color: colors.mutedForeground),
+            error: (_, _) =>
+                Icon(AppIcons.image, size: 28, color: colors.mutedForeground),
+          ),
           if (isNew)
             Positioned(
               top: 10,
@@ -1445,15 +1477,7 @@ class _HistoryItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    final cover = Container(
-      width: 60,
-      height: 80,
-      decoration: BoxDecoration(
-        color: colors.muted,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(AppIcons.image, size: 24, color: colors.mutedForeground),
-    );
+    final cover = _HistoryCover(sourcePath: item.comicSourcePath);
     final textColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -1534,6 +1558,50 @@ class _HistoryItem extends StatelessWidget {
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _HistoryCover extends ConsumerWidget {
+  const _HistoryCover({required this.sourcePath});
+
+  final String sourcePath;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.theme.colors;
+    final thumbnail = ref.watch(
+      comicThumbnailProvider((
+        sourcePath: sourcePath,
+        maxWidth: 100,
+        maxHeight: 140,
+      )),
+    );
+
+    return Container(
+      width: 60,
+      height: 80,
+      decoration: BoxDecoration(
+        color: colors.muted,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: thumbnail.when(
+        data: (bytes) {
+          if (bytes == null) {
+            return Icon(
+              AppIcons.image,
+              size: 24,
+              color: colors.mutedForeground,
+            );
+          }
+          return Image.memory(bytes, fit: BoxFit.cover);
+        },
+        loading: () =>
+            Icon(AppIcons.image, size: 24, color: colors.mutedForeground),
+        error: (_, _) =>
+            Icon(AppIcons.image, size: 24, color: colors.mutedForeground),
       ),
     );
   }
@@ -1692,6 +1760,7 @@ class _BookmarkCard extends StatelessWidget {
         Expanded(
           child: _CoverArea(
             text: text,
+            sourcePath: bookmark.comicSourcePath,
             isGrid: true,
             isNew: false,
             bookmarked: true,
@@ -1763,6 +1832,7 @@ class _BookmarkCard extends StatelessWidget {
         children: [
           _CoverArea(
             text: text,
+            sourcePath: bookmark.comicSourcePath,
             isGrid: false,
             isNew: false,
             bookmarked: true,

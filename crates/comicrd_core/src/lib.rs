@@ -3,6 +3,7 @@ mod database;
 mod image_pipeline;
 mod library;
 mod reader;
+mod thumbnail;
 
 use std::collections::HashMap;
 use std::fs;
@@ -21,6 +22,7 @@ use crate::database::*;
 use crate::image_pipeline::*;
 use crate::library::*;
 use crate::reader::*;
+use crate::thumbnail::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortBy {
@@ -248,8 +250,10 @@ struct ChapterDiscoveryCache {
 
 pub struct ComicRdCore {
     db_path: PathBuf,
+    thumbnail_dir: PathBuf,
     conn: Mutex<Connection>,
     page_cache: PageCache,
+    thumbnail_cache: ThumbnailCache,
     scan_state: Mutex<LibraryScanState>,
     library_list_cache: Mutex<Option<LibraryListCache>>,
     chapter_discovery_cache: Mutex<HashMap<String, ChapterDiscoveryCache>>,
@@ -261,14 +265,19 @@ impl ComicRdCore {
         fs::create_dir_all(app_data_dir)
             .map_err(|e| format!("failed creating app data dir: {e}"))?;
         let db_path = app_data_dir.join("comicrd.db");
+        let thumbnail_dir = app_data_dir.join("thumbnails");
         copy_legacy_database_if_missing(app_data_dir, &db_path)?;
         let conn = open_database_file(&db_path)?;
         run_migrations(&conn)?;
+        fs::create_dir_all(&thumbnail_dir)
+            .map_err(|e| format!("failed creating thumbnail dir: {e}"))?;
 
         Ok(Self {
             db_path,
+            thumbnail_dir,
             conn: Mutex::new(conn),
             page_cache: PageCache::default(),
+            thumbnail_cache: ThumbnailCache::default(),
             scan_state: Mutex::new(LibraryScanState::default()),
             library_list_cache: Mutex::new(None),
             chapter_discovery_cache: Mutex::new(HashMap::new()),
@@ -277,6 +286,40 @@ impl ComicRdCore {
 
     pub fn db_path(&self) -> &Path {
         &self.db_path
+    }
+
+    pub fn get_comic_thumbnail(
+        &self,
+        source_path: &str,
+        max_width: u32,
+        max_height: u32,
+    ) -> Result<Arc<Vec<u8>>, String> {
+        if let Some(cached) = self.thumbnail_cache.get(source_path, max_width, max_height) {
+            return Ok(cached);
+        }
+
+        if let Some(bytes) =
+            read_disk_thumbnail(&self.thumbnail_dir, source_path, max_width, max_height)
+        {
+            let shared = Arc::new(bytes);
+            self.thumbnail_cache
+                .insert(source_path, max_width, max_height, Arc::clone(&shared))?;
+            return Ok(shared);
+        }
+
+        let bytes = generate_thumbnail_bytes(source_path, max_width, max_height)?;
+        if let Err(e) = write_disk_thumbnail(
+            &self.thumbnail_dir,
+            source_path,
+            max_width,
+            max_height,
+            &bytes,
+        ) {
+            eprintln!("failed writing thumbnail to disk cache: {e}");
+        }
+        self.thumbnail_cache
+            .insert(source_path, max_width, max_height, Arc::clone(&bytes))?;
+        Ok(bytes)
     }
 
     pub fn list_settings(&self) -> Result<Vec<SettingEntry>, String> {
