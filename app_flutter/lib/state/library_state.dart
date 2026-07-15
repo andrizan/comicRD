@@ -132,18 +132,10 @@ final libraryCountProvider = NotifierProvider<LibraryCountNotifier, int>(
   LibraryCountNotifier.new,
 );
 
-class BookmarkCountNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-
-  void update(int count) {
-    state = count;
-  }
-}
-
-final bookmarkCountProvider = NotifierProvider<BookmarkCountNotifier, int>(
-  BookmarkCountNotifier.new,
-);
+final bookmarkCountProvider = Provider<int>((ref) {
+  final bookmarks = ref.watch(allBookmarksProvider);
+  return bookmarks.asData?.value.length ?? 0;
+});
 
 final comicsWithProgressProvider = FutureProvider<List<String>>((ref) {
   return ref.watch(comicRdApiProvider).listComicsWithProgress();
@@ -155,13 +147,15 @@ final comicThumbnailProvider = FutureProvider.autoDispose
       key,
     ) async {
       try {
-        return await ref
+        final bytes = await ref
             .watch(comicRdApiProvider)
             .getComicThumbnail(
               key.sourcePath,
               maxWidth: key.maxWidth,
               maxHeight: key.maxHeight,
             );
+        if (bytes.isEmpty) return null;
+        return bytes;
       } catch (e, st) {
         debugPrint('thumbnail error for ${key.sourcePath}: $e\n$st');
         return null;

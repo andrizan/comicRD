@@ -277,6 +277,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       await api.addComicBookmark(widget.comicPath);
     }
     ref.invalidate(comicBookmarkedProvider(widget.comicPath));
+    ref.invalidate(allBookmarksProvider);
   }
 
   Future<void> _openContainingFolder() async {
@@ -584,6 +585,7 @@ class _ComicHero extends StatelessWidget {
                   _OutlineActionButton(
                     label: bookmarked ? text.bookmarked : text.bookmark,
                     icon: AppIcons.bookmark,
+                    iconColor: bookmarked ? context.appReader.star : null,
                     onPressed: () => onToggleBookmark(bookmarked),
                   ),
                   _OutlineActionButton(
@@ -629,7 +631,7 @@ class _ComicCover extends ConsumerWidget {
         data: (bytes) {
           if (bytes == null) {
             return Icon(
-              AppIcons.image,
+              AppIcons.library,
               size: 48,
               color: colors.mutedForeground,
             );
@@ -637,9 +639,9 @@ class _ComicCover extends ConsumerWidget {
           return Image.memory(bytes, fit: BoxFit.cover);
         },
         loading: () =>
-            Icon(AppIcons.image, size: 48, color: colors.mutedForeground),
+            Icon(AppIcons.library, size: 48, color: colors.mutedForeground),
         error: (_, _) =>
-            Icon(AppIcons.image, size: 48, color: colors.mutedForeground),
+            Icon(AppIcons.library, size: 48, color: colors.mutedForeground),
       ),
     );
   }
@@ -694,11 +696,13 @@ class _OutlineActionButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.icon,
+    this.iconColor,
   });
 
   final String label;
   final VoidCallback onPressed;
   final IconData? icon;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -719,7 +723,11 @@ class _OutlineActionButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
-                  Icon(icon, size: 16, color: colors.mutedForeground),
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: iconColor ?? colors.mutedForeground,
+                  ),
                   const SizedBox(width: 8),
                 ],
                 Flexible(

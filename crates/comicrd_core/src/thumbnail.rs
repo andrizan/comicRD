@@ -99,6 +99,10 @@ impl ThumbnailCache {
 /// cover image, it falls back to the first page of the earliest chapter that
 /// contains images.
 /// For archive comics this reads the first image entry in natural order.
+///
+/// Returns an empty `Vec` when the source has no usable images at all (empty
+/// folder, no chapter with images, or empty archive). This lets callers treat
+/// "no content" as a silent fallback rather than an error.
 pub(crate) fn load_cover_image_bytes(source_path: &str) -> Result<Vec<u8>, String> {
     let path = Path::new(source_path);
     if path.is_dir() {
@@ -112,18 +116,16 @@ pub(crate) fn load_cover_image_bytes(source_path: &str) -> Result<Vec<u8>, Strin
         // Fall back to the first readable page of chapter 1 (or the first
         // chapter that actually contains images).
         let chapters = discover_chapter_entries_for_comic(source_path)?;
-        let mut last_error = "no cover image or chapter found in comic folder".to_string();
         for (_, chapter_path, chapter_source_type, _) in chapters {
-            match first_page_bytes(&chapter_path, &chapter_source_type) {
-                Ok(bytes) => return Ok(bytes),
-                Err(e) => last_error = e,
+            if let Ok(bytes) = first_page_bytes(&chapter_path, &chapter_source_type) {
+                return Ok(bytes);
             }
         }
-        Err(last_error)
+        Ok(Vec::new())
     } else {
         let entries = archive_image_entries(path)?;
         let Some(first) = entries.first() else {
-            return Err("no cover image found in comic archive".to_string());
+            return Ok(Vec::new());
         };
         archive_image_bytes(path, first)
     }
@@ -170,12 +172,19 @@ fn fit_thumbnail(img: &DynamicImage, max_width: u32, max_height: u32) -> Dynamic
 }
 
 /// Generate a JPEG thumbnail for a comic source.
+///
+/// Returns an empty `Arc<Vec<u8>>` when the source has no usable cover image
+/// (empty folder, no chapter with images, or empty archive). Callers should
+/// treat this as a silent fallback and skip cache writes.
 pub(crate) fn generate_thumbnail_bytes(
     source_path: &str,
     max_width: u32,
     max_height: u32,
 ) -> Result<Arc<Vec<u8>>, String> {
     let cover_bytes = load_cover_image_bytes(source_path)?;
+    if cover_bytes.is_empty() {
+        return Ok(Arc::new(Vec::new()));
+    }
     let img = image::load_from_memory(&cover_bytes)
         .map_err(|e| format!("failed decoding cover image: {e}"))?;
     let thumbnail = fit_thumbnail(&img, max_width, max_height);
@@ -300,5 +309,43 @@ mod tests {
         let thumb = fit_thumbnail(&img, 100, 100);
         assert_eq!(thumb.width(), 50);
         assert_eq!(thumb.height(), 50);
+    }
+
+    #[test]
+    fn load_cover_returns_empty_for_empty_folder() {
+        let dir = tempdir();
+        let result = load_cover_image_bytes(dir.to_str().unwrap()).unwrap();
+        assert!(result.is_empty(), "expected empty bytes for empty folder");
+    }
+
+    #[test]
+    fn load_cover_returns_empty_for_folder_with_empty_chapter() {
+        let dir = tempdir();
+        std::fs::create_dir(dir.join("Chapter 1")).unwrap();
+        let result = load_cover_image_bytes(dir.to_str().unwrap()).unwrap();
+        assert!(
+            result.is_empty(),
+            "expected empty bytes when chapters have no images"
+        );
+    }
+
+    #[test]
+    fn generate_thumbnail_returns_empty_for_empty_folder() {
+        let dir = tempdir();
+        let result =
+            generate_thumbnail_bytes(dir.to_str().unwrap(), 200, 300).unwrap();
+        assert!(result.is_empty(), "expected empty thumbnail for empty folder");
+    }
+
+    fn tempdir() -> std::path::PathBuf {
+        let base = std::env::temp_dir().join(format!(
+            "comicrd_thumb_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+        base
     }
 }

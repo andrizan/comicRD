@@ -308,17 +308,19 @@ impl ComicRdCore {
         }
 
         let bytes = generate_thumbnail_bytes(source_path, max_width, max_height)?;
-        if let Err(e) = write_disk_thumbnail(
-            &self.thumbnail_dir,
-            source_path,
-            max_width,
-            max_height,
-            &bytes,
-        ) {
-            eprintln!("failed writing thumbnail to disk cache: {e}");
+        if !bytes.is_empty() {
+            if let Err(e) = write_disk_thumbnail(
+                &self.thumbnail_dir,
+                source_path,
+                max_width,
+                max_height,
+                &bytes,
+            ) {
+                eprintln!("failed writing thumbnail to disk cache: {e}");
+            }
+            self.thumbnail_cache
+                .insert(source_path, max_width, max_height, Arc::clone(&bytes))?;
         }
-        self.thumbnail_cache
-            .insert(source_path, max_width, max_height, Arc::clone(&bytes))?;
         Ok(bytes)
     }
 

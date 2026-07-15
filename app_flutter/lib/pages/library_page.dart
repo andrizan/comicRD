@@ -220,9 +220,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         ref
             .read(libraryCountProvider.notifier)
             .update(comicsState.items.length);
-        ref
-            .read(bookmarkCountProvider.notifier)
-            .update(bookmarks.asData?.value.length ?? 0);
       }
     });
 
@@ -1331,7 +1328,7 @@ class _CoverArea extends ConsumerWidget {
             data: (bytes) {
               if (bytes == null) {
                 return Icon(
-                  AppIcons.image,
+                  AppIcons.library,
                   size: 28,
                   color: colors.mutedForeground,
                 );
@@ -1344,9 +1341,9 @@ class _CoverArea extends ConsumerWidget {
               );
             },
             loading: () =>
-                Icon(AppIcons.image, size: 28, color: colors.mutedForeground),
+                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
             error: (_, _) =>
-                Icon(AppIcons.image, size: 28, color: colors.mutedForeground),
+                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
           ),
           if (isNew)
             Positioned(
@@ -1638,7 +1635,7 @@ class _HistoryCover extends ConsumerWidget {
         data: (bytes) {
           if (bytes == null) {
             return Icon(
-              AppIcons.image,
+              AppIcons.library,
               size: 24,
               color: colors.mutedForeground,
             );
@@ -1646,9 +1643,9 @@ class _HistoryCover extends ConsumerWidget {
           return Image.memory(bytes, fit: BoxFit.cover);
         },
         loading: () =>
-            Icon(AppIcons.image, size: 24, color: colors.mutedForeground),
+            Icon(AppIcons.library, size: 24, color: colors.mutedForeground),
         error: (_, _) =>
-            Icon(AppIcons.image, size: 24, color: colors.mutedForeground),
+            Icon(AppIcons.library, size: 24, color: colors.mutedForeground),
       ),
     );
   }
