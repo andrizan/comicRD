@@ -8,6 +8,7 @@ mod thumbnail;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -257,6 +258,7 @@ pub struct ComicRdCore {
     scan_state: Mutex<LibraryScanState>,
     library_list_cache: Mutex<Option<LibraryListCache>>,
     chapter_discovery_cache: Mutex<HashMap<String, ChapterDiscoveryCache>>,
+    cancel_token: AtomicBool,
 }
 
 impl ComicRdCore {
@@ -281,7 +283,15 @@ impl ComicRdCore {
             scan_state: Mutex::new(LibraryScanState::default()),
             library_list_cache: Mutex::new(None),
             chapter_discovery_cache: Mutex::new(HashMap::new()),
+            cancel_token: AtomicBool::new(false),
         })
+    }
+
+    pub fn shutdown(&self) {
+        self.cancel_token.store(true, Ordering::SeqCst);
+        if let Ok(conn) = self.conn.lock() {
+            let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        }
     }
 
     pub fn db_path(&self) -> &Path {
@@ -515,6 +525,9 @@ impl ComicRdCore {
         let mut chapter_count = 0usize;
 
         for lib in libraries {
+            if self.cancel_token.load(Ordering::SeqCst) {
+                break;
+            }
             let base = Path::new(&lib.path);
             if !base.exists() || !base.is_dir() {
                 continue;

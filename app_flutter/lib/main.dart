@@ -27,11 +27,11 @@ Future<void> main() async {
 class _WindowListener extends WindowListener {
   _WindowListener({required this.onClose});
 
-  final VoidCallback onClose;
+  final Future<void> Function() onClose;
 
   @override
   void onWindowClose() async {
-    onClose();
+    await onClose();
     await windowManager.destroy();
   }
 }

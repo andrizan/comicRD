@@ -463,6 +463,14 @@ pub fn init_app(app_data_dir: String) -> Result<(), String> {
 }
 
 pub fn shutdown_app() -> Result<(), String> {
+    let core_arc = {
+        CORE.read()
+            .map_err(|_| "core lock poisoned".to_string())?
+            .clone()
+    };
+    if let Some(core) = core_arc {
+        core.shutdown();
+    }
     *CORE.write().map_err(|_| "core lock poisoned".to_string())? = None;
     Ok(())
 }
