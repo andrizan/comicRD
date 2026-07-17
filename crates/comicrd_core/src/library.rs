@@ -383,12 +383,16 @@ pub(crate) fn scan_comic_dir(
     Ok((1, chapter_count))
 }
 
-pub(crate) fn scan_library_entries(
+pub(crate) fn scan_library_entries<F>(
     conn: &mut Connection,
     library_id: i64,
     library_path: &str,
     entries: &[std::path::PathBuf],
-) -> Result<(usize, usize), String> {
+    mut on_progress: F,
+) -> Result<(usize, usize), String>
+where
+    F: FnMut(&str) -> bool,
+{
     let mut comic_count = 0usize;
     let mut chapter_count = 0usize;
 
@@ -401,6 +405,9 @@ pub(crate) fn scan_library_entries(
             let (c, ch) = scan_comic_dir(&tx, library_id, library_path, entry)?;
             comic_count += c;
             chapter_count += ch;
+            if !on_progress(&entry.to_string_lossy()) {
+                break;
+            }
         } else if entry.is_file() && is_archive(entry) {
             let title = comic_title_for_path(entry);
             let source_type = source_type_for_path(entry);
@@ -455,6 +462,9 @@ pub(crate) fn scan_library_entries(
             .map_err(|e| format!("failed updating archive comic size_bytes: {e}"))?;
             comic_count += 1;
             chapter_count += 1;
+            if !on_progress(&source_path) {
+                break;
+            }
         }
     }
 

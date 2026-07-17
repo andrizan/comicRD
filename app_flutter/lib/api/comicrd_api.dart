@@ -26,9 +26,9 @@ class ComicRdApi {
 
   Future<List<bridge.Library>> listLibraries() => bridge.listLibraries();
 
-  Future<bridge.ScanSummary> scanLibraries() => bridge.scanLibraries();
-
   Future<bool> startScanLibraries() => bridge.startScanLibraries();
+
+  Future<void> cancelScanLibraries() => bridge.cancelScanLibraries();
 
   Future<bridge.LibraryScanStatus> getLibraryScanStatus() =>
       bridge.getLibraryScanStatus();

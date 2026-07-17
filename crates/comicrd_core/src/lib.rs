@@ -66,11 +66,19 @@ pub struct ScanSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScanProgress {
+    pub processed: usize,
+    pub total: usize,
+    pub current_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LibraryScanStatus {
     pub running: bool,
     pub started_at: Option<i64>,
     pub finished_at: Option<i64>,
     pub last_summary: Option<ScanSummary>,
+    pub progress: Option<ScanProgress>,
     pub error: Option<String>,
 }
 
@@ -80,6 +88,7 @@ struct LibraryScanState {
     started_at: Option<i64>,
     finished_at: Option<i64>,
     last_summary: Option<ScanSummary>,
+    progress: Option<ScanProgress>,
     error: Option<String>,
 }
 
@@ -90,6 +99,7 @@ impl LibraryScanState {
             started_at: self.started_at,
             finished_at: self.finished_at,
             last_summary: self.last_summary.clone(),
+            progress: self.progress.clone(),
             error: self.error.clone(),
         }
     }
@@ -521,8 +531,8 @@ impl ComicRdCore {
             list_libraries_conn(&conn)?
         };
 
-        let mut comic_count = 0usize;
-        let mut chapter_count = 0usize;
+        let mut library_entries = Vec::new();
+        let mut total_entries = 0usize;
 
         for lib in libraries {
             if self.cancel_token.load(Ordering::SeqCst) {
@@ -541,17 +551,54 @@ impl ComicRdCore {
                 .map(|e| e.into_path())
                 .collect::<Vec<_>>();
             entries.sort();
+            total_entries += entries.len();
+            library_entries.push((lib.id, lib.path, entries));
+        }
+
+        let mut processed_entries = 0usize;
+        let mut comic_count = 0usize;
+        let mut chapter_count = 0usize;
+
+        self.update_scan_progress(Some(ScanProgress {
+            processed: 0,
+            total: total_entries,
+            current_path: String::new(),
+        }));
+
+        for (lib_id, lib_path, entries) in library_entries {
+            if self.cancel_token.load(Ordering::SeqCst) {
+                break;
+            }
 
             let mut conn = self
                 .conn
                 .lock()
                 .map_err(|_| "db lock poisoned".to_string())?;
-            let (c, ch) = scan_library_entries(&mut conn, lib.id, &lib.path, &entries)?;
+            let (c, ch) = scan_library_entries(
+                &mut conn,
+                lib_id,
+                &lib_path,
+                &entries,
+                |entry_path| {
+                    if self.cancel_token.load(Ordering::SeqCst) {
+                        return false;
+                    }
+                    processed_entries += 1;
+                    self.update_scan_progress(Some(ScanProgress {
+                        processed: processed_entries,
+                        total: total_entries,
+                        current_path: entry_path.to_string(),
+                    }));
+                    true
+                },
+            )?;
             drop(conn);
 
             comic_count += c;
             chapter_count += ch;
         }
+
+        self.update_scan_progress(None);
 
         Ok(ScanSummary {
             comics: comic_count,
@@ -593,12 +640,25 @@ impl ComicRdCore {
                 started_at: None,
                 finished_at: None,
                 last_summary: None,
+                progress: None,
                 error: Some("scan state lock poisoned".to_string()),
             },
         }
     }
 
+    pub fn cancel_scan_libraries(&self) -> Result<(), String> {
+        self.cancel_token.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn update_scan_progress(&self, progress: Option<ScanProgress>) {
+        if let Ok(mut state) = self.scan_state.lock() {
+            state.progress = progress;
+        }
+    }
+
     fn mark_scan_started(&self) -> Result<(), String> {
+        self.cancel_token.store(false, Ordering::SeqCst);
         let mut state = self
             .scan_state
             .lock()
@@ -606,14 +666,18 @@ impl ComicRdCore {
         state.running = true;
         state.started_at = Some(now_ts());
         state.finished_at = None;
+        state.last_summary = None;
+        state.progress = None;
         state.error = None;
         Ok(())
     }
 
     fn mark_scan_finished(&self, result: &Result<ScanSummary, String>) {
+        self.cancel_token.store(false, Ordering::SeqCst);
         if let Ok(mut state) = self.scan_state.lock() {
             state.running = false;
             state.finished_at = Some(now_ts());
+            state.progress = None;
             match result {
                 Ok(summary) => {
                     state.last_summary = Some(summary.clone());

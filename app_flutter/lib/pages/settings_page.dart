@@ -29,6 +29,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String? _message;
   bool _scanning = false;
   String? _scanStatus;
+  double _scanProgress = 0.0;
+  String? _scanCurrentPath;
   Timer? _scanPollTimer;
   ProviderSubscription<AsyncValue<Map<String, String>>>? _settingsMapSub;
 
@@ -140,10 +142,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             return Semantics(
               label: 'Version ${info.version}',
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: context.appAccent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
@@ -164,10 +163,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _librarySection(
-    AppStrings text,
-    AsyncValue<dynamic> sourceStatus,
-  ) {
+  Widget _librarySection(AppStrings text, AsyncValue<dynamic> sourceStatus) {
     return _settingsCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,11 +214,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   if (constraints.maxWidth < 520) {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        textField,
-                        const SizedBox(height: 8),
-                        buttons,
-                      ],
+                      children: [textField, const SizedBox(height: 8), buttons],
                     );
                   }
                   return Row(
@@ -258,20 +250,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         : const Icon(AppIcons.refresh, size: 16),
                     child: Text(_scanning ? text.scanning : text.scanLibrary),
                   ),
-                  if (_scanStatus != null) ...[
+                  if (_scanning) ...[
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _scanStatus!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.appMutedText,
-                        ),
-                      ),
+                    FButton(
+                      variant: .outline,
+                      onPress: _cancelScan,
+                      child: Text(text.cancelScan),
                     ),
                   ],
                 ],
               ),
+              if (_scanning && _scanCurrentPath != null) ...[
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: _scanProgress > 0 ? _scanProgress : null,
+                  minHeight: 6,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _scanStatus!,
+                  style: TextStyle(fontSize: 12, color: context.appMutedText),
+                ),
+              ] else if (!_scanning && _scanStatus != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _scanStatus!,
+                  style: TextStyle(fontSize: 12, color: context.appMutedText),
+                ),
+              ],
             ],
           ),
         ],
@@ -300,10 +307,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       },
       error: (error, _) => Text(
         error.toString(),
-        style: TextStyle(
-          fontSize: 12,
-          color: context.appColors.destructive,
-        ),
+        style: TextStyle(fontSize: 12, color: context.appColors.destructive),
       ),
       loading: () => const FCircularProgress.loader(),
     );
@@ -316,14 +320,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         children: [
           _sectionHeader(icon: AppIcons.scroll, title: text.readerSection),
           _settingsField(
-            label: '${text.defaultZoom} (${(readerSettings.zoom * 100).round()}%)',
+            label:
+                '${text.defaultZoom} (${(readerSettings.zoom * 100).round()}%)',
             child: FSlider(
               control: .managedContinuous(
                 initial: FSliderValue(max: readerSettings.zoom),
                 onChange: (value) => Future(() {
-                  ref
-                      .read(readerSettingsProvider.notifier)
-                      .setZoom(value.max);
+                  ref.read(readerSettingsProvider.notifier).setZoom(value.max);
                 }),
               ),
             ),
@@ -337,9 +340,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 onChange: (value) => Future(() {
                   ref
                       .read(readerSettingsProvider.notifier)
-                      .setPageGap(
-                        (value.max * 80).clamp(0, 80).toDouble(),
-                      );
+                      .setPageGap((value.max * 80).clamp(0, 80).toDouble());
                 }),
               ),
             ),
@@ -358,8 +359,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             value: readerSettings.unlimitedScrollUp,
             onChange: readerSettings.unlimitedScroll
                 ? (value) => ref
-                    .read(readerSettingsProvider.notifier)
-                    .setUnlimitedScrollUp(value)
+                      .read(readerSettingsProvider.notifier)
+                      .setUnlimitedScrollUp(value)
                 : null,
           ),
         ],
@@ -394,10 +395,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ref
                             .read(appSettingsProvider.notifier)
                             .setThemeMode(value);
-                        await ref.read(comicRdApiProvider).setSetting(
-                          'app_theme',
-                          jsonEncode(themeModeToSetting(value)),
-                        );
+                        await ref
+                            .read(comicRdApiProvider)
+                            .setSetting(
+                              'app_theme',
+                              jsonEncode(themeModeToSetting(value)),
+                            );
                       }
                     },
                   ),
@@ -435,13 +438,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     initial: appSettings.localeCode,
                     onChange: (value) async {
                       if (value != null) {
-                        ref
-                            .read(appSettingsProvider.notifier)
-                            .setLocale(value);
-                        await ref.read(comicRdApiProvider).setSetting(
-                          'app_locale',
-                          jsonEncode(value),
-                        );
+                        ref.read(appSettingsProvider.notifier).setLocale(value);
+                        await ref
+                            .read(comicRdApiProvider)
+                            .setSetting('app_locale', jsonEncode(value));
                       }
                     },
                   ),
@@ -495,11 +495,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   children: _intersperse(buttons, const SizedBox(height: 8)),
                 );
               }
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: buttons,
-              );
+              return Wrap(spacing: 8, runSpacing: 8, children: buttons);
             },
           ),
           if (_message != null) ...[
@@ -521,10 +517,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: context.appColors.border),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: child,
-      ),
+      child: Padding(padding: const EdgeInsets.all(20), child: child),
     );
   }
 
@@ -539,9 +532,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             const SizedBox(width: 8),
             Text(
               title,
-              style: context.appBodyStrongStyle.copyWith(
-                fontSize: 15,
-              ),
+              style: context.appBodyStrongStyle.copyWith(fontSize: 15),
             ),
           ],
         ),
@@ -560,9 +551,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       children: [
         Text(
           label,
-          style: context.appCaptionStyle.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: context.appCaptionStyle.copyWith(fontWeight: FontWeight.w600),
         ),
         if (helper != null) ...[
           const SizedBox(height: 2),
@@ -615,11 +604,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Widget? _activeIndicator(BuildContext context, bool selected) {
     return selected
-        ? Icon(
-            AppIcons.check,
-            size: 16,
-            color: context.appAccent,
-          )
+        ? Icon(AppIcons.check, size: 16, color: context.appAccent)
         : null;
   }
 
@@ -675,7 +660,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await api.setSetting('app_locale', jsonEncode(appSettings.localeCode));
     _invalidateDataProviders();
     if (mounted) {
-      setState(() => _message = stringsFor(appSettings.localeCode).settingsSaved);
+      setState(
+        () => _message = stringsFor(appSettings.localeCode).settingsSaved,
+      );
     }
   }
 
@@ -731,6 +718,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() {
       _scanning = true;
       _scanStatus = null;
+      _scanProgress = 0.0;
+      _scanCurrentPath = null;
     });
     try {
       final started = await api.startScanLibraries();
@@ -750,6 +739,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  Future<void> _cancelScan() async {
+    try {
+      await ref.read(comicRdApiProvider).cancelScanLibraries();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _scanStatus = e.toString();
+        });
+      }
+    }
+  }
+
   void _pollScanStatus() {
     _scanPollTimer?.cancel();
     _scanPollTimer = Timer.periodic(const Duration(milliseconds: 500), (
@@ -765,17 +766,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         }
         if (!status.running) {
           timer.cancel();
-          final summary = await api.scanLibraries();
+          final summary = status.lastSummary;
           setState(() {
             _scanning = false;
-            _scanStatus = t.scanCompleted
-                .replaceAll('{comics}', '${summary.comics}')
-                .replaceAll('{chapters}', '${summary.chapters}');
+            _scanProgress = 0.0;
+            _scanCurrentPath = null;
+            if (summary != null) {
+              _scanStatus = t.scanCompleted
+                  .replaceAll('{comics}', '${summary.comics}')
+                  .replaceAll('{chapters}', '${summary.chapters}');
+            } else {
+              _scanStatus ??= t.scanNoChange;
+            }
           });
           _invalidateDataProviders();
         } else {
+          final progress = status.progress;
           setState(() {
-            _scanStatus = '${t.scanProgress}...';
+            if (progress != null && progress.total > 0) {
+              _scanProgress = progress.processed / progress.total;
+              _scanCurrentPath = progress.currentPath.isNotEmpty
+                  ? progress.currentPath
+                  : null;
+              _scanStatus =
+                  '${t.scanProgress}: ${progress.processed} / ${progress.total}';
+            } else {
+              _scanProgress = 0.0;
+              _scanCurrentPath = null;
+              _scanStatus = '${t.scanProgress}...';
+            }
           });
         }
       } catch (e) {

@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `core`, `open_path`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<void> initApp({required String appDataDir}) =>
     RustLib.instance.api.crateApiInitApp(appDataDir: appDataDir);
@@ -23,11 +23,11 @@ Future<PlatformInt64> addLibrary({required String path}) =>
 Future<List<Library>> listLibraries() =>
     RustLib.instance.api.crateApiListLibraries();
 
-Future<ScanSummary> scanLibraries() =>
-    RustLib.instance.api.crateApiScanLibraries();
-
 Future<bool> startScanLibraries() =>
     RustLib.instance.api.crateApiStartScanLibraries();
+
+Future<void> cancelScanLibraries() =>
+    RustLib.instance.api.crateApiCancelScanLibraries();
 
 Future<LibraryScanStatus> getLibraryScanStatus() =>
     RustLib.instance.api.crateApiGetLibraryScanStatus();
@@ -324,6 +324,7 @@ class LibraryScanStatus {
   final PlatformInt64? startedAt;
   final PlatformInt64? finishedAt;
   final ScanSummary? lastSummary;
+  final ScanProgress? progress;
   final String? error;
 
   const LibraryScanStatus({
@@ -331,6 +332,7 @@ class LibraryScanStatus {
     this.startedAt,
     this.finishedAt,
     this.lastSummary,
+    this.progress,
     this.error,
   });
 
@@ -340,6 +342,7 @@ class LibraryScanStatus {
       startedAt.hashCode ^
       finishedAt.hashCode ^
       lastSummary.hashCode ^
+      progress.hashCode ^
       error.hashCode;
 
   @override
@@ -351,6 +354,7 @@ class LibraryScanStatus {
           startedAt == other.startedAt &&
           finishedAt == other.finishedAt &&
           lastSummary == other.lastSummary &&
+          progress == other.progress &&
           error == other.error;
 }
 
@@ -770,6 +774,31 @@ class SaveProgressPayload {
           lastPage == other.lastPage &&
           totalPages == other.totalPages &&
           isRead == other.isRead;
+}
+
+class ScanProgress {
+  final int processed;
+  final int total;
+  final String currentPath;
+
+  const ScanProgress({
+    required this.processed,
+    required this.total,
+    required this.currentPath,
+  });
+
+  @override
+  int get hashCode =>
+      processed.hashCode ^ total.hashCode ^ currentPath.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ScanProgress &&
+          runtimeType == other.runtimeType &&
+          processed == other.processed &&
+          total == other.total &&
+          currentPath == other.currentPath;
 }
 
 class ScanSummary {

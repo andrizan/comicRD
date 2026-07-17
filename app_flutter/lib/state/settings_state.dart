@@ -296,6 +296,7 @@ class AppStrings {
     required this.scanNoChange,
     required this.scanProgress,
     required this.scanCompleted,
+    required this.cancelScan,
   });
 
   // App identity
@@ -401,6 +402,7 @@ class AppStrings {
   final String scanNoChange;
   final String scanProgress;
   final String scanCompleted;
+  final String cancelScan;
 
   static const en = AppStrings(
     appName: 'ComicRD',
@@ -494,6 +496,7 @@ class AppStrings {
     scanNoChange: 'No Changes Detected',
     scanProgress: 'Scanning',
     scanCompleted: 'Scan Complete: {comics} Comics, {chapters} Chapters Found',
+    cancelScan: 'Cancel Scan',
   );
 
   static const id = AppStrings(
@@ -589,5 +592,6 @@ class AppStrings {
     scanProgress: 'Memindai',
     scanCompleted:
         'Pemindaian Selesai: {comics} Komik, {chapters} Chapter Ditemukan',
+    cancelScan: 'Batalkan Pemindaian',
   );
 }

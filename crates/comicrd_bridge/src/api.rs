@@ -44,11 +44,19 @@ pub struct ScanSummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanProgress {
+    pub processed: u32,
+    pub total: u32,
+    pub current_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LibraryScanStatus {
     pub running: bool,
     pub started_at: Option<i64>,
     pub finished_at: Option<i64>,
     pub last_summary: Option<ScanSummary>,
+    pub progress: Option<ScanProgress>,
     pub error: Option<String>,
 }
 
@@ -245,6 +253,16 @@ impl From<core::ScanSummary> for ScanSummary {
     }
 }
 
+impl From<core::ScanProgress> for ScanProgress {
+    fn from(value: core::ScanProgress) -> Self {
+        Self {
+            processed: value.processed as u32,
+            total: value.total as u32,
+            current_path: value.current_path,
+        }
+    }
+}
+
 impl From<core::LibraryScanStatus> for LibraryScanStatus {
     fn from(value: core::LibraryScanStatus) -> Self {
         Self {
@@ -252,6 +270,7 @@ impl From<core::LibraryScanStatus> for LibraryScanStatus {
             started_at: value.started_at,
             finished_at: value.finished_at,
             last_summary: value.last_summary.map(Into::into),
+            progress: value.progress.map(Into::into),
             error: value.error,
         }
     }
@@ -491,12 +510,12 @@ pub fn list_libraries() -> Result<Vec<Library>, String> {
         .collect())
 }
 
-pub fn scan_libraries() -> Result<ScanSummary, String> {
-    core()?.scan_libraries().map(Into::into)
-}
-
 pub fn start_scan_libraries() -> Result<bool, String> {
     core()?.start_scan_libraries()
+}
+
+pub fn cancel_scan_libraries() -> Result<(), String> {
+    core()?.cancel_scan_libraries()
 }
 
 pub fn get_library_scan_status() -> Result<LibraryScanStatus, String> {

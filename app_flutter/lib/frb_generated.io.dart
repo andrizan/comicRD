@@ -54,6 +54,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SaveProgressPayload dco_decode_box_autoadd_save_progress_payload(dynamic raw);
 
   @protected
+  ScanProgress dco_decode_box_autoadd_scan_progress(dynamic raw);
+
+  @protected
   ScanSummary dco_decode_box_autoadd_scan_summary(dynamic raw);
 
   @protected
@@ -135,6 +138,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress? dco_decode_opt_box_autoadd_reading_progress(dynamic raw);
 
   @protected
+  ScanProgress? dco_decode_opt_box_autoadd_scan_progress(dynamic raw);
+
+  @protected
   ScanSummary? dco_decode_opt_box_autoadd_scan_summary(dynamic raw);
 
   @protected
@@ -169,6 +175,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SaveProgressPayload dco_decode_save_progress_payload(dynamic raw);
+
+  @protected
+  ScanProgress dco_decode_scan_progress(dynamic raw);
 
   @protected
   ScanSummary dco_decode_scan_summary(dynamic raw);
@@ -235,6 +244,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SaveProgressPayload sse_decode_box_autoadd_save_progress_payload(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ScanProgress sse_decode_box_autoadd_scan_progress(
     SseDeserializer deserializer,
   );
 
@@ -338,6 +352,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ScanProgress? sse_decode_opt_box_autoadd_scan_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ScanSummary? sse_decode_opt_box_autoadd_scan_summary(
     SseDeserializer deserializer,
   );
@@ -384,6 +403,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SaveProgressPayload sse_decode_save_progress_payload(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ScanProgress sse_decode_scan_progress(SseDeserializer deserializer);
 
   @protected
   ScanSummary sse_decode_scan_summary(SseDeserializer deserializer);
@@ -460,6 +482,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_save_progress_payload(
     SaveProgressPayload self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_scan_progress(
+    ScanProgress self,
     SseSerializer serializer,
   );
 
@@ -593,6 +621,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_scan_progress(
+    ScanProgress? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_scan_summary(
     ScanSummary? self,
     SseSerializer serializer,
@@ -648,6 +682,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     SaveProgressPayload self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_scan_progress(ScanProgress self, SseSerializer serializer);
 
   @protected
   void sse_encode_scan_summary(ScanSummary self, SseSerializer serializer);
