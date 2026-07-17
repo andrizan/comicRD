@@ -190,6 +190,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                       _TopBar(
                         text: text,
                         themeMode: settings.themeMode,
+                        locale: settings.localeCode,
                         onThemeChanged: (mode) async {
                           ref
                               .read(appSettingsProvider.notifier)
@@ -580,12 +581,14 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.text,
     required this.themeMode,
+    required this.locale,
     required this.onThemeChanged,
     required this.onLocaleChanged,
   });
 
   final AppStrings text;
   final ThemeMode themeMode;
+  final String locale;
   final ValueChanged<ThemeMode> onThemeChanged;
   final ValueChanged<String> onLocaleChanged;
 
@@ -610,7 +613,11 @@ class _TopBar extends StatelessWidget {
                 onChanged: onThemeChanged,
               ),
               const SizedBox(width: 8),
-              _LocaleMenuButton(text: text, onChanged: onLocaleChanged),
+              _LocaleMenuButton(
+                text: text,
+                locale: locale,
+                onChanged: onLocaleChanged,
+              ),
             ],
           ),
         ),
@@ -637,6 +644,7 @@ class _ThemeMenuButton extends StatelessWidget {
       ThemeMode.light => AppIcons.sun,
       ThemeMode.system => AppIcons.monitor,
     };
+    final activeColor = context.appAccent;
     return FPopoverMenu(
       menuAnchor: .bottomEnd,
       childAnchor: .topEnd,
@@ -646,25 +654,37 @@ class _ThemeMenuButton extends StatelessWidget {
             FItem(
               prefix: Icon(
                 AppIcons.monitor,
-                color: themeMode == ThemeMode.system ? context.appAccent : null,
+                color: themeMode == ThemeMode.system ? activeColor : null,
               ),
               title: Text(text.themeSystem),
+              suffix: themeMode == ThemeMode.system
+                  ? Icon(AppIcons.check, size: 16, color: activeColor)
+                  : null,
+              selected: themeMode == ThemeMode.system,
               onPress: () => onChanged(ThemeMode.system),
             ),
             FItem(
               prefix: Icon(
                 AppIcons.sun,
-                color: themeMode == ThemeMode.light ? context.appAccent : null,
+                color: themeMode == ThemeMode.light ? activeColor : null,
               ),
               title: Text(text.themeLight),
+              suffix: themeMode == ThemeMode.light
+                  ? Icon(AppIcons.check, size: 16, color: activeColor)
+                  : null,
+              selected: themeMode == ThemeMode.light,
               onPress: () => onChanged(ThemeMode.light),
             ),
             FItem(
               prefix: Icon(
                 AppIcons.moon,
-                color: themeMode == ThemeMode.dark ? context.appAccent : null,
+                color: themeMode == ThemeMode.dark ? activeColor : null,
               ),
               title: Text(text.themeDark),
+              suffix: themeMode == ThemeMode.dark
+                  ? Icon(AppIcons.check, size: 16, color: activeColor)
+                  : null,
+              selected: themeMode == ThemeMode.dark,
               onPress: () => onChanged(ThemeMode.dark),
             ),
           ],
@@ -680,13 +700,19 @@ class _ThemeMenuButton extends StatelessWidget {
 }
 
 class _LocaleMenuButton extends StatelessWidget {
-  const _LocaleMenuButton({required this.text, required this.onChanged});
+  const _LocaleMenuButton({
+    required this.text,
+    required this.locale,
+    required this.onChanged,
+  });
 
   final AppStrings text;
+  final String locale;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final activeColor = context.appAccent;
     return FPopoverMenu(
       menuAnchor: .bottomEnd,
       childAnchor: .topEnd,
@@ -696,11 +722,19 @@ class _LocaleMenuButton extends StatelessWidget {
             FItem(
               prefix: const Text('🇺🇸'),
               title: Text(text.english),
+              suffix: locale == 'en'
+                  ? Icon(AppIcons.check, size: 16, color: activeColor)
+                  : null,
+              selected: locale == 'en',
               onPress: () => onChanged('en'),
             ),
             FItem(
               prefix: const Text('🇮🇩'),
               title: Text(text.indonesian),
+              suffix: locale == 'id'
+                  ? Icon(AppIcons.check, size: 16, color: activeColor)
+                  : null,
+              selected: locale == 'id',
               onPress: () => onChanged('id'),
             ),
           ],

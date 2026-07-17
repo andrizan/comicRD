@@ -276,6 +276,7 @@ class AppStrings {
     // Settings panel
     required this.librarySection,
     required this.librarySource,
+    required this.librarySourceDescription,
     required this.browseDirectory,
     required this.refreshSourceStatus,
     required this.readerSection,
@@ -380,6 +381,7 @@ class AppStrings {
   // Settings panel
   final String librarySection;
   final String librarySource;
+  final String librarySourceDescription;
   final String browseDirectory;
   final String refreshSourceStatus;
   final String readerSection;
@@ -473,6 +475,7 @@ class AppStrings {
     downloaded: 'Downloaded',
     librarySection: 'Library',
     librarySource: 'Library Source',
+    librarySourceDescription: 'The root folder containing your comics',
     browseDirectory: 'Browse Directory',
     refreshSourceStatus: 'Refresh Source Status',
     readerSection: 'Reader',
@@ -566,6 +569,7 @@ class AppStrings {
     downloaded: 'Diunduh',
     librarySection: 'Pustaka',
     librarySource: 'Sumber Pustaka',
+    librarySourceDescription: 'Folder root yang berisi komik Anda',
     browseDirectory: 'Pilih Direktori',
     refreshSourceStatus: 'Perbarui Status Sumber',
     readerSection: 'Reader',

@@ -42,6 +42,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     visibleCount: 0,
     hasMore: false,
   );
+  List<bridge.RawComic> _rawComics = const [];
   int _totalSizeBytes = 0;
 
   @override
@@ -84,9 +85,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
               0,
               (sum, comic) => sum + comic.sizeBytes.toInt(),
             );
-            if (total != _totalSizeBytes) {
+            final needsComicsUpdate = !identical(comics, _rawComics);
+            final needsTotalUpdate = total != _totalSizeBytes;
+            if (needsComicsUpdate || needsTotalUpdate) {
               setState(() {
-                _totalSizeBytes = total;
+                if (needsComicsUpdate) _rawComics = comics;
+                if (needsTotalUpdate) _totalSizeBytes = total;
               });
             }
           },
@@ -327,12 +331,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           LibraryTab.bookmarks => _BookmarkList(
                             text: text,
                             bookmarks: bookmarks,
-                            comics:
-                                ref
-                                    .watch(rawLibraryComicsProvider)
-                                    .asData
-                                    ?.value ??
-                                const [],
+                            comics: _rawComics,
                             displayMode: preferences.displayMode,
                             controller: _bookmarksScroll,
                             emptyLabel: text.emptyLibrary,
