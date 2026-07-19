@@ -23,6 +23,61 @@ import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
 import '../utils/forui_theme.dart';
 
+/// Standardized page layout for the reader.
+///
+/// Pages are normalized to a comfortable pixel width on PC screens while
+/// preserving their original orientation. Portrait pages use a narrower
+/// standard; landscape pages use a wider standard so spreads remain readable.
+class _ReaderPageLayout {
+  static const double _portraitTargetWidth = 1000.0;
+  static const double _landscapeTargetWidth = 1500.0;
+  static const double _minDisplayWidth = 240.0;
+  static const double _viewportWidthPadding = 24.0;
+
+  static double maxDisplayWidth(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return math.max(width - _viewportWidthPadding, _minDisplayWidth);
+  }
+
+  static bool _isLandscape(bridge.PageInfo page) {
+    final width = page.width ?? 0;
+    final height = page.height ?? 0;
+    if (width <= 0 || height <= 0) return false;
+    return width > height;
+  }
+
+  static double _targetWidth(bridge.PageInfo page) {
+    return _isLandscape(page) ? _landscapeTargetWidth : _portraitTargetWidth;
+  }
+
+  static double displayWidth(
+    bridge.PageInfo page,
+    double zoom,
+    double maxWidth,
+  ) {
+    final target = _targetWidth(page) * zoom;
+    return target.clamp(_minDisplayWidth, maxWidth);
+  }
+
+  static double displayHeight(
+    bridge.PageInfo page,
+    double zoom,
+    double maxWidth,
+  ) {
+    final width = displayWidth(page, zoom, maxWidth);
+    return width / aspectRatio(page);
+  }
+
+  static double aspectRatio(bridge.PageInfo page) {
+    final width = page.width ?? 900;
+    final height = page.height ?? 1300;
+    if (width <= 0 || height <= 0) {
+      return 900 / 1300;
+    }
+    return width / height;
+  }
+}
+
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({super.key, required this.chapterId});
 
@@ -990,13 +1045,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return offset.clamp(0, _scroll.position.maxScrollExtent).toDouble();
   }
 
-  static double _pageDisplayHeight(bridge.PageInfo page, double zoom) {
-    final width = page.width ?? 900;
-    final height = page.height ?? 1300;
-    if (width <= 0 || height <= 0) {
-      return 1300 * zoom;
-    }
-    return height * zoom;
+  double _pageDisplayHeight(bridge.PageInfo page, double zoom) {
+    return _ReaderPageLayout.displayHeight(
+      page,
+      zoom,
+      _ReaderPageLayout.maxDisplayWidth(context),
+    );
   }
 
   void _showToolbar() {
@@ -1079,22 +1133,26 @@ class _ReaderPageItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final aspectRatio = _aspectRatio(page);
-    final displayWidth = _displayWidth(page, zoom);
+    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
+    final displayWidth = _ReaderPageLayout.displayWidth(page, zoom, maxWidth);
+    final aspectRatio = _ReaderPageLayout.aspectRatio(page);
     final rendered = ref.watch(
       renderedPageProvider(
         RenderedPageRequest(chapterId: chapterId, pageIndex: page.index),
       ),
     );
     return rendered.when(
-      data: (page) => Center(
+      data: (renderedPage) => Center(
         child: SizedBox(
-          width: page.width == 0 ? null : page.width.toDouble() * zoom,
-          child: Image.memory(
-            page.bytes,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
-            fit: BoxFit.contain,
+          width: displayWidth,
+          child: AspectRatio(
+            aspectRatio: aspectRatio,
+            child: Image.memory(
+              renderedPage.bytes,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
       ),
@@ -1106,23 +1164,6 @@ class _ReaderPageItem extends ConsumerWidget {
       loading: () =>
           _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
     );
-  }
-
-  static double _displayWidth(bridge.PageInfo page, double zoom) {
-    final width = page.width ?? 900;
-    if (width <= 0) {
-      return 900 * zoom;
-    }
-    return width * zoom;
-  }
-
-  static double _aspectRatio(bridge.PageInfo page) {
-    final width = page.width ?? 900;
-    final height = page.height ?? 1300;
-    if (width <= 0 || height <= 0) {
-      return 900 / 1300;
-    }
-    return width / height;
   }
 }
 
@@ -1326,6 +1367,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                           : text.addFavorite,
                       icon: AppIcons.star,
                       active: isFavorited,
+                      activeColor: context.appReader.star,
                       onPressed: onToggleFavorite,
                     ),
                     _ReferenceReaderIconButton(
@@ -1334,6 +1376,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                           : text.addBookmark,
                       icon: AppIcons.bookmark,
                       active: isPageBookmarked,
+                      activeColor: context.appReader.star,
                       onPressed: onTogglePageBookmark,
                     ),
                     const SizedBox(width: 4),
@@ -1386,6 +1429,7 @@ class _ReferenceReaderIconButton extends StatefulWidget {
     required this.icon,
     required this.onPressed,
     this.active = false,
+    this.activeColor,
     this.compact = false,
   });
 
@@ -1393,6 +1437,7 @@ class _ReferenceReaderIconButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback? onPressed;
   final bool active;
+  final Color? activeColor;
   final bool compact;
 
   @override
@@ -1408,9 +1453,19 @@ class _ReferenceReaderIconButtonState
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     final size = widget.compact ? 38.0 : 40.0;
+    final activeColor = widget.activeColor;
+    final isActiveColored = widget.active && activeColor != null;
     final fgOpacity = enabled ? 0.78 : 0.28;
     final bgOpacity = (widget.active ? 0.14 : (_hovered && enabled ? 0.10 : 0))
         .toDouble();
+    final borderColor = isActiveColored
+        ? activeColor.withValues(alpha: 0.60)
+        : Colors.white.withValues(
+            alpha: widget.active ? 0.36 : 0.18,
+          );
+    final iconColor = isActiveColored
+        ? activeColor.withValues(alpha: enabled ? 1.0 : 0.40)
+        : Colors.white.withValues(alpha: fgOpacity);
     return Tooltip(
       message: widget.tooltip,
       child: MouseRegion(
@@ -1428,16 +1483,12 @@ class _ReferenceReaderIconButtonState
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: bgOpacity),
               borderRadius: BorderRadius.circular(widget.compact ? 999 : 8),
-              border: Border.all(
-                color: Colors.white.withValues(
-                  alpha: widget.active ? 0.36 : 0.18,
-                ),
-              ),
+              border: Border.all(color: borderColor),
             ),
             child: Icon(
               widget.icon,
               size: widget.compact ? 16 : 18,
-              color: Colors.white.withValues(alpha: fgOpacity),
+              color: iconColor,
             ),
           ),
         ),

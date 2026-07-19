@@ -587,7 +587,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       bytes: Uint8List.fromList(_onePixelPng),
       mime: 'image/png',
       width: 900,
-      height: 1300,
+      height: pageHeight,
     );
   }
 

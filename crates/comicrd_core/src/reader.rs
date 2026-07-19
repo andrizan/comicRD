@@ -1,5 +1,8 @@
+use std::path::Path;
+
 use rusqlite::{params, Connection};
 
+use crate::chapter::comic_title_for_path;
 use crate::database::now_ts;
 use crate::{
     Bookmark, ComicBookmark, ReadingHistoryEntry, ReadingProgress, SaveBookmarkPayload,
@@ -136,8 +139,16 @@ pub(crate) fn list_all_bookmarks_conn(conn: &Connection) -> Result<Vec<ComicBook
             })
         })
         .map_err(|e| format!("failed querying comic bookmarks: {e}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("failed collecting comic bookmarks: {e}"))
+    let mut bookmarks = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed collecting comic bookmarks: {e}"))?;
+    for bookmark in &mut bookmarks {
+        if bookmark.comic_title.trim().is_empty() {
+            bookmark.comic_title =
+                comic_title_for_path(Path::new(&bookmark.comic_source_path));
+        }
+    }
+    Ok(bookmarks)
 }
 
 pub(crate) fn add_comic_bookmark_conn(

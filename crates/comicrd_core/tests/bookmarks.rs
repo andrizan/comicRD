@@ -89,6 +89,29 @@ fn comic_bookmarks_round_trip() {
 }
 
 #[test]
+fn comic_bookmark_title_falls_back_to_path_when_not_scanned() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    fs::create_dir_all(&comic).expect("comic");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+
+    // Bookmark a comic without opening any chapter (so it is not in the comics table).
+    core.add_comic_bookmark(&comic.to_string_lossy())
+        .expect("add comic bookmark");
+    let comic_bookmarks = core.list_all_bookmarks().expect("list comic bookmarks");
+    assert_eq!(comic_bookmarks.len(), 1);
+    assert_eq!(comic_bookmarks[0].comic_title, "Comic A");
+}
+
+#[test]
 fn chapter_favorites_round_trip() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
