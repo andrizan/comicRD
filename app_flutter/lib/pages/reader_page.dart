@@ -1460,9 +1460,7 @@ class _ReferenceReaderIconButtonState
         .toDouble();
     final borderColor = isActiveColored
         ? activeColor.withValues(alpha: 0.60)
-        : Colors.white.withValues(
-            alpha: widget.active ? 0.36 : 0.18,
-          );
+        : Colors.white.withValues(alpha: widget.active ? 0.36 : 0.18);
     final iconColor = isActiveColored
         ? activeColor.withValues(alpha: enabled ? 1.0 : 0.40)
         : Colors.white.withValues(alpha: fgOpacity);
