@@ -228,9 +228,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final isFavorited =
         chapterSourcePath.isNotEmpty &&
         favoritePaths.contains(chapterSourcePath);
-    final isComicBookmarked = comicPath.isNotEmpty
-        ? ref.watch(comicBookmarkedProvider(comicPath)).asData?.value ?? false
-        : false;
+    final isComicBookmarked =
+        ref.watch(comicBookmarkedProvider(comicPath)).asData?.value ?? false;
     return KeyboardListener(
       autofocus: true,
       focusNode: _focusNode,
