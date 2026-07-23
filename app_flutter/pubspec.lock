@@ -305,10 +305,10 @@ packages:
     dependency: "direct main"
     description:
       name: forui
-      sha256: "6081cd95782b736239112edf00fbf3b9238fa953f422541046c8d2bf639d5ba0"
+      sha256: d55f88f53f6bc0c6e435370a9875e75e687cb5f8e7c82a41c94e8d05e80d0763
       url: "https://pub.dev"
     source: hosted
-    version: "0.24.0"
+    version: "0.24.2"
   forui_assets:
     dependency: "direct main"
     description:
