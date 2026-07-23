@@ -228,16 +228,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final isFavorited =
         chapterSourcePath.isNotEmpty &&
         favoritePaths.contains(chapterSourcePath);
-    final chapterBookmarksAsync = ref.watch(
-      chapterBookmarksProvider(widget.chapterId),
-    );
-    final chapterBookmarks = chapterBookmarksAsync.asData?.value ?? [];
-    final isCurrentPageBookmarked = chapterBookmarks.any(
-      (b) => b.page == _currentPage,
-    );
-    final currentBookmarkId = isCurrentPageBookmarked
-        ? chapterBookmarks.firstWhere((b) => b.page == _currentPage).id
-        : null;
+    final isComicBookmarked = comicPath.isNotEmpty
+        ? ref.watch(comicBookmarkedProvider(comicPath)).asData?.value ?? false
+        : false;
     return KeyboardListener(
       autofocus: true,
       focusNode: _focusNode,
@@ -303,7 +296,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             fullscreen: _fullscreen,
                             unlimitedScroll: readerSettings.unlimitedScroll,
                             isFavorited: isFavorited,
-                            isPageBookmarked: isCurrentPageBookmarked,
+                            isComicBookmarked: isComicBookmarked,
                             onClose: () => _close(data),
                             onPreviousPage: () => _jumpBy(-1),
                             onNextPage: () => _jumpBy(1),
@@ -338,8 +331,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             },
                             onToggleFavorite: () =>
                                 _toggleFavorite(chapterSourcePath, comicPath),
-                            onTogglePageBookmark: () =>
-                                _togglePageBookmark(currentBookmarkId),
+                            onToggleComicBookmark: () =>
+                                _toggleComicBookmark(comicPath),
                           ),
                         ),
                       ),
@@ -1103,20 +1096,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.invalidate(chapterFavoritesProvider(comicSourcePath));
   }
 
-  Future<void> _togglePageBookmark(int? bookmarkId) async {
+  Future<void> _toggleComicBookmark(String comicPath) async {
+    if (comicPath.isEmpty) return;
     final api = ref.read(comicRdApiProvider);
-    if (bookmarkId != null) {
-      await api.removeBookmark(bookmarkId);
+    final bookmarked =
+        ref.read(comicBookmarkedProvider(comicPath)).asData?.value ?? false;
+    if (bookmarked) {
+      await api.removeComicBookmark(comicPath);
     } else {
-      await api.addBookmark(
-        bridge.SaveBookmarkPayload(
-          chapterId: widget.chapterId,
-          page: _currentPage,
-          note: '',
-        ),
-      );
+      await api.addComicBookmark(comicPath);
     }
-    ref.invalidate(chapterBookmarksProvider(widget.chapterId));
+    ref.invalidate(comicBookmarkedProvider(comicPath));
+    ref.invalidate(allBookmarksProvider);
   }
 }
 
@@ -1248,7 +1239,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.fullscreen,
     required this.unlimitedScroll,
     required this.isFavorited,
-    required this.isPageBookmarked,
+    required this.isComicBookmarked,
     required this.onClose,
     required this.onPreviousPage,
     required this.onNextPage,
@@ -1259,7 +1250,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.onToggleFullscreen,
     required this.onToggleUnlimitedScroll,
     required this.onToggleFavorite,
-    required this.onTogglePageBookmark,
+    required this.onToggleComicBookmark,
   });
 
   final AppStrings text;
@@ -1270,7 +1261,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final bool fullscreen;
   final bool unlimitedScroll;
   final bool isFavorited;
-  final bool isPageBookmarked;
+  final bool isComicBookmarked;
   final VoidCallback onClose;
   final VoidCallback onPreviousPage;
   final VoidCallback onNextPage;
@@ -1281,7 +1272,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final VoidCallback onToggleFullscreen;
   final VoidCallback onToggleUnlimitedScroll;
   final VoidCallback onToggleFavorite;
-  final VoidCallback onTogglePageBookmark;
+  final VoidCallback onToggleComicBookmark;
 
   @override
   Widget build(BuildContext context) {
@@ -1371,13 +1362,13 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       onPressed: onToggleFavorite,
                     ),
                     _ReferenceReaderIconButton(
-                      tooltip: isPageBookmarked
+                      tooltip: isComicBookmarked
                           ? text.removeBookmark
                           : text.addBookmark,
                       icon: AppIcons.bookmark,
-                      active: isPageBookmarked,
+                      active: isComicBookmarked,
                       activeColor: context.appReader.star,
-                      onPressed: onTogglePageBookmark,
+                      onPressed: onToggleComicBookmark,
                     ),
                     const SizedBox(width: 4),
                     _ReaderControlChip(
