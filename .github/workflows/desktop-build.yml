@@ -166,7 +166,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/dav1d-install
-          key: dav1d-1.5.4-windows-x64-v1
+          key: dav1d-1.5.4-windows-x64-v2
 
       - name: Install packaging tools
         run: choco install pkgconfiglite innosetup -y

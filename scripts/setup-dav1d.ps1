@@ -29,28 +29,34 @@ ForEach-Object {
 
 Write-Host "==> Installing tools..."
 
+# Memastikan Scoop sudah terinstal di PC Anda
+if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+    throw "Scoop tidak ditemukan. Jalankan: iwr -useb get.scoop.sh | iex"
+}
+
 if (-not (Get-Command meson -ErrorAction SilentlyContinue)) {
     pip install meson
 }
 
 if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
-    choco install ninja -y
+    scoop install ninja
 }
 
 if (-not (Get-Command pkg-config -ErrorAction SilentlyContinue)) {
-    choco install pkgconfiglite -y
+    scoop install pkgconfiglite
 }
 
 if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
-    choco install nasm -y
+    scoop install nasm
 }
 
-$temp = Join-Path $env:TEMP "dav1d-build"
-$prefix = Join-Path $env:LOCALAPPDATA "dav1d"
+# Gunakan forward slash (/) agar aman untuk Meson dan Pkg-config
+$temp = (Join-Path $env:TEMP "dav1d-build") -replace '\\', '/'
+$prefix = (Join-Path $env:LOCALAPPDATA "dav1d") -replace '\\', '/'
 
 Remove-Item $temp -Recurse -Force -ErrorAction Ignore
 
-git clone --depth 1 --branch 1.5.3 https://code.videolan.org/videolan/dav1d.git $temp
+git clone --depth 1 --branch 1.5.4 https://code.videolan.org/videolan/dav1d.git $temp
 
 Push-Location $temp
 
@@ -67,7 +73,7 @@ meson install -C build
 
 Pop-Location
 
-$pkg = "$prefix\lib\pkgconfig"
+$pkg = "$prefix/lib/pkgconfig"
 
 [Environment]::SetEnvironmentVariable(
     "PKG_CONFIG_PATH",
