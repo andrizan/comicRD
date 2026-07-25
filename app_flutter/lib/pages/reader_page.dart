@@ -913,6 +913,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ref.read(readerDataProvider(currentChapterId)).asData?.value ??
         (_lastReaderChapterId == currentChapterId ? _lastReaderData : null);
     await _saveProgressDirect(chapterId: currentChapterId, data: data);
+
+    // Update last opened chapter immediately so the comic page shows the
+    // correct "continue reading" target even if the app is killed right after.
+    final comicPath = data?.context?.comicSourcePath;
+    if (comicPath != null && comicPath.isNotEmpty) {
+      try {
+        final newCtx = await _api.getChapterContext(chapterId);
+        final newChapterPath = newCtx?.chapterSourcePath ?? '';
+        if (newChapterPath.isNotEmpty) {
+          ref
+              .read(lastOpenedChapterProvider.notifier)
+              .remember(comicPath, newChapterPath);
+        }
+      } catch (_) {
+        // Non-critical: worst case the old chapter stays as "last opened".
+      }
+    }
+
     ref.invalidate(readerDataProvider(currentChapterId));
     await _releaseChapterMemory(
       chapterId: currentChapterId,
