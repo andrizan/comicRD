@@ -218,13 +218,21 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             .map((bookmark) => bookmark.comicSourcePath)
             .toSet() ??
         const <String>{};
+
+    // Sync search controller when tab changes
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _updateBackToTopVisibility(_activeScrollController());
-        ref
-            .read(libraryCountProvider.notifier)
-            .update(comicsState.items.length);
+      if (!mounted) return;
+      final currentQuery = preferences.query;
+      if (_search.text != currentQuery) {
+        _search.text = currentQuery;
+        _search.selection = TextSelection.fromPosition(
+          TextPosition(offset: currentQuery.length),
+        );
       }
+      _updateBackToTopVisibility(_activeScrollController());
+      ref
+          .read(libraryCountProvider.notifier)
+          .update(comicsState.items.length);
     });
 
     return KeyboardListener(
@@ -332,6 +340,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                             text: text,
                             bookmarks: bookmarks,
                             comics: _rawComics,
+                            query: preferences.query,
                             displayMode: preferences.displayMode,
                             controller: _bookmarksScroll,
                             emptyLabel: text.emptyLibrary,
@@ -1655,6 +1664,7 @@ class _BookmarkList extends StatelessWidget {
     required this.text,
     required this.bookmarks,
     required this.comics,
+    required this.query,
     required this.displayMode,
     required this.controller,
     required this.emptyLabel,
@@ -1667,6 +1677,7 @@ class _BookmarkList extends StatelessWidget {
   final AppStrings text;
   final AsyncValue<List<bridge.ComicBookmark>> bookmarks;
   final List<bridge.RawComic> comics;
+  final String query;
   final LibraryDisplayMode displayMode;
   final ScrollController controller;
   final String emptyLabel;
@@ -1684,7 +1695,19 @@ class _BookmarkList extends StatelessWidget {
     }
     return bookmarks.when(
       data: (items) {
-        if (items.isEmpty) {
+        final filteredQuery = query.trim().toLowerCase();
+        final filtered = filteredQuery.isEmpty
+            ? items
+            : items
+                .where(
+                  (item) =>
+                      item.comicTitle.toLowerCase().contains(filteredQuery) ||
+                      item.comicSourcePath
+                          .toLowerCase()
+                          .contains(filteredQuery),
+                )
+                .toList();
+        if (filtered.isEmpty) {
           return _EmptyState(label: emptyLabel);
         }
         return NotificationListener<ScrollNotification>(
@@ -1699,9 +1722,9 @@ class _BookmarkList extends StatelessWidget {
                     crossAxisSpacing: 20,
                     mainAxisSpacing: 20,
                   ),
-                  itemCount: items.length,
+                  itemCount: filtered.length,
                   itemBuilder: (context, index) {
-                    final item = items[index];
+                    final item = filtered[index];
                     return _BookmarkCard(
                       text: text,
                       bookmark: item,
@@ -1720,10 +1743,10 @@ class _BookmarkList extends StatelessWidget {
               : ListView.separated(
                   controller: controller,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  itemCount: items.length,
+                  itemCount: filtered.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 16),
                   itemBuilder: (context, index) {
-                    final item = items[index];
+                    final item = filtered[index];
                     return _BookmarkCard(
                       text: text,
                       bookmark: item,

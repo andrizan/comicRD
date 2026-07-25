@@ -170,7 +170,9 @@ enum LibraryTab { history, library, bookmarks }
 
 class LibraryPreferences {
   const LibraryPreferences({
-    this.query = '',
+    this.libraryQuery = '',
+    this.bookmarksQuery = '',
+    this.historyQuery = '',
     this.sortBy = bridge.SortBy.name,
     this.sortDir = bridge.SortDir.asc,
     this.viewMode = LibraryViewMode.all,
@@ -178,22 +180,34 @@ class LibraryPreferences {
     this.selectedTab = LibraryTab.library,
   });
 
-  final String query;
+  final String libraryQuery;
+  final String bookmarksQuery;
+  final String historyQuery;
   final bridge.SortBy sortBy;
   final bridge.SortDir sortDir;
   final LibraryViewMode viewMode;
   final LibraryDisplayMode displayMode;
   final LibraryTab selectedTab;
 
+  String get query => switch (selectedTab) {
+    LibraryTab.library => libraryQuery,
+    LibraryTab.bookmarks => bookmarksQuery,
+    LibraryTab.history => historyQuery,
+  };
+
   LibraryPreferences copyWith({
-    String? query,
+    String? libraryQuery,
+    String? bookmarksQuery,
+    String? historyQuery,
     bridge.SortBy? sortBy,
     bridge.SortDir? sortDir,
     LibraryViewMode? viewMode,
     LibraryDisplayMode? displayMode,
     LibraryTab? selectedTab,
   }) => LibraryPreferences(
-    query: query ?? this.query,
+    libraryQuery: libraryQuery ?? this.libraryQuery,
+    bookmarksQuery: bookmarksQuery ?? this.bookmarksQuery,
+    historyQuery: historyQuery ?? this.historyQuery,
     sortBy: sortBy ?? this.sortBy,
     sortDir: sortDir ?? this.sortDir,
     viewMode: viewMode ?? this.viewMode,
@@ -223,7 +237,11 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
   }
 
   void setQuery(String query) {
-    state = state.copyWith(query: query);
+    state = switch (state.selectedTab) {
+      LibraryTab.library => state.copyWith(libraryQuery: query),
+      LibraryTab.bookmarks => state.copyWith(bookmarksQuery: query),
+      LibraryTab.history => state.copyWith(historyQuery: query),
+    };
   }
 
   void setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) {
