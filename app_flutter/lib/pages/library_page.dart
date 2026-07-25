@@ -230,9 +230,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         );
       }
       _updateBackToTopVisibility(_activeScrollController());
-      ref
-          .read(libraryCountProvider.notifier)
-          .update(comicsState.items.length);
+      ref.read(libraryCountProvider.notifier).update(comicsState.items.length);
     });
 
     return KeyboardListener(
@@ -1699,14 +1697,14 @@ class _BookmarkList extends StatelessWidget {
         final filtered = filteredQuery.isEmpty
             ? items
             : items
-                .where(
-                  (item) =>
-                      item.comicTitle.toLowerCase().contains(filteredQuery) ||
-                      item.comicSourcePath
-                          .toLowerCase()
-                          .contains(filteredQuery),
-                )
-                .toList();
+                  .where(
+                    (item) =>
+                        item.comicTitle.toLowerCase().contains(filteredQuery) ||
+                        item.comicSourcePath.toLowerCase().contains(
+                          filteredQuery,
+                        ),
+                  )
+                  .toList();
         if (filtered.isEmpty) {
           return _EmptyState(label: emptyLabel);
         }
