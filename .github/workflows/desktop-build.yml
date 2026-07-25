@@ -37,6 +37,9 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -87,6 +90,9 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
 
       - name: Install Linux build dependencies
         run: |
@@ -148,15 +154,36 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install native AVIF dependencies
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      # dav1d dikompilasi dari source lewat meson — ini salah satu bagian
+      # paling lambat di job Windows. Di-cache berdasarkan versi dav1d,
+      # sehingga run berikutnya bisa langsung skip build selama versi
+      # dav1d (1.5.4) tidak berubah.
+      - name: Cache dav1d build
+        id: cache-dav1d
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/dav1d-install
+          key: dav1d-1.5.4-windows-x64-v1
+
+      - name: Install packaging tools
+        run: choco install pkgconfiglite innosetup -y
+
+      # nasm/ninja/meson hanya diperlukan untuk mengompilasi dav1d,
+      # jadi dilewati kalau cache dav1d sudah hit.
+      - name: Install dav1d build tools
+        if: steps.cache-dav1d.outputs.cache-hit != 'true'
         run: |
-          choco install nasm pkgconfiglite -y
+          choco install nasm -y
           if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
             choco install ninja -y
           }
           pip install meson
 
       - name: Build and install dav1d
+        if: steps.cache-dav1d.outputs.cache-hit != 'true'
         run: |
           $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           $vcvarsPath = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
@@ -166,11 +193,18 @@ jobs:
             }
           }
           $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
-          git clone --depth 1 --branch 1.5.3 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
+          git clone --depth 1 --branch 1.5.4 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
           cd $env:RUNNER_TEMP\dav1d-build
           meson setup build --prefix=$prefix --buildtype release --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
           meson compile -C build
           meson install -C build
+        shell: pwsh
+
+      # Selalu jalan (cache hit maupun miss) supaya PKG_CONFIG_PATH
+      # tetap ter-set untuk step-step berikutnya.
+      - name: Verify dav1d and export PKG_CONFIG_PATH
+        run: |
+          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
           $env:PKG_CONFIG_PATH = "$prefix/lib/pkgconfig"
           pkg-config --exists dav1d
           if ($LASTEXITCODE -ne 0) {
@@ -232,9 +266,6 @@ jobs:
           path: dist/comicrd-*-windows-x86_64.zip
           if-no-files-found: error
 
-      - name: Install Inno Setup
-        run: choco install innosetup -y
-
       - name: Build Windows installer
         shell: pwsh
         run: |
@@ -273,6 +304,9 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
 
       - name: Install native AVIF dependencies
         run: |
