@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:comicrd_flutter/app.dart';
 import 'package:comicrd_flutter/api/comicrd_api.dart';
@@ -265,6 +266,15 @@ class _FakeComicRdApi extends ComicRdApi {
   @override
   Future<List<String>> listChapterFavorites(String comicSourcePath) async {
     return const [];
+  }
+
+  @override
+  Future<Uint8List> getComicThumbnail(
+    String sourcePath, {
+    int maxWidth = 200,
+    int maxHeight = 300,
+  }) async {
+    return Uint8List(0);
   }
 }
 
