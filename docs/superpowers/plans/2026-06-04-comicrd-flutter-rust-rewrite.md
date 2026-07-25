@@ -6,7 +6,7 @@
 
 **Architecture:** Flutter becomes the desktop shell, renderer, routing, and UI runtime. Rust remains the owner of scanning, archive/page reading, SQLite metadata, progress/bookmarks/settings, backup/import, image resize, caching, and prefetch. Tauri, WebView, React, custom protocol image URLs, and Tauri commands are removed from the new app.
 
-**Tech Stack:** Flutter 3.44.1, Dart 3.12.1, Rust 1.95.0, `flutter_rust_bridge` v2, `go_router`, `flutter_riverpod`, SQLite through Rust `rusqlite`, `zip`, `image`, `lru`, `file_selector`, `path_provider`, `window_manager`.
+**Tech Stack:** Flutter 3.44.8, Dart 3.12.1, Rust 1.95.0, `flutter_rust_bridge` v2, `go_router`, `flutter_riverpod`, SQLite through Rust `rusqlite`, `zip`, `image`, `lru`, `file_selector`, `path_provider`, `window_manager`.
 
 ---
 
