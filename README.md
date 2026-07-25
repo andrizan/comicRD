@@ -68,8 +68,8 @@ Download the Linux tarball from GitHub Releases, extract it, and run the bundled
 executable:
 
 ```bash
-tar -xzf comicrd-1.1.1-linux-x86_64.tar.gz
-./comicrd-1.1.1-linux-x86_64/opt/comicrd/ComicRD
+tar -xzf comicrd-2.0.0-linux-x86_64.tar.gz
+./comicrd-2.0.0-linux-x86_64/opt/comicrd/ComicRD
 ```
 
 ### Local Pacman Package
@@ -77,8 +77,8 @@ tar -xzf comicrd-1.1.1-linux-x86_64.tar.gz
 On Arch-based systems, a local install package can be created from source:
 
 ```bash
-./scripts/package-arch-local.sh 1.1.1
-sudo pacman -U dist/arch/comicrd-bin-1.1.1-1-x86_64.pkg.tar.zst
+./scripts/package-arch-local.sh 2.0.0
+sudo pacman -U dist/arch/comicrd-bin-2.0.0-1-x86_64.pkg.tar.zst
 ```
 
 ## Build From Source
@@ -251,7 +251,7 @@ To build the Inno Setup installer (requires
 [Inno Setup](https://jrsoftware.org/isinfo.php) installed):
 
 ```bash
-ISCC.exe /D"AppVersion=2.1.4" app_flutter\windows\installer\comicrd-setup.iss
+ISCC.exe /D"AppVersion=2.0.0" app_flutter\windows\installer\comicrd-setup.iss
 ```
 
 The output is written to `dist/comicrd-{version}-windows-x86_64-setup.exe`.
@@ -270,15 +270,15 @@ flutter build macos --release
 Create the Linux release tarball used by GitHub Releases and AUR:
 
 ```bash
-./scripts/package-linux.sh 1.1.1
-./scripts/package-linux.sh 1.1.1a1
+./scripts/package-linux.sh 2.0.0
+./scripts/package-linux.sh 2.0.0a1
 ```
 
 The output is written to:
 
 ```text
-dist/comicrd-1.1.1-linux-x86_64.tar.gz
-dist/comicrd-1.1.1a1-linux-x86_64.tar.gz
+dist/comicrd-2.0.0-linux-x86_64.tar.gz
+dist/comicrd-2.0.0a1-linux-x86_64.tar.gz
 ```
 
 ## Repository Layout
