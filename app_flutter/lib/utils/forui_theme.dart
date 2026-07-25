@@ -223,6 +223,8 @@ class AppIcons {
   static const IconData plus = FLucideIcons.plus;
   static const IconData copyTitle = FLucideIcons.text;
   static const IconData copyPath = FLucideIcons.copy;
+  static const IconData info = FLucideIcons.info;
+  static const IconData code = FLucideIcons.code;
 }
 
 // ---------------------------------------------------------------------------

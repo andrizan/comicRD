@@ -283,6 +283,19 @@ class AppStrings {
     required this.defaultZoom,
     required this.pageGap,
     required this.applicationSection,
+    // Update
+    required this.updateSection,
+    required this.checkForUpdates,
+    required this.checkingForUpdates,
+    required this.appUpToDate,
+    required this.updateAvailable,
+    required this.downloadUpdate,
+    required this.viewRelease,
+    required this.updateCheckFailed,
+    // About
+    required this.aboutSection,
+    required this.aboutDescription,
+    required this.viewOnGithub,
     required this.backupSection,
     required this.exportBackup,
     required this.importBackup,
@@ -389,6 +402,19 @@ class AppStrings {
   final String defaultZoom;
   final String pageGap;
   final String applicationSection;
+  // Update
+  final String updateSection;
+  final String checkForUpdates;
+  final String checkingForUpdates;
+  final String appUpToDate;
+  final String updateAvailable;
+  final String downloadUpdate;
+  final String viewRelease;
+  final String updateCheckFailed;
+  // About
+  final String aboutSection;
+  final String aboutDescription;
+  final String viewOnGithub;
   final String backupSection;
   final String exportBackup;
   final String importBackup;
@@ -484,6 +510,17 @@ class AppStrings {
     defaultZoom: 'Default Zoom',
     pageGap: 'Page Gap',
     applicationSection: 'Application',
+    updateSection: 'Update',
+    checkForUpdates: 'Check for Updates',
+    checkingForUpdates: 'Checking...',
+    appUpToDate: 'App is up to date',
+    updateAvailable: 'Update available',
+    downloadUpdate: 'Download Installer',
+    viewRelease: 'View Release',
+    updateCheckFailed: 'Could not check for updates',
+    aboutSection: 'About',
+    aboutDescription: 'A desktop comic reader for local libraries.',
+    viewOnGithub: 'View on GitHub',
     backupSection: 'Backup',
     exportBackup: 'Export Backup',
     importBackup: 'Import Backup',
@@ -579,6 +616,17 @@ class AppStrings {
     defaultZoom: 'Zoom Default',
     pageGap: 'Jarak Halaman',
     applicationSection: 'Aplikasi',
+    updateSection: 'Pembaruan',
+    checkForUpdates: 'Periksa Pembaruan',
+    checkingForUpdates: 'Memeriksa...',
+    appUpToDate: 'Aplikasi sudah terbaru',
+    updateAvailable: 'Pembaruan tersedia',
+    downloadUpdate: 'Unduh Installer',
+    viewRelease: 'Lihat Rilis',
+    updateCheckFailed: 'Gagal memeriksa pembaruan',
+    aboutSection: 'Tentang',
+    aboutDescription: 'Pembaca komik desktop untuk pustaka lokal.',
+    viewOnGithub: 'Lihat di GitHub',
     backupSection: 'Cadangan',
     exportBackup: 'Ekspor Cadangan',
     importBackup: 'Impor Cadangan',

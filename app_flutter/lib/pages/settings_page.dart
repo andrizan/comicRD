@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../state/api_state.dart';
 import '../state/library_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
+import '../state/update_state.dart';
 import '../utils/forui_theme.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -105,7 +107,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       const SizedBox(height: 24),
                       _applicationSection(text, appSettings),
                       const SizedBox(height: 24),
+                      _updateSection(text),
+                      const SizedBox(height: 24),
                       _backupSection(text),
+                      const SizedBox(height: 24),
+                      _aboutSection(text),
                       const SizedBox(height: 32),
                     ],
                   ),
@@ -468,6 +474,125 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  Widget _updateSection(AppStrings text) {
+    final updateState = ref.watch(updateProvider);
+    return _settingsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(
+            icon: AppIcons.download,
+            title: text.updateSection,
+          ),
+          // Status-specific content
+          if (updateState.status == UpdateStatus.checking)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: FCircularProgress.loader(),
+              ),
+            ),
+          if (updateState.status == UpdateStatus.upToDate)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                text.appUpToDate,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.appColors.mutedForeground,
+                ),
+              ),
+            ),
+          if (updateState.status == UpdateStatus.error)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                text.updateCheckFailed,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.appColors.mutedForeground,
+                ),
+              ),
+            ),
+          if (updateState.status == UpdateStatus.available) ...[
+            Text(
+              '${text.updateAvailable}: v${updateState.info!.latestVersion}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (updateState.info!.releaseNotes.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.appColors.muted.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    updateState.info!.releaseNotes,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.appColors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FButton(
+                  onPress: () => _openReleasePage(
+                    updateState.info!.releaseUrl,
+                  ),
+                  prefix: const Icon(AppIcons.download, size: 16),
+                  child: Text(text.downloadUpdate),
+                ),
+                FButton(
+                  variant: .outline,
+                  onPress: () => _openReleasePage(
+                    updateState.info!.releaseUrl,
+                  ),
+                  child: Text(text.viewRelease),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Manual check button — always visible except while checking
+          if (updateState.status != UpdateStatus.checking)
+            FButton(
+              variant: .outline,
+              onPress: () =>
+                  ref.read(updateProvider.notifier).checkForUpdates(),
+              prefix: const Icon(AppIcons.refresh, size: 16),
+              child: Text(text.checkForUpdates),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _openReleasePage(String url) {
+    if (url.isEmpty) return;
+    Process.run('xdg-open', [url]).catchError((_) {
+      return Process.run('open', [url]).catchError((_) {
+        return Process.run('cmd', ['/c', 'start', url]).catchError((_) {
+          return ProcessResult(0, 0, '', '');
+        });
+      });
+    });
+  }
+
   Widget _backupSection(AppStrings text) {
     return _settingsCard(
       child: Column(
@@ -505,6 +630,58 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               title: Text(_message!),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _aboutSection(AppStrings text) {
+    return _settingsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(icon: AppIcons.info, title: text.aboutSection),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final info = snapshot.data;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    info != null ? 'ComicRD v${info.version}' : 'ComicRD',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    text.aboutDescription,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.appColors.mutedForeground,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FButton(
+                        variant: .outline,
+                        onPress: () => _openReleasePage(
+                          'https://github.com/andrizan/comicRD',
+                        ),
+                        prefix: const Icon(AppIcons.code, size: 16),
+                        child: Text(text.viewOnGithub),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );

@@ -210,6 +210,29 @@ jobs:
           path: dist/comicrd-*-windows-x86_64.zip
           if-no-files-found: error
 
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $Version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
+          if ($Version -notmatch '^\d+\.\d+\.\d+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$') {
+            if ($env:GITHUB_REF -like 'refs/tags/*') {
+              Write-Error ("Invalid tag: {0}. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix." -f $env:GITHUB_REF_NAME)
+              exit 1
+            }
+            $Version = "manual-${env:GITHUB_RUN_NUMBER}"
+          }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /D"AppVersion=$Version" "app_flutter\windows\installer\comicrd-setup.iss"
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: comicrd-windows-installer
+          path: dist/comicrd-*-windows-x86_64-setup.exe
+          if-no-files-found: error
+
   build-macos:
     name: Build macOS Bundle
     needs: quality
@@ -288,7 +311,8 @@ jobs:
           mkdir -p release-upload
           find release-artifacts -type f \( \
             -name "*.tar.gz" -o \
-            -name "*.zip" \
+            -name "*.zip" -o \
+            -name "*.exe" \
           \) -exec cp -v {} release-upload/ \;
           ls -la release-upload
           test "$(find release-upload -maxdepth 1 -type f | wc -l)" -gt 0

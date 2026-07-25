@@ -17,6 +17,7 @@ import 'state/api_state.dart';
 import 'state/library_state.dart';
 import 'state/settings_data_state.dart';
 import 'state/settings_state.dart';
+import 'state/update_state.dart';
 import 'utils/forui_theme.dart';
 
 final _router = GoRouter(
@@ -139,6 +140,12 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
               .read(libraryPreferencesProvider.notifier)
               .hydrateFromSettings(values);
           ref.read(readerSettingsProvider.notifier).hydrateFromSettings(values);
+          // Auto-check for updates after settings are hydrated.
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) {
+              ref.read(updateProvider.notifier).checkForUpdates();
+            }
+          });
         });
       });
     });
