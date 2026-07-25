@@ -50,21 +50,41 @@ class _ReaderPageLayout {
     return _isLandscape(page) ? _landscapeTargetWidth : _portraitTargetWidth;
   }
 
+  /// If a landscape page has the same actual width as the portrait page
+  /// above it, use the portrait target width so the column stays visually
+  /// consistent.
+  static double _effectiveTargetWidth(
+    bridge.PageInfo page,
+    bridge.PageInfo? prevPage,
+  ) {
+    if (!_isLandscape(page) || prevPage == null) {
+      return _targetWidth(page);
+    }
+    final curWidth = page.width ?? 0;
+    final prevWidth = prevPage.width ?? 0;
+    if (curWidth > 0 && curWidth == prevWidth) {
+      return _targetWidth(prevPage);
+    }
+    return _targetWidth(page);
+  }
+
   static double displayWidth(
     bridge.PageInfo page,
     double zoom,
-    double maxWidth,
-  ) {
-    final target = _targetWidth(page) * zoom;
+    double maxWidth, {
+    bridge.PageInfo? prevPage,
+  }) {
+    final target = _effectiveTargetWidth(page, prevPage) * zoom;
     return target.clamp(_minDisplayWidth, maxWidth);
   }
 
   static double displayHeight(
     bridge.PageInfo page,
     double zoom,
-    double maxWidth,
-  ) {
-    final width = displayWidth(page, zoom, maxWidth);
+    double maxWidth, {
+    bridge.PageInfo? prevPage,
+  }) {
+    final width = displayWidth(page, zoom, maxWidth, prevPage: prevPage);
     return width / aspectRatio(page);
   }
 
@@ -432,8 +452,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           final pageGap = index == data.pages.length - 1
               ? 0
               : readerSettings.pageGap;
-          return _pageDisplayHeight(data.pages[index], readerSettings.zoom) +
-              pageGap;
+          final prevPage = index > 0 ? data.pages[index - 1] : null;
+          return _pageDisplayHeight(
+            data.pages[index],
+            readerSettings.zoom,
+            prevPage: prevPage,
+          ) + pageGap;
         },
         padding: EdgeInsets.only(
           top: _topPadding,
@@ -452,6 +476,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     int index,
   ) {
     final page = data.pages[index];
+    final prevPage = index > 0 ? data.pages[index - 1] : null;
     return Padding(
       key: ValueKey(page.index),
       padding: EdgeInsets.only(
@@ -461,6 +486,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         chapterId: widget.chapterId,
         page: page,
         zoom: readerSettings.zoom,
+        prevPage: prevPage,
       ),
     );
   }
@@ -654,7 +680,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     var last = -1;
     var top = _topPadding;
     for (var i = 0; i < pages.length; i++) {
-      final bottom = top + _pageDisplayHeight(pages[i], zoom);
+      final prevPage = i > 0 ? pages[i - 1] : null;
+      final bottom = top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
       if (bottom >= visibleTop && top <= visibleBottom) {
         first = first == -1 ? i : first;
         last = i;
@@ -683,7 +710,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }) {
     var top = _topPadding;
     for (var i = 0; i < pages.length; i++) {
-      final bottom = top + _pageDisplayHeight(pages[i], zoom);
+      final prevPage = i > 0 ? pages[i - 1] : null;
+      final bottom = top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
       if (offset <= bottom || i == pages.length - 1) {
         return i;
       }
@@ -1049,17 +1077,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final target = page.clamp(0, pages.length - 1);
     var offset = _topPadding;
     for (var i = 0; i < target; i++) {
-      offset += _pageDisplayHeight(pages[i], settings.zoom);
+      final prevPage = i > 0 ? pages[i - 1] : null;
+      offset += _pageDisplayHeight(pages[i], settings.zoom, prevPage: prevPage);
       offset += settings.pageGap;
     }
     return offset.clamp(0, _scroll.position.maxScrollExtent).toDouble();
   }
 
-  double _pageDisplayHeight(bridge.PageInfo page, double zoom) {
+  double _pageDisplayHeight(
+    bridge.PageInfo page,
+    double zoom, {
+    bridge.PageInfo? prevPage,
+  }) {
     return _ReaderPageLayout.displayHeight(
       page,
       zoom,
       _ReaderPageLayout.maxDisplayWidth(context),
+      prevPage: prevPage,
     );
   }
 
@@ -1133,16 +1167,23 @@ class _ReaderPageItem extends ConsumerWidget {
     required this.chapterId,
     required this.page,
     required this.zoom,
+    this.prevPage,
   });
 
   final int chapterId;
   final bridge.PageInfo page;
   final double zoom;
+  final bridge.PageInfo? prevPage;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
-    final displayWidth = _ReaderPageLayout.displayWidth(page, zoom, maxWidth);
+    final displayWidth = _ReaderPageLayout.displayWidth(
+      page,
+      zoom,
+      maxWidth,
+      prevPage: prevPage,
+    );
     final aspectRatio = _ReaderPageLayout.aspectRatio(page);
     final rendered = ref.watch(
       renderedPageProvider(
