@@ -67,6 +67,10 @@ static void my_application_activate(GApplication* application) {
     }
   }
 
+  // Explicitly set WM_CLASS so the window manager can match this window to the
+  // .desktop file and show the correct icon in alt-tab / task switcher.
+  gtk_window_set_wmclass(window, "comicrd", "ComicRD");
+
   gtk_window_set_default_size(window, 1280, 720);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();

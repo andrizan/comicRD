@@ -44,6 +44,7 @@ Exec=comicrd
 Icon=comicrd
 Terminal=false
 Categories=Graphics;Viewer;
+StartupWMClass=com.andrizan.comicrd
 EOF
 
 cp \
