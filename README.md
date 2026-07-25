@@ -27,7 +27,9 @@ history, backup/import, and the reader image pipeline.
 - Selectable title/path and open-folder action on comic detail page
 - SQLite-backed settings, metadata, reading progress, bookmarks, and history
 - Database backup export/import
+- Auto-update check via GitHub Releases
 - Linux packaging scripts, GitHub release assets, and AUR publishing support
+- Windows Inno Setup installer
 
 ## Status
 
@@ -53,6 +55,12 @@ or:
 ```bash
 yay -S comicrd-bin
 ```
+
+### Windows Installer
+
+Download the Windows installer (`*-setup.exe`) from GitHub Releases and run it.
+The installer supports per-user installation without admin privileges and creates
+an optional desktop shortcut.
 
 ### Linux Tarball
 
@@ -239,6 +247,15 @@ Windows, from a Windows host with Visual Studio desktop build tools:
 flutter build windows --release
 ```
 
+To build the Inno Setup installer (requires
+[Inno Setup](https://jrsoftware.org/isinfo.php) installed):
+
+```bash
+ISCC.exe /D"AppVersion=2.1.4" app_flutter\windows\installer\comicrd-setup.iss
+```
+
+The output is written to `dist/comicrd-{version}-windows-x86_64-setup.exe`.
+
 Windows AVIF support is native and requires the `dav1d` vcpkg package above.
 The Windows Flutter build calls `scripts/build-native-bridge.ps1`, which also
 uses `VCPKG_INSTALLATION_ROOT` or `VCPKG_ROOT` to populate `PKG_CONFIG_PATH`
@@ -283,6 +300,7 @@ comicrd_flutter/
 │   │   └── frb_generated.io.dart
 │   ├── linux/
 │   ├── windows/
+│   │   └── installer/       # Inno Setup script
 │   ├── test/
 │   └── pubspec.yaml
 │
