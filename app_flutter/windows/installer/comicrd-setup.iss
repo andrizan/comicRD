@@ -32,8 +32,11 @@ VersionInfoProductName={#MyAppName}
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[CustomMessages]
+AdditionalIcons=Additional icons:
+
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}": Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
 Source: "..\..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
