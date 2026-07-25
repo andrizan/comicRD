@@ -86,7 +86,7 @@ sudo pacman -U dist/arch/comicrd-bin-2.0.0-1-x86_64.pkg.tar.zst
 ### Requirements
 
 - Flutter desktop SDK
-- Rust toolchain, currently `rustc 1.96`
+- Rust toolchain, currently `rustc 1.95`
 - `flutter_rust_bridge_codegen` 2.12.0
 - `cargo-expand`
 - Platform desktop build tools
