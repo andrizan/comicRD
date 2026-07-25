@@ -35,7 +35,7 @@ mkdir -p \
 cp -a "$BUNDLE_DIR/." "$PACKAGE_DIR/opt/comicrd/"
 chmod 755 "$PACKAGE_DIR/opt/comicrd/ComicRD"
 
-cat > "$PACKAGE_DIR/usr/share/applications/comicrd.desktop" <<'EOF'
+cat > "$PACKAGE_DIR/usr/share/applications/com.andrizan.comicrd.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=ComicRD

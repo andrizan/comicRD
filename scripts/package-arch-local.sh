@@ -51,7 +51,7 @@ package() {
   cp -R --no-preserve=ownership "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/opt" "\${pkgdir}/"
   install -dm755 "\${pkgdir}/usr/bin"
   ln -sf /opt/comicrd/ComicRD "\${pkgdir}/usr/bin/comicrd"
-  install -Dm644 "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/applications/comicrd.desktop" "\${pkgdir}/usr/share/applications/comicrd.desktop"
+  install -Dm644 "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/applications/com.andrizan.comicrd.desktop" "\${pkgdir}/usr/share/applications/com.andrizan.comicrd.desktop"
   install -Dm644 "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/icons/hicolor/512x512/apps/comicrd.png" "\${pkgdir}/usr/share/icons/hicolor/512x512/apps/comicrd.png"
   install -Dm644 "\${srcdir}/comicrd-\${pkgver}-linux-x86_64/usr/share/licenses/comicrd-bin/LICENSE" "\${pkgdir}/usr/share/licenses/comicrd-bin/LICENSE"
 }

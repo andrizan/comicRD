@@ -69,7 +69,10 @@ static void my_application_activate(GApplication* application) {
 
   // Explicitly set WM_CLASS so the window manager can match this window to the
   // .desktop file and show the correct icon in alt-tab / task switcher.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   gtk_window_set_wmclass(window, "comicrd", "ComicRD");
+#pragma GCC diagnostic pop
 
   gtk_window_set_default_size(window, 1280, 720);
 
