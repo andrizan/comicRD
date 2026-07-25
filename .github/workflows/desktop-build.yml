@@ -72,6 +72,61 @@ jobs:
         working-directory: app_flutter
         run: flutter test
 
+  cache-dav1d:
+    name: Cache dav1d (Windows)
+    needs: quality
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache dav1d build
+        id: cache-dav1d
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/dav1d-install
+          key: dav1d-1.5.4-windows-x64-v2
+          restore-keys: |
+            dav1d-1.5.4-windows-x64-
+            dav1d-1.5.4-
+
+      - name: Install build tools
+        if: steps.cache-dav1d.outputs.cache-hit != 'true'
+        run: |
+          choco install nasm pkgconfiglite -y
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja -y
+          }
+          pip install meson
+
+      - name: Build dav1d
+        if: steps.cache-dav1d.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $vcvarsPath = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+          cmd /c "call `"$vcvarsPath`" && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') {
+              [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+            }
+          }
+          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
+          git clone --depth 1 --branch 1.5.4 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
+          cd $env:RUNNER_TEMP\dav1d-build
+          meson setup build --prefix=$prefix --buildtype release --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
+          meson compile -C build
+          meson install -C build
+
+      - name: Verify dav1d
+        shell: pwsh
+        run: |
+          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
+          $env:PKG_CONFIG_PATH = "$prefix/lib/pkgconfig"
+          pkg-config --modversion dav1d
+          pkg-config --libs dav1d
+
   build-linux:
     name: Build Linux Bundle
     needs: quality
@@ -167,41 +222,13 @@ jobs:
         with:
           path: ${{ runner.temp }}/dav1d-install
           key: dav1d-1.5.4-windows-x64-v2
+          restore-keys: |
+            dav1d-1.5.4-windows-x64-
+            dav1d-1.5.4-
 
       - name: Install packaging tools
         run: choco install pkgconfiglite innosetup -y
 
-      # nasm/ninja/meson hanya diperlukan untuk mengompilasi dav1d,
-      # jadi dilewati kalau cache dav1d sudah hit.
-      - name: Install dav1d build tools
-        if: steps.cache-dav1d.outputs.cache-hit != 'true'
-        run: |
-          choco install nasm -y
-          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
-            choco install ninja -y
-          }
-          pip install meson
-
-      - name: Build and install dav1d
-        if: steps.cache-dav1d.outputs.cache-hit != 'true'
-        run: |
-          $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          $vcvarsPath = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "call `"$vcvarsPath`" && set" | ForEach-Object {
-            if ($_ -match '^([^=]+)=(.*)$') {
-              [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
-            }
-          }
-          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
-          git clone --depth 1 --branch 1.5.4 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
-          cd $env:RUNNER_TEMP\dav1d-build
-          meson setup build --prefix=$prefix --buildtype release --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
-          meson compile -C build
-          meson install -C build
-        shell: pwsh
-
-      # Selalu jalan (cache hit maupun miss) supaya PKG_CONFIG_PATH
-      # tetap ter-set untuk step-step berikutnya.
       - name: Verify dav1d and export PKG_CONFIG_PATH
         run: |
           $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
