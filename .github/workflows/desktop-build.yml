@@ -417,10 +417,12 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          # Read the version that was actually built by the build jobs.
-          # The build jobs already bumped pubspec.yaml before building,
-          # but each job has its own checkout. We bump again here to
-          # ensure the committed version matches the tag.
+          # Read current version from pubspec.yaml.
+          CURRENT_VERSION=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/version: \([0-9][0-9.]*\).*/\1/')
+          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
+            echo "Version already matches tag ($VERSION). Skipping commit."
+            exit 0
+          fi
           BUILD=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/.*+\([0-9]*\).*/\1/')
           NEW_BUILD=$((BUILD + 1))
           sed -i "s/^version: .*/version: ${VERSION}+${NEW_BUILD}/" app_flutter/pubspec.yaml
