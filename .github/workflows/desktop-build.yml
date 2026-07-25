@@ -116,6 +116,10 @@ jobs:
             fi
             VERSION="manual-${GITHUB_RUN_NUMBER}"
           fi
+          # Bump pubspec version to match tag before building.
+          BUILD=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/.*+\([0-9]*\).*/\1/')
+          NEW_BUILD=$((BUILD + 1))
+          sed -i "s/^version: .*/version: ${VERSION}+${NEW_BUILD}/" app_flutter/pubspec.yaml
           ./scripts/package-linux.sh "$VERSION"
 
       - name: Upload Linux tarball
@@ -181,6 +185,24 @@ jobs:
       - name: Fetch Flutter dependencies
         working-directory: app_flutter
         run: flutter pub get
+
+      - name: Bump pubspec version to match tag
+        shell: pwsh
+        run: |
+          $Version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
+          if ($Version -notmatch '^\d+\.\d+\.\d+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$') {
+            if ($env:GITHUB_REF -like 'refs/tags/*') {
+              Write-Error ("Invalid tag: {0}. Expected vX.Y.Z" -f $env:GITHUB_REF_NAME)
+              exit 1
+            }
+            $Version = "manual-${env:GITHUB_RUN_NUMBER}"
+          }
+          $Content = Get-Content app_flutter\pubspec.yaml -Raw
+          $Match = [regex]::Match($Content, 'version:\s+(\d+\.\d+\.\d+)\+(\d+)')
+          $OldBuild = [int]$Match.Groups[2].Value
+          $NewBuild = $OldBuild + 1
+          $Content = $Content -replace 'version:\s+\d+\.\d+\.\d+\+\d+', "version: ${Version}+${NewBuild}"
+          Set-Content app_flutter\pubspec.yaml $Content -NoNewline
 
       - name: Build Windows release
         working-directory: app_flutter
@@ -261,6 +283,21 @@ jobs:
         working-directory: app_flutter
         run: flutter pub get
 
+      - name: Bump pubspec version to match tag
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$'; then
+            if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+              echo "Invalid tag: $GITHUB_REF_NAME. Expected vX.Y.Z"
+              exit 1
+            fi
+            VERSION="manual-${GITHUB_RUN_NUMBER}"
+          fi
+          BUILD=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/.*+\([0-9]*\).*/\1/')
+          NEW_BUILD=$((BUILD + 1))
+          sed -i '' "s/^version: .*/version: ${VERSION}+${NEW_BUILD}/" app_flutter/pubspec.yaml
+
       - name: Build macOS release
         working-directory: app_flutter
         run: |
@@ -336,6 +373,25 @@ jobs:
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: ${{ steps.release-metadata.outputs.prerelease }}
+
+      - name: Commit version bump
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Read the version that was actually built by the build jobs.
+          # The build jobs already bumped pubspec.yaml before building,
+          # but each job has its own checkout. We bump again here to
+          # ensure the committed version matches the tag.
+          BUILD=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/.*+\([0-9]*\).*/\1/')
+          NEW_BUILD=$((BUILD + 1))
+          sed -i "s/^version: .*/version: ${VERSION}+${NEW_BUILD}/" app_flutter/pubspec.yaml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app_flutter/pubspec.yaml
+          git diff --cached --quiet && echo "No version change to commit" && exit 0
+          git commit -m "chore: bump version to ${VERSION}+${NEW_BUILD} [skip ci]"
+          git push
 
   publish-aur:
     name: Publish to AUR
