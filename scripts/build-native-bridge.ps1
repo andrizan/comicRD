@@ -20,12 +20,15 @@ if ([string]::IsNullOrWhiteSpace($VcpkgRoot)) {
   $VcpkgRoot = $env:VCPKG_ROOT
 }
 if ($Platform -eq "windows" -and -not [string]::IsNullOrWhiteSpace($VcpkgRoot)) {
-  $VcpkgPkgConfig = Join-Path $VcpkgRoot "installed\x64-windows\lib\pkgconfig"
-  if (Test-Path -LiteralPath $VcpkgPkgConfig) {
-    if ([string]::IsNullOrWhiteSpace($env:PKG_CONFIG_PATH)) {
-      $env:PKG_CONFIG_PATH = $VcpkgPkgConfig
-    } elseif ($env:PKG_CONFIG_PATH -notlike "*$VcpkgPkgConfig*") {
-      $env:PKG_CONFIG_PATH = "$VcpkgPkgConfig;$env:PKG_CONFIG_PATH"
+  $Dav1dLibDir = & pkg-config --variable=libdir dav1d 2>$null
+  if ($Dav1dLibDir -and $Dav1dLibDir.StartsWith($VcpkgRoot)) {
+    $Dav1dDir = if ($Profile -eq "release") { "bin" } else { "debug\bin" }
+    $Dav1dDll = Join-Path $VcpkgRoot "installed\x64-windows\$Dav1dDir\dav1d.dll"
+    if (Test-Path -LiteralPath $Dav1dDll) {
+      Copy-Item -LiteralPath $Dav1dDll -Destination $Destination -Force
+      Write-Host "Bundled dav1d.dll from $Dav1dDll to $Destination"
+    } else {
+      Write-Warning "dav1d.dll not found at $Dav1dDll; the app may fail to load the native bridge at runtime."
     }
   }
 }
