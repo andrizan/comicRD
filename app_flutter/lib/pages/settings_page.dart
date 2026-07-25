@@ -480,10 +480,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionHeader(
-            icon: AppIcons.download,
-            title: text.updateSection,
-          ),
+          _sectionHeader(icon: AppIcons.download, title: text.updateSection),
           // Status-specific content
           if (updateState.status == UpdateStatus.checking)
             const Padding(
@@ -519,10 +516,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (updateState.status == UpdateStatus.available) ...[
             Text(
               '${text.updateAvailable}: v${updateState.info!.latestVersion}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
             if (updateState.info!.releaseNotes.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -551,17 +545,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               runSpacing: 8,
               children: [
                 FButton(
-                  onPress: () => _openReleasePage(
-                    updateState.info!.releaseUrl,
-                  ),
+                  onPress: () => _openReleasePage(updateState.info!.releaseUrl),
                   prefix: const Icon(AppIcons.download, size: 16),
                   child: Text(text.downloadUpdate),
                 ),
                 FButton(
                   variant: .outline,
-                  onPress: () => _openReleasePage(
-                    updateState.info!.releaseUrl,
-                  ),
+                  onPress: () => _openReleasePage(updateState.info!.releaseUrl),
                   child: Text(text.viewRelease),
                 ),
               ],

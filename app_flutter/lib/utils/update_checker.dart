@@ -19,8 +19,7 @@ class UpdateInfo {
 
 class UpdateChecker {
   static const _repo = 'andrizan/comicRD';
-  static const _apiUrl =
-      'https://api.github.com/repos/$_repo/releases/latest';
+  static const _apiUrl = 'https://api.github.com/repos/$_repo/releases/latest';
 
   static Future<UpdateInfo?> check() async {
     try {
@@ -28,8 +27,9 @@ class UpdateChecker {
         ..connectionTimeout = const Duration(seconds: 10);
       final request = await client.getUrl(Uri.parse(_apiUrl));
       request.headers.set('Accept', 'application/vnd.github+json');
-      final response =
-          await request.close().timeout(const Duration(seconds: 15));
+      final response = await request.close().timeout(
+        const Duration(seconds: 15),
+      );
       if (response.statusCode != 200) {
         client.close(force: false);
         return null;
