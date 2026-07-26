@@ -197,7 +197,7 @@ crates/comicrd_core/tests/
   reader_flow.rs        — open chapter, pages, context, progress
   image_pipeline.rs     — render page variant, page dimensions
   cache.rs              — page cache hits, concurrency, eviction
-  bookmarks.rs          — page/comic bookmarks, chapter favorites
+  bookmarks.rs          — page bookmarks, favorites, chapter bookmarks
   history.rs            — reading history, comics-with-progress
   migrations.rs         — DB creation, default settings, legacy migration
   backup.rs             — export/import database backup

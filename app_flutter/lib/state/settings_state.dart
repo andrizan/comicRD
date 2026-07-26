@@ -204,7 +204,7 @@ class AppStrings {
     required this.settings,
     required this.history,
     required this.library,
-    required this.bookmarks,
+    required this.favorites,
     required this.search,
     required this.refresh,
     required this.backToTop,
@@ -242,8 +242,10 @@ class AppStrings {
     required this.list,
     required this.sortDirection,
     // Comic actions
-    required this.bookmark,
-    required this.bookmarked,
+    required this.pageBookmark,
+    required this.pageBookmarked,
+    required this.addPageBookmark,
+    required this.removePageBookmark,
     required this.addBookmark,
     required this.removeBookmark,
     required this.addFavorite,
@@ -259,7 +261,7 @@ class AppStrings {
     required this.totalSize,
     required this.chapterCountLabel,
     required this.librarySubtitleTemplate,
-    required this.bookmarksSubtitleTemplate,
+    required this.favoritesSubtitleTemplate,
     required this.latestReading,
     // Comic detail labels
     required this.backToLibrary,
@@ -271,7 +273,7 @@ class AppStrings {
     required this.startFromBeginning,
     required this.filterChapters,
     required this.allChapters,
-    required this.favoriteChapters,
+    required this.bookmarkChapters,
     required this.downloaded,
     // Settings panel
     required this.librarySection,
@@ -323,7 +325,7 @@ class AppStrings {
   final String settings;
   final String history;
   final String library;
-  final String bookmarks;
+  final String favorites;
   final String search;
   final String refresh;
   final String backToTop;
@@ -361,8 +363,10 @@ class AppStrings {
   final String list;
   final String sortDirection;
   // Comic actions
-  final String bookmark;
-  final String bookmarked;
+  final String pageBookmark;
+  final String pageBookmarked;
+  final String addPageBookmark;
+  final String removePageBookmark;
   final String addBookmark;
   final String removeBookmark;
   final String addFavorite;
@@ -378,7 +382,7 @@ class AppStrings {
   final String totalSize;
   final String chapterCountLabel;
   final String librarySubtitleTemplate;
-  final String bookmarksSubtitleTemplate;
+  final String favoritesSubtitleTemplate;
   final String latestReading;
   // Comic detail labels
   final String backToLibrary;
@@ -390,7 +394,7 @@ class AppStrings {
   final String startFromBeginning;
   final String filterChapters;
   final String allChapters;
-  final String favoriteChapters;
+  final String bookmarkChapters;
   final String downloaded;
   // Settings panel
   final String librarySection;
@@ -440,7 +444,7 @@ class AppStrings {
     settings: 'Settings',
     history: 'History',
     library: 'Library',
-    bookmarks: 'Bookmarks',
+    favorites: 'Favorites',
     search: 'Search',
     refresh: 'Refresh',
     backToTop: 'Back to Top',
@@ -472,8 +476,10 @@ class AppStrings {
     grid: 'Grid',
     list: 'List',
     sortDirection: 'Sort Direction',
-    bookmark: 'Bookmark',
-    bookmarked: 'Bookmarked',
+    pageBookmark: 'Page Bookmark',
+    pageBookmarked: 'Page Bookmarked',
+    addPageBookmark: 'Add Page Bookmark',
+    removePageBookmark: 'Remove Page Bookmark',
     addBookmark: 'Add Bookmark',
     removeBookmark: 'Remove Bookmark',
     addFavorite: 'Add Favorite',
@@ -488,7 +494,7 @@ class AppStrings {
     totalSize: 'Total Size',
     chapterCountLabel: 'Ch.',
     librarySubtitleTemplate: '{count} Titles Saved',
-    bookmarksSubtitleTemplate: '{count} Titles Saved',
+    favoritesSubtitleTemplate: '{count} Titles Saved',
     latestReading: 'Latest Reading',
     backToLibrary: 'Back to Library',
     directoryPath: 'Directory Path',
@@ -499,7 +505,7 @@ class AppStrings {
     startFromBeginning: 'Start from Beginning',
     filterChapters: 'Filter Chapters...',
     allChapters: 'All Chapters',
-    favoriteChapters: 'Favorites',
+    bookmarkChapters: 'Bookmarks',
     downloaded: 'Downloaded',
     librarySection: 'Library',
     librarySource: 'Library Source',
@@ -546,7 +552,7 @@ class AppStrings {
     settings: 'Pengaturan',
     history: 'Riwayat',
     library: 'Pustaka',
-    bookmarks: 'Bookmark',
+    favorites: 'Favorit',
     search: 'Cari',
     refresh: 'Perbarui',
     backToTop: 'Kembali ke Atas',
@@ -578,10 +584,12 @@ class AppStrings {
     grid: 'Kisi',
     list: 'Daftar',
     sortDirection: 'Arah Urutan',
-    bookmark: 'Bookmark',
-    bookmarked: 'Dibookmark',
-    addBookmark: 'Tambah Bookmark',
-    removeBookmark: 'Hapus Bookmark',
+    pageBookmark: 'Bookmark Halaman',
+    pageBookmarked: 'Dibookmark',
+    addPageBookmark: 'Bookmark Halaman',
+    removePageBookmark: 'Hapus Bookmark Halaman',
+    addBookmark: 'Bookmark Chapter',
+    removeBookmark: 'Hapus Bookmark Chapter',
     addFavorite: 'Tambah Favorit',
     removeFavorite: 'Hapus Favorit',
     openFolder: 'Buka Folder',
@@ -594,7 +602,7 @@ class AppStrings {
     totalSize: 'Total Ukuran',
     chapterCountLabel: 'Ch.',
     librarySubtitleTemplate: '{count} Judul Tersimpan',
-    bookmarksSubtitleTemplate: '{count} Judul Disimpan',
+    favoritesSubtitleTemplate: '{count} Judul Disimpan',
     latestReading: 'Bacaan Terakhir',
     backToLibrary: 'Kembali ke Pustaka',
     directoryPath: 'Path Direktori',
@@ -605,7 +613,7 @@ class AppStrings {
     startFromBeginning: 'Mulai dari Awal',
     filterChapters: 'Filter Chapter...',
     allChapters: 'Semua Chapter',
-    favoriteChapters: 'Favorit',
+    bookmarkChapters: 'Bookmark',
     downloaded: 'Diunduh',
     librarySection: 'Pustaka',
     librarySource: 'Sumber Pustaka',

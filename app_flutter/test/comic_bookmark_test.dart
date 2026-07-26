@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:forui/forui.dart';
 
 void main() {
-  testWidgets('bookmark button toggles comic bookmark', (tester) async {
+  testWidgets('favorite button toggles comic favorite', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(1920, 1080);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -35,36 +35,36 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(api.addComicBookmarkCalls, isEmpty);
-    expect(api.removeComicBookmarkCalls, isEmpty);
+    expect(api.addFavoriteCalls, isEmpty);
+    expect(api.removeFavoriteCalls, isEmpty);
 
-    final bookmarksBefore = await container.read(
-      allBookmarksProvider.future,
+    final favoritesBefore = await container.read(
+      allFavoritesProvider.future,
     );
-    expect(bookmarksBefore, isEmpty);
+    expect(favoritesBefore, isEmpty);
 
-    await tester.tap(find.text('Bookmark'));
+    await tester.tap(find.text('Add Favorite'));
     await tester.pump();
     await tester.pump();
 
-    expect(api.addComicBookmarkCalls, [comicPath]);
-    expect(api.removeComicBookmarkCalls, isEmpty);
+    expect(api.addFavoriteCalls, [comicPath]);
+    expect(api.removeFavoriteCalls, isEmpty);
 
     await tester.pumpAndSettle(const Duration(milliseconds: 200));
 
-    expect(find.text('Bookmarked'), findsOneWidget);
+    expect(find.text('Remove Favorite'), findsOneWidget);
 
-    final bookmarksAfter = await container.read(
-      allBookmarksProvider.future,
+    final favoritesAfter = await container.read(
+      allFavoritesProvider.future,
     );
-    expect(bookmarksAfter.length, 1);
-    expect(bookmarksAfter.first.comicSourcePath, comicPath);
-    expect(container.read(bookmarkCountProvider), 1);
+    expect(favoritesAfter.length, 1);
+    expect(favoritesAfter.first.comicSourcePath, comicPath);
+    expect(container.read(favoriteCountProvider), 1);
 
     final bookmarkedIcon = tester.widget<Icon>(
       find.descendant(
         of: find.ancestor(
-          of: find.text('Bookmarked'),
+          of: find.text('Remove Favorite'),
           matching: find.byType(GestureDetector),
         ),
         matching: find.byType(Icon),
@@ -73,21 +73,21 @@ void main() {
     expect(bookmarkedIcon.color, isNotNull);
     expect(bookmarkedIcon.color, ComicReaderColors.light.star);
 
-    await tester.tap(find.text('Bookmarked'));
+    await tester.tap(find.text('Remove Favorite'));
     await tester.pump();
     await tester.pump();
 
-    expect(api.removeComicBookmarkCalls, [comicPath]);
-    expect(api.addComicBookmarkCalls.length, 1);
+    expect(api.removeFavoriteCalls, [comicPath]);
+    expect(api.addFavoriteCalls.length, 1);
 
     await tester.pumpAndSettle(const Duration(milliseconds: 200));
 
-    expect(find.text('Bookmark'), findsOneWidget);
+    expect(find.text('Add Favorite'), findsOneWidget);
 
     final unbookmarkedIcon = tester.widget<Icon>(
       find.descendant(
         of: find.ancestor(
-          of: find.text('Bookmark'),
+          of: find.text('Add Favorite'),
           matching: find.byType(GestureDetector),
         ),
         matching: find.byType(Icon),
@@ -95,11 +95,11 @@ void main() {
     );
     expect(unbookmarkedIcon.color, isNot(ComicReaderColors.light.star));
 
-    final bookmarksRemoved = await container.read(
-      allBookmarksProvider.future,
+    final favoritesRemoved = await container.read(
+      allFavoritesProvider.future,
     );
-    expect(bookmarksRemoved, isEmpty);
-    expect(container.read(bookmarkCountProvider), 0);
+    expect(favoritesRemoved, isEmpty);
+    expect(container.read(favoriteCountProvider), 0);
   });
 }
 
@@ -121,41 +121,41 @@ class _ForuiHost extends StatelessWidget {
 }
 
 class _RecordingApi extends ComicRdApi {
-  final List<String> addComicBookmarkCalls = [];
-  final List<String> removeComicBookmarkCalls = [];
-  bool _isBookmarked = false;
-  final List<bridge.ComicBookmark> _bookmarks = [];
+  final List<String> addFavoriteCalls = [];
+  final List<String> removeFavoriteCalls = [];
+  bool _isFavorited = false;
+  final List<bridge.Favorite> _favorites = [];
 
   @override
-  Future<bool> isComicBookmarked(String comicSourcePath) async {
-    return _isBookmarked;
+  Future<bool> isFavorited({required String comicSourcePath}) async {
+    return _isFavorited;
   }
 
   @override
-  Future<int> addComicBookmark(String comicSourcePath) async {
-    addComicBookmarkCalls.add(comicSourcePath);
-    _isBookmarked = true;
-    _bookmarks.add(
-      bridge.ComicBookmark(
-        id: _bookmarks.length + 1,
+  Future<int> addFavorite({required String comicSourcePath}) async {
+    addFavoriteCalls.add(comicSourcePath);
+    _isFavorited = true;
+    _favorites.add(
+      bridge.Favorite(
+        id: _favorites.length + 1,
         comicSourcePath: comicSourcePath,
         comicTitle: comicSourcePath.split('/').last,
         createdAt: 0,
       ),
     );
-    return _bookmarks.length;
+    return _favorites.length;
   }
 
   @override
-  Future<void> removeComicBookmark(String comicSourcePath) async {
-    removeComicBookmarkCalls.add(comicSourcePath);
-    _isBookmarked = false;
-    _bookmarks.removeWhere((b) => b.comicSourcePath == comicSourcePath);
+  Future<void> removeFavorite({required String comicSourcePath}) async {
+    removeFavoriteCalls.add(comicSourcePath);
+    _isFavorited = false;
+    _favorites.removeWhere((b) => b.comicSourcePath == comicSourcePath);
   }
 
   @override
-  Future<List<bridge.ComicBookmark>> listAllBookmarks() async {
-    return List.unmodifiable(_bookmarks);
+  Future<List<bridge.Favorite>> listFavorites() async {
+    return List.unmodifiable(_favorites);
   }
 
   @override
@@ -167,7 +167,7 @@ class _RecordingApi extends ComicRdApi {
   ) async => const [];
 
   @override
-  Future<List<String>> listChapterFavorites(String comicSourcePath) async =>
+  Future<List<String>> listBookmarks({required String comicSourcePath}) async =>
       const [];
 
   @override

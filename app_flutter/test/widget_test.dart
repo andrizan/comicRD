@@ -239,7 +239,7 @@ class _FakeComicRdApi extends ComicRdApi {
   }
 
   @override
-  Future<List<bridge.ComicBookmark>> listAllBookmarks() async {
+  Future<List<bridge.Favorite>> listFavorites() async {
     return const [];
   }
 
@@ -264,7 +264,7 @@ class _FakeComicRdApi extends ComicRdApi {
   }
 
   @override
-  Future<List<String>> listChapterFavorites(String comicSourcePath) async {
+  Future<List<String>> listBookmarks({required String comicSourcePath}) async {
     return const [];
   }
 

@@ -95,50 +95,48 @@ Future<void> saveProgress({required SaveProgressPayload payload}) =>
 Future<ReadingProgress?> getProgress({required PlatformInt64 chapterId}) =>
     RustLib.instance.api.crateApiGetProgress(chapterId: chapterId);
 
-Future<List<Bookmark>> listBookmarks({required PlatformInt64 chapterId}) =>
-    RustLib.instance.api.crateApiListBookmarks(chapterId: chapterId);
+Future<List<PageBookmark>> listPageBookmarks({
+  required PlatformInt64 chapterId,
+}) => RustLib.instance.api.crateApiListPageBookmarks(chapterId: chapterId);
 
-Future<PlatformInt64> addBookmark({required SaveBookmarkPayload payload}) =>
-    RustLib.instance.api.crateApiAddBookmark(payload: payload);
+Future<PlatformInt64> addPageBookmark({
+  required SavePageBookmarkPayload payload,
+}) => RustLib.instance.api.crateApiAddPageBookmark(payload: payload);
 
-Future<void> removeBookmark({required PlatformInt64 bookmarkId}) =>
-    RustLib.instance.api.crateApiRemoveBookmark(bookmarkId: bookmarkId);
+Future<void> removePageBookmark({required PlatformInt64 bookmarkId}) =>
+    RustLib.instance.api.crateApiRemovePageBookmark(bookmarkId: bookmarkId);
 
-Future<List<ComicBookmark>> listAllBookmarks() =>
-    RustLib.instance.api.crateApiListAllBookmarks();
+Future<List<Favorite>> listFavorites() =>
+    RustLib.instance.api.crateApiListFavorites();
 
-Future<PlatformInt64> addComicBookmark({required String comicSourcePath}) =>
-    RustLib.instance.api.crateApiAddComicBookmark(
-      comicSourcePath: comicSourcePath,
-    );
+Future<PlatformInt64> addFavorite({required String comicSourcePath}) =>
+    RustLib.instance.api.crateApiAddFavorite(comicSourcePath: comicSourcePath);
 
-Future<void> removeComicBookmark({required String comicSourcePath}) => RustLib
+Future<void> removeFavorite({required String comicSourcePath}) => RustLib
     .instance
     .api
-    .crateApiRemoveComicBookmark(comicSourcePath: comicSourcePath);
+    .crateApiRemoveFavorite(comicSourcePath: comicSourcePath);
 
-Future<bool> isComicBookmarked({required String comicSourcePath}) => RustLib
-    .instance
-    .api
-    .crateApiIsComicBookmarked(comicSourcePath: comicSourcePath);
+Future<bool> isFavorited({required String comicSourcePath}) =>
+    RustLib.instance.api.crateApiIsFavorited(comicSourcePath: comicSourcePath);
 
-Future<PlatformInt64> addChapterFavorite({
+Future<PlatformInt64> addBookmark({
   required String chapterSourcePath,
   required String comicSourcePath,
-}) => RustLib.instance.api.crateApiAddChapterFavorite(
+}) => RustLib.instance.api.crateApiAddBookmark(
   chapterSourcePath: chapterSourcePath,
   comicSourcePath: comicSourcePath,
 );
 
-Future<void> removeChapterFavorite({required String chapterSourcePath}) =>
-    RustLib.instance.api.crateApiRemoveChapterFavorite(
-      chapterSourcePath: chapterSourcePath,
-    );
+Future<void> removeBookmark({required String chapterSourcePath}) => RustLib
+    .instance
+    .api
+    .crateApiRemoveBookmark(chapterSourcePath: chapterSourcePath);
 
-Future<List<String>> listChapterFavorites({required String comicSourcePath}) =>
-    RustLib.instance.api.crateApiListChapterFavorites(
-      comicSourcePath: comicSourcePath,
-    );
+Future<List<String>> listBookmarks({required String comicSourcePath}) => RustLib
+    .instance
+    .api
+    .crateApiListBookmarks(comicSourcePath: comicSourcePath);
 
 Future<List<SettingEntry>> listSettings() =>
     RustLib.instance.api.crateApiListSettings();
@@ -157,41 +155,6 @@ Future<void> importDatabaseBackup({required String inputPath}) =>
 
 Future<void> openContainingFolder({required String path}) =>
     RustLib.instance.api.crateApiOpenContainingFolder(path: path);
-
-class Bookmark {
-  final PlatformInt64 id;
-  final PlatformInt64 chapterId;
-  final PlatformInt64 page;
-  final PlatformInt64 createdAt;
-  final String note;
-
-  const Bookmark({
-    required this.id,
-    required this.chapterId,
-    required this.page,
-    required this.createdAt,
-    required this.note,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      chapterId.hashCode ^
-      page.hashCode ^
-      createdAt.hashCode ^
-      note.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is Bookmark &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          chapterId == other.chapterId &&
-          page == other.page &&
-          createdAt == other.createdAt &&
-          note == other.note;
-}
 
 class ChapterContext {
   final PlatformInt64 chapterId;
@@ -260,13 +223,13 @@ class ChapterContext {
           nextChapterTitle == other.nextChapterTitle;
 }
 
-class ComicBookmark {
+class Favorite {
   final PlatformInt64 id;
   final String comicSourcePath;
   final String comicTitle;
   final PlatformInt64 createdAt;
 
-  const ComicBookmark({
+  const Favorite({
     required this.id,
     required this.comicSourcePath,
     required this.comicTitle,
@@ -283,7 +246,7 @@ class ComicBookmark {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ComicBookmark &&
+      other is Favorite &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           comicSourcePath == other.comicSourcePath &&
@@ -440,6 +403,41 @@ class OpenChapterPayload {
           runtimeType == other.runtimeType &&
           comicSourcePath == other.comicSourcePath &&
           chapterSourcePath == other.chapterSourcePath;
+}
+
+class PageBookmark {
+  final PlatformInt64 id;
+  final PlatformInt64 chapterId;
+  final PlatformInt64 page;
+  final PlatformInt64 createdAt;
+  final String note;
+
+  const PageBookmark({
+    required this.id,
+    required this.chapterId,
+    required this.page,
+    required this.createdAt,
+    required this.note,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      chapterId.hashCode ^
+      page.hashCode ^
+      createdAt.hashCode ^
+      note.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PageBookmark &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          chapterId == other.chapterId &&
+          page == other.page &&
+          createdAt == other.createdAt &&
+          note == other.note;
 }
 
 class PageInfo {
@@ -721,12 +719,12 @@ class RenderedPage {
           height == other.height;
 }
 
-class SaveBookmarkPayload {
+class SavePageBookmarkPayload {
   final PlatformInt64 chapterId;
   final PlatformInt64 page;
   final String? note;
 
-  const SaveBookmarkPayload({
+  const SavePageBookmarkPayload({
     required this.chapterId,
     required this.page,
     this.note,
@@ -738,7 +736,7 @@ class SaveBookmarkPayload {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SaveBookmarkPayload &&
+      other is SavePageBookmarkPayload &&
           runtimeType == other.runtimeType &&
           chapterId == other.chapterId &&
           page == other.page &&

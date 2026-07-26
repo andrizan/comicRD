@@ -147,7 +147,7 @@ class _ManyChaptersApi extends ComicRdApi {
   }
 
   @override
-  Future<List<String>> listChapterFavorites(String comicSourcePath) async {
+  Future<List<String>> listBookmarks({required String comicSourcePath}) async {
     return const [];
   }
 
@@ -157,7 +157,7 @@ class _ManyChaptersApi extends ComicRdApi {
   }
 
   @override
-  Future<bool> isComicBookmarked(String comicSourcePath) async {
+  Future<bool> isFavorited({required String comicSourcePath}) async {
     return false;
   }
 }

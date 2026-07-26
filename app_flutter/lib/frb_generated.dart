@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 899852775;
+  int get rustContentHash => 427574724;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -77,19 +77,17 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
 abstract class RustLibApi extends BaseApi {
   Future<PlatformInt64> crateApiAddBookmark({
-    required SaveBookmarkPayload payload,
-  });
-
-  Future<PlatformInt64> crateApiAddChapterFavorite({
     required String chapterSourcePath,
     required String comicSourcePath,
   });
 
-  Future<PlatformInt64> crateApiAddComicBookmark({
-    required String comicSourcePath,
-  });
+  Future<PlatformInt64> crateApiAddFavorite({required String comicSourcePath});
 
   Future<PlatformInt64> crateApiAddLibrary({required String path});
+
+  Future<PlatformInt64> crateApiAddPageBookmark({
+    required SavePageBookmarkPayload payload,
+  });
 
   Future<void> crateApiCancelScanLibraries();
 
@@ -130,19 +128,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiInitApp({required String appDataDir});
 
-  Future<bool> crateApiIsComicBookmarked({required String comicSourcePath});
+  Future<bool> crateApiIsFavorited({required String comicSourcePath});
 
   Future<LibraryStorageStats> crateApiLibraryStorageStatsDefault();
 
-  Future<List<ComicBookmark>> crateApiListAllBookmarks();
-
-  Future<List<Bookmark>> crateApiListBookmarks({
-    required PlatformInt64 chapterId,
-  });
-
-  Future<List<String>> crateApiListChapterFavorites({
-    required String comicSourcePath,
-  });
+  Future<List<String>> crateApiListBookmarks({required String comicSourcePath});
 
   Future<List<RawChapter>> crateApiListComicChaptersRaw({
     required String comicSourcePath,
@@ -150,11 +140,17 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<String>> crateApiListComicsWithProgress();
 
+  Future<List<Favorite>> crateApiListFavorites();
+
   Future<List<Library>> crateApiListLibraries();
 
   Future<List<RawComic>> crateApiListLibraryComicsRaw({
     required SortBy sortBy,
     required SortDir sortDir,
+  });
+
+  Future<List<PageBookmark>> crateApiListPageBookmarks({
+    required PlatformInt64 chapterId,
   });
 
   Future<List<ReadingHistoryEntry>> crateApiListReadingHistory();
@@ -169,13 +165,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiPrefetchPages({required PrefetchPagesPayload payload});
 
-  Future<void> crateApiRemoveBookmark({required PlatformInt64 bookmarkId});
+  Future<void> crateApiRemoveBookmark({required String chapterSourcePath});
 
-  Future<void> crateApiRemoveChapterFavorite({
-    required String chapterSourcePath,
-  });
+  Future<void> crateApiRemoveFavorite({required String comicSourcePath});
 
-  Future<void> crateApiRemoveComicBookmark({required String comicSourcePath});
+  Future<void> crateApiRemovePageBookmark({required PlatformInt64 bookmarkId});
 
   Future<RenderedPage> crateApiRenderPageVariant({
     required RenderPagePayload payload,
@@ -203,36 +197,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<PlatformInt64> crateApiAddBookmark({
-    required SaveBookmarkPayload payload,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_save_bookmark_payload(payload, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 1,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_i_64,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiAddBookmarkConstMeta,
-        argValues: [payload],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiAddBookmarkConstMeta =>
-      const TaskConstMeta(debugName: "add_bookmark", argNames: ["payload"]);
-
-  @override
-  Future<PlatformInt64> crateApiAddChapterFavorite({
     required String chapterSourcePath,
     required String comicSourcePath,
   }) {
@@ -245,7 +209,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 1,
             port: port_,
           );
         },
@@ -253,22 +217,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiAddChapterFavoriteConstMeta,
+        constMeta: kCrateApiAddBookmarkConstMeta,
         argValues: [chapterSourcePath, comicSourcePath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAddChapterFavoriteConstMeta => const TaskConstMeta(
-    debugName: "add_chapter_favorite",
+  TaskConstMeta get kCrateApiAddBookmarkConstMeta => const TaskConstMeta(
+    debugName: "add_bookmark",
     argNames: ["chapterSourcePath", "comicSourcePath"],
   );
 
   @override
-  Future<PlatformInt64> crateApiAddComicBookmark({
-    required String comicSourcePath,
-  }) {
+  Future<PlatformInt64> crateApiAddFavorite({required String comicSourcePath}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -277,7 +239,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 2,
             port: port_,
           );
         },
@@ -285,15 +247,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_i_64,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiAddComicBookmarkConstMeta,
+        constMeta: kCrateApiAddFavoriteConstMeta,
         argValues: [comicSourcePath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAddComicBookmarkConstMeta => const TaskConstMeta(
-    debugName: "add_comic_bookmark",
+  TaskConstMeta get kCrateApiAddFavoriteConstMeta => const TaskConstMeta(
+    debugName: "add_favorite",
     argNames: ["comicSourcePath"],
   );
 
@@ -307,7 +269,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 3,
             port: port_,
           );
         },
@@ -324,6 +286,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAddLibraryConstMeta =>
       const TaskConstMeta(debugName: "add_library", argNames: ["path"]);
+
+  @override
+  Future<PlatformInt64> crateApiAddPageBookmark({
+    required SavePageBookmarkPayload payload,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_save_page_bookmark_payload(
+            payload,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiAddPageBookmarkConstMeta,
+        argValues: [payload],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAddPageBookmarkConstMeta => const TaskConstMeta(
+    debugName: "add_page_bookmark",
+    argNames: ["payload"],
+  );
 
   @override
   Future<void> crateApiCancelScanLibraries() {
@@ -716,7 +713,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_app", argNames: ["appDataDir"]);
 
   @override
-  Future<bool> crateApiIsComicBookmarked({required String comicSourcePath}) {
+  Future<bool> crateApiIsFavorited({required String comicSourcePath}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -733,15 +730,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiIsComicBookmarkedConstMeta,
+        constMeta: kCrateApiIsFavoritedConstMeta,
         argValues: [comicSourcePath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiIsComicBookmarkedConstMeta => const TaskConstMeta(
-    debugName: "is_comic_bookmarked",
+  TaskConstMeta get kCrateApiIsFavoritedConstMeta => const TaskConstMeta(
+    debugName: "is_favorited",
     argNames: ["comicSourcePath"],
   );
 
@@ -776,64 +773,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<List<ComicBookmark>> crateApiListAllBookmarks() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 20,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_comic_bookmark,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiListAllBookmarksConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiListAllBookmarksConstMeta =>
-      const TaskConstMeta(debugName: "list_all_bookmarks", argNames: []);
-
-  @override
-  Future<List<Bookmark>> crateApiListBookmarks({
-    required PlatformInt64 chapterId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(chapterId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 21,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_bookmark,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiListBookmarksConstMeta,
-        argValues: [chapterId],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiListBookmarksConstMeta =>
-      const TaskConstMeta(debugName: "list_bookmarks", argNames: ["chapterId"]);
-
-  @override
-  Future<List<String>> crateApiListChapterFavorites({
+  Future<List<String>> crateApiListBookmarks({
     required String comicSourcePath,
   }) {
     return handler.executeNormal(
@@ -844,7 +784,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 20,
             port: port_,
           );
         },
@@ -852,18 +792,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiListChapterFavoritesConstMeta,
+        constMeta: kCrateApiListBookmarksConstMeta,
         argValues: [comicSourcePath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiListChapterFavoritesConstMeta =>
-      const TaskConstMeta(
-        debugName: "list_chapter_favorites",
-        argNames: ["comicSourcePath"],
-      );
+  TaskConstMeta get kCrateApiListBookmarksConstMeta => const TaskConstMeta(
+    debugName: "list_bookmarks",
+    argNames: ["comicSourcePath"],
+  );
 
   @override
   Future<List<RawChapter>> crateApiListComicChaptersRaw({
@@ -877,7 +816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 21,
             port: port_,
           );
         },
@@ -907,7 +846,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 22,
             port: port_,
           );
         },
@@ -926,6 +865,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "list_comics_with_progress", argNames: []);
 
   @override
+  Future<List<Favorite>> crateApiListFavorites() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_favorite,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiListFavoritesConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiListFavoritesConstMeta =>
+      const TaskConstMeta(debugName: "list_favorites", argNames: []);
+
+  @override
   Future<List<Library>> crateApiListLibraries() {
     return handler.executeNormal(
       NormalTask(
@@ -934,7 +900,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 24,
             port: port_,
           );
         },
@@ -966,7 +932,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 25,
             port: port_,
           );
         },
@@ -986,6 +952,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "list_library_comics_raw",
         argNames: ["sortBy", "sortDir"],
       );
+
+  @override
+  Future<List<PageBookmark>> crateApiListPageBookmarks({
+    required PlatformInt64 chapterId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(chapterId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 26,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_page_bookmark,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiListPageBookmarksConstMeta,
+        argValues: [chapterId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiListPageBookmarksConstMeta => const TaskConstMeta(
+    debugName: "list_page_bookmarks",
+    argNames: ["chapterId"],
+  );
 
   @override
   Future<List<ReadingHistoryEntry>> crateApiListReadingHistory() {
@@ -1134,12 +1132,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "prefetch_pages", argNames: ["payload"]);
 
   @override
-  Future<void> crateApiRemoveBookmark({required PlatformInt64 bookmarkId}) {
+  Future<void> crateApiRemoveBookmark({required String chapterSourcePath}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_i_64(bookmarkId, serializer);
+          sse_encode_String(chapterSourcePath, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1152,7 +1150,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiRemoveBookmarkConstMeta,
-        argValues: [bookmarkId],
+        argValues: [chapterSourcePath],
         apiImpl: this,
       ),
     );
@@ -1160,18 +1158,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiRemoveBookmarkConstMeta => const TaskConstMeta(
     debugName: "remove_bookmark",
-    argNames: ["bookmarkId"],
+    argNames: ["chapterSourcePath"],
   );
 
   @override
-  Future<void> crateApiRemoveChapterFavorite({
-    required String chapterSourcePath,
-  }) {
+  Future<void> crateApiRemoveFavorite({required String comicSourcePath}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(chapterSourcePath, serializer);
+          sse_encode_String(comicSourcePath, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1183,26 +1179,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiRemoveChapterFavoriteConstMeta,
-        argValues: [chapterSourcePath],
+        constMeta: kCrateApiRemoveFavoriteConstMeta,
+        argValues: [comicSourcePath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRemoveChapterFavoriteConstMeta =>
-      const TaskConstMeta(
-        debugName: "remove_chapter_favorite",
-        argNames: ["chapterSourcePath"],
-      );
+  TaskConstMeta get kCrateApiRemoveFavoriteConstMeta => const TaskConstMeta(
+    debugName: "remove_favorite",
+    argNames: ["comicSourcePath"],
+  );
 
   @override
-  Future<void> crateApiRemoveComicBookmark({required String comicSourcePath}) {
+  Future<void> crateApiRemovePageBookmark({required PlatformInt64 bookmarkId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(comicSourcePath, serializer);
+          sse_encode_i_64(bookmarkId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1214,18 +1209,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiRemoveComicBookmarkConstMeta,
-        argValues: [comicSourcePath],
+        constMeta: kCrateApiRemovePageBookmarkConstMeta,
+        argValues: [bookmarkId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRemoveComicBookmarkConstMeta =>
-      const TaskConstMeta(
-        debugName: "remove_comic_bookmark",
-        argNames: ["comicSourcePath"],
-      );
+  TaskConstMeta get kCrateApiRemovePageBookmarkConstMeta => const TaskConstMeta(
+    debugName: "remove_page_bookmark",
+    argNames: ["bookmarkId"],
+  );
 
   @override
   Future<RenderedPage> crateApiRenderPageVariant({
@@ -1382,21 +1376,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Bookmark dco_decode_bookmark(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return Bookmark(
-      id: dco_decode_i_64(arr[0]),
-      chapterId: dco_decode_i_64(arr[1]),
-      page: dco_decode_i_64(arr[2]),
-      createdAt: dco_decode_i_64(arr[3]),
-      note: dco_decode_String(arr[4]),
-    );
-  }
-
-  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -1441,11 +1420,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SaveBookmarkPayload dco_decode_box_autoadd_save_bookmark_payload(
+  SavePageBookmarkPayload dco_decode_box_autoadd_save_page_bookmark_payload(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_save_bookmark_payload(raw);
+    return dco_decode_save_page_bookmark_payload(raw);
   }
 
   @protected
@@ -1498,12 +1477,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ComicBookmark dco_decode_comic_bookmark(dynamic raw) {
+  Favorite dco_decode_favorite(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 4)
       throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return ComicBookmark(
+    return Favorite(
       id: dco_decode_i_64(arr[0]),
       comicSourcePath: dco_decode_String(arr[1]),
       comicTitle: dco_decode_String(arr[2]),
@@ -1588,21 +1567,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<Bookmark> dco_decode_list_bookmark(dynamic raw) {
+  List<Favorite> dco_decode_list_favorite(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_bookmark).toList();
-  }
-
-  @protected
-  List<ComicBookmark> dco_decode_list_comic_bookmark(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_comic_bookmark).toList();
+    return (raw as List<dynamic>).map(dco_decode_favorite).toList();
   }
 
   @protected
   List<Library> dco_decode_list_library(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_library).toList();
+  }
+
+  @protected
+  List<PageBookmark> dco_decode_list_page_bookmark(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_page_bookmark).toList();
   }
 
   @protected
@@ -1707,6 +1686,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
+  PageBookmark dco_decode_page_bookmark(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return PageBookmark(
+      id: dco_decode_i_64(arr[0]),
+      chapterId: dco_decode_i_64(arr[1]),
+      page: dco_decode_i_64(arr[2]),
+      createdAt: dco_decode_i_64(arr[3]),
+      note: dco_decode_String(arr[4]),
+    );
   }
 
   @protected
@@ -1833,12 +1827,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SaveBookmarkPayload dco_decode_save_bookmark_payload(dynamic raw) {
+  SavePageBookmarkPayload dco_decode_save_page_bookmark_payload(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 3)
       throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return SaveBookmarkPayload(
+    return SavePageBookmarkPayload(
       chapterId: dco_decode_i_64(arr[0]),
       page: dco_decode_i_64(arr[1]),
       note: dco_decode_opt_String(arr[2]),
@@ -1934,23 +1928,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Bookmark sse_decode_bookmark(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_i_64(deserializer);
-    var var_chapterId = sse_decode_i_64(deserializer);
-    var var_page = sse_decode_i_64(deserializer);
-    var var_createdAt = sse_decode_i_64(deserializer);
-    var var_note = sse_decode_String(deserializer);
-    return Bookmark(
-      id: var_id,
-      chapterId: var_chapterId,
-      page: var_page,
-      createdAt: var_createdAt,
-      note: var_note,
-    );
-  }
-
-  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
@@ -2003,11 +1980,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SaveBookmarkPayload sse_decode_box_autoadd_save_bookmark_payload(
+  SavePageBookmarkPayload sse_decode_box_autoadd_save_page_bookmark_payload(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_save_bookmark_payload(deserializer));
+    return (sse_decode_save_page_bookmark_payload(deserializer));
   }
 
   @protected
@@ -2074,13 +2051,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ComicBookmark sse_decode_comic_bookmark(SseDeserializer deserializer) {
+  Favorite sse_decode_favorite(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_i_64(deserializer);
     var var_comicSourcePath = sse_decode_String(deserializer);
     var var_comicTitle = sse_decode_String(deserializer);
     var var_createdAt = sse_decode_i_64(deserializer);
-    return ComicBookmark(
+    return Favorite(
       id: var_id,
       comicSourcePath: var_comicSourcePath,
       comicTitle: var_comicTitle,
@@ -2183,27 +2160,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<Bookmark> sse_decode_list_bookmark(SseDeserializer deserializer) {
+  List<Favorite> sse_decode_list_favorite(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <Bookmark>[];
+    var ans_ = <Favorite>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_bookmark(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<ComicBookmark> sse_decode_list_comic_bookmark(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ComicBookmark>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_comic_bookmark(deserializer));
+      ans_.add(sse_decode_favorite(deserializer));
     }
     return ans_;
   }
@@ -2216,6 +2179,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <Library>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_library(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<PageBookmark> sse_decode_list_page_bookmark(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <PageBookmark>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_page_bookmark(deserializer));
     }
     return ans_;
   }
@@ -2404,6 +2381,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PageBookmark sse_decode_page_bookmark(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_chapterId = sse_decode_i_64(deserializer);
+    var var_page = sse_decode_i_64(deserializer);
+    var var_createdAt = sse_decode_i_64(deserializer);
+    var var_note = sse_decode_String(deserializer);
+    return PageBookmark(
+      id: var_id,
+      chapterId: var_chapterId,
+      page: var_page,
+      createdAt: var_createdAt,
+      note: var_note,
+    );
+  }
+
+  @protected
   PageInfo sse_decode_page_info(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_index = sse_decode_u_32(deserializer);
@@ -2552,14 +2546,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SaveBookmarkPayload sse_decode_save_bookmark_payload(
+  SavePageBookmarkPayload sse_decode_save_page_bookmark_payload(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_chapterId = sse_decode_i_64(deserializer);
     var var_page = sse_decode_i_64(deserializer);
     var var_note = sse_decode_opt_String(deserializer);
-    return SaveBookmarkPayload(
+    return SavePageBookmarkPayload(
       chapterId: var_chapterId,
       page: var_page,
       note: var_note,
@@ -2650,16 +2644,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_bookmark(Bookmark self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_64(self.id, serializer);
-    sse_encode_i_64(self.chapterId, serializer);
-    sse_encode_i_64(self.page, serializer);
-    sse_encode_i_64(self.createdAt, serializer);
-    sse_encode_String(self.note, serializer);
-  }
-
-  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
@@ -2720,12 +2704,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_save_bookmark_payload(
-    SaveBookmarkPayload self,
+  void sse_encode_box_autoadd_save_page_bookmark_payload(
+    SavePageBookmarkPayload self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_save_bookmark_payload(self, serializer);
+    sse_encode_save_page_bookmark_payload(self, serializer);
   }
 
   @protected
@@ -2783,7 +2767,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_comic_bookmark(ComicBookmark self, SseSerializer serializer) {
+  void sse_encode_favorite(Favorite self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.id, serializer);
     sse_encode_String(self.comicSourcePath, serializer);
@@ -2860,23 +2844,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_bookmark(List<Bookmark> self, SseSerializer serializer) {
+  void sse_encode_list_favorite(List<Favorite> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_bookmark(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_comic_bookmark(
-    List<ComicBookmark> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_comic_bookmark(item, serializer);
+      sse_encode_favorite(item, serializer);
     }
   }
 
@@ -2886,6 +2858,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_library(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_page_bookmark(
+    List<PageBookmark> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_page_bookmark(item, serializer);
     }
   }
 
@@ -3077,6 +3061,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_page_bookmark(PageBookmark self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_i_64(self.chapterId, serializer);
+    sse_encode_i_64(self.page, serializer);
+    sse_encode_i_64(self.createdAt, serializer);
+    sse_encode_String(self.note, serializer);
+  }
+
+  @protected
   void sse_encode_page_info(PageInfo self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.index, serializer);
@@ -3172,8 +3166,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_save_bookmark_payload(
-    SaveBookmarkPayload self,
+  void sse_encode_save_page_bookmark_payload(
+    SavePageBookmarkPayload self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs

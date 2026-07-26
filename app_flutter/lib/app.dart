@@ -50,7 +50,7 @@ final _router = GoRouter(
   ],
 );
 
-enum SidebarTab { library, history, bookmarks, settings }
+enum SidebarTab { library, history, favorites, settings }
 
 final sidebarTabProvider = NotifierProvider<SidebarTabNotifier, SidebarTab>(
   SidebarTabNotifier.new,
@@ -181,7 +181,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                   text: text,
                   selectedTab: selectedTab,
                   libraryCount: ref.watch(libraryCountProvider),
-                  bookmarkCount: ref.watch(bookmarkCountProvider),
+                  favoriteCount: ref.watch(favoriteCountProvider),
                   onSelectTab: _setSelectedTab,
                 ),
                 Expanded(
@@ -234,7 +234,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
       nextTab = switch (libraryTab) {
         LibraryTab.library => SidebarTab.library,
         LibraryTab.history => SidebarTab.history,
-        LibraryTab.bookmarks => SidebarTab.bookmarks,
+        LibraryTab.favorites => SidebarTab.favorites,
       };
     }
     if (ref.read(sidebarTabProvider) != nextTab) {
@@ -267,15 +267,15 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
               jsonEncode(encodeLibraryTab(LibraryTab.history)),
             );
         if (mounted) context.go('/');
-      case SidebarTab.bookmarks:
+      case SidebarTab.favorites:
         ref
             .read(libraryPreferencesProvider.notifier)
-            .setSelectedTab(LibraryTab.bookmarks);
+            .setSelectedTab(LibraryTab.favorites);
         await ref
             .read(comicRdApiProvider)
             .setSetting(
               'library_selected_tab',
-              jsonEncode(encodeLibraryTab(LibraryTab.bookmarks)),
+              jsonEncode(encodeLibraryTab(LibraryTab.favorites)),
             );
         if (mounted) context.go('/');
       case SidebarTab.settings:
@@ -299,7 +299,7 @@ class _Sidebar extends StatelessWidget {
     required this.text,
     required this.selectedTab,
     required this.libraryCount,
-    required this.bookmarkCount,
+    required this.favoriteCount,
     required this.onSelectTab,
   });
 
@@ -308,7 +308,7 @@ class _Sidebar extends StatelessWidget {
   final AppStrings text;
   final SidebarTab selectedTab;
   final int libraryCount;
-  final int bookmarkCount;
+  final int favoriteCount;
   final ValueChanged<SidebarTab> onSelectTab;
 
   @override
@@ -370,11 +370,11 @@ class _Sidebar extends StatelessWidget {
           const SizedBox(height: 4),
           _SidebarNavItem(
             collapsed: collapsed,
-            icon: AppIcons.bookmark,
-            label: text.bookmarks,
-            count: bookmarkCount,
-            selected: selectedTab == SidebarTab.bookmarks,
-            onTap: () => onSelectTab(SidebarTab.bookmarks),
+            icon: AppIcons.star,
+            label: text.favorites,
+            count: favoriteCount,
+            selected: selectedTab == SidebarTab.favorites,
+            onTap: () => onSelectTab(SidebarTab.favorites),
           ),
           const Spacer(),
           const SizedBox(height: 4),

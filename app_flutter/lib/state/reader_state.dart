@@ -23,11 +23,6 @@ final readerDataProvider = FutureProvider.autoDispose.family<ReaderData, int>((
   );
 });
 
-final chapterBookmarksProvider =
-    FutureProvider.family<List<bridge.Bookmark>, int>((ref, chapterId) {
-      return ref.watch(comicRdApiProvider).listBookmarks(chapterId);
-    });
-
 final renderedPageProvider = FutureProvider.autoDispose
     .family<bridge.RenderedPage, RenderedPageRequest>((ref, request) {
       return ref

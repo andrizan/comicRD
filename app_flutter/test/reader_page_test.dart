@@ -464,17 +464,17 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(api.favoriteListRequests, isNot(contains('')));
+    expect(api.bookmarkListRequests, isNot(contains('')));
     expect(
-      api.favoriteListRequests,
+      api.bookmarkListRequests,
       contains('/library/Kaichou wa Maid-sama!'),
     );
 
-    await tester.tap(find.byIcon(AppIcons.star));
+    await tester.tap(find.byIcon(AppIcons.folderBookmark).first);
     await tester.pump();
 
     expect(
-      api.addedChapterFavorites,
+      api.addedBookmarks,
       contains((
         comicSourcePath: '/library/Kaichou wa Maid-sama!',
         chapterSourcePath: '/library/Kaichou wa Maid-sama!/Chapter 28',
@@ -509,11 +509,11 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   final savedProgress = <bridge.SaveProgressPayload>[];
   final loadedChapterIds = <int>[];
   final events = <String>[];
-  final favoriteListRequests = <String>[];
-  final favoriteChapterPaths = <String>{};
-  final addedChapterFavorites =
+  final bookmarkListRequests = <String>[];
+  final bookmarkChapterPaths = <String>{};
+  final addedBookmarks =
       <({String comicSourcePath, String chapterSourcePath})>[];
-  final removedChapterFavorites = <String>[];
+  final removedBookmarks = <String>[];
   bool _prefetchGateUsed = false;
   int loadedPageEntries = 0;
 
@@ -618,28 +618,28 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   }
 
   @override
-  Future<List<String>> listChapterFavorites(String comicSourcePath) async {
-    favoriteListRequests.add(comicSourcePath);
-    return favoriteChapterPaths.toList();
+  Future<List<String>> listBookmarks({required String comicSourcePath}) async {
+    bookmarkListRequests.add(comicSourcePath);
+    return bookmarkChapterPaths.toList();
   }
 
   @override
-  Future<int> addChapterFavorite({
+  Future<int> addBookmark({
     required String chapterSourcePath,
     required String comicSourcePath,
   }) async {
-    addedChapterFavorites.add((
+    addedBookmarks.add((
       comicSourcePath: comicSourcePath,
       chapterSourcePath: chapterSourcePath,
     ));
-    favoriteChapterPaths.add(chapterSourcePath);
-    return addedChapterFavorites.length;
+    bookmarkChapterPaths.add(chapterSourcePath);
+    return addedBookmarks.length;
   }
 
   @override
-  Future<void> removeChapterFavorite(String chapterSourcePath) async {
-    removedChapterFavorites.add(chapterSourcePath);
-    favoriteChapterPaths.remove(chapterSourcePath);
+  Future<void> removeBookmark({required String chapterSourcePath}) async {
+    removedBookmarks.add(chapterSourcePath);
+    bookmarkChapterPaths.remove(chapterSourcePath);
   }
 }
 

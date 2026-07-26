@@ -100,16 +100,16 @@ Reading state APIs:
 
 - `saveProgress(SaveProgressPayload) -> void`
 - `getProgress(chapterId: int) -> ReadingProgress?`
-- `listBookmarks(chapterId: int) -> List<Bookmark>`
-- `addBookmark(SaveBookmarkPayload) -> int`
-- `removeBookmark(bookmarkId: int) -> void`
-- `listAllBookmarks() -> List<ComicBookmark>`
-- `addComicBookmark(comicSourcePath: String) -> int`
-- `removeComicBookmark(comicSourcePath: String) -> void`
-- `isComicBookmarked(comicSourcePath: String) -> bool`
-- `addChapterFavorite(chapterSourcePath: String, comicSourcePath: String) -> int`
-- `removeChapterFavorite(chapterSourcePath: String) -> void`
-- `listChapterFavorites(comicSourcePath: String) -> List<String>`
+- `listPageBookmarks(chapterId: int) -> List<PageBookmark>`
+- `addPageBookmark(SavePageBookmarkPayload) -> int`
+- `removePageBookmark(bookmarkId: int) -> void`
+- `listFavorites() -> List<Favorite>`
+- `addFavorite(comicSourcePath: String) -> int`
+- `removeFavorite(comicSourcePath: String) -> void`
+- `isFavorited(comicSourcePath: String) -> bool`
+- `addBookmark(chapterSourcePath: String, comicSourcePath: String) -> int`
+- `removeBookmark(chapterSourcePath: String) -> void`
+- `listBookmarks(comicSourcePath: String) -> List<String>`
 
 Settings/backup/OS APIs:
 
@@ -226,7 +226,7 @@ Important data types:
 - [x] Show source status warning when the library path is unconfigured, missing, not a directory, or unreadable.
 - [x] Implement comic bookmarks and context actions.
 - [x] Implement history tab using `listReadingHistory`, deduped by comic source path.
-- [x] Implement bookmarks tab using `listAllBookmarks`.
+- [x] Implement bookmarks tab using `listFavorites`.
 - [x] Preserve scroll position per tab.
 - [x] Add on-demand comic thumbnail generation with a bounded in-memory LRU cache plus persistent disk cache (200 MB, LRU cleanup), and display covers in library/bookmarks grid/list views and on the comic detail page.
 

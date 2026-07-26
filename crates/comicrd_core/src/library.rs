@@ -88,11 +88,9 @@ pub(crate) fn comics_from_fs_entries(
             let key = comic_history_key(library_path, &source_path);
             let size_bytes = comic_size_by_key.get(&key).copied().unwrap_or(0);
             comics.push(RawComic {
-                key: source_path.clone(),
                 title: comic_title_for_path(entry),
                 source_path,
                 source_type: "folder".to_string(),
-                library_path: library_path.to_string(),
                 date_modified: file_modified_ts(entry),
                 chapter_count,
                 read_chapter_count,
@@ -111,11 +109,9 @@ pub(crate) fn comics_from_fs_entries(
                 .copied()
                 .unwrap_or_else(|| chapter_size_bytes(entry, &source_type));
             comics.push(RawComic {
-                key: source_path.clone(),
                 title: comic_title_for_path(entry),
                 source_path,
                 source_type,
-                library_path: library_path.to_string(),
                 date_modified: file_modified_ts(entry),
                 chapter_count: 1,
                 read_chapter_count,
@@ -402,9 +398,9 @@ where
 
     for entry in entries {
         if entry.is_dir() {
-            let (c, ch) = scan_comic_dir(&tx, library_id, library_path, entry)?;
-            comic_count += c;
-            chapter_count += ch;
+            let (dir_comic_count, dir_chapter_count) = scan_comic_dir(&tx, library_id, library_path, entry)?;
+            comic_count += dir_comic_count;
+            chapter_count += dir_chapter_count;
             if !on_progress(&entry.to_string_lossy()) {
                 break;
             }

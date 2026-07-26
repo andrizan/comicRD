@@ -124,6 +124,77 @@ pub(crate) fn file_modified_ts(path: &Path) -> i64 {
 }
 
 pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
+    // Migration: rename old tables to new names if they exist.
+    // Order matters: bookmarks → page_bookmarks first, then chapter_favorites → bookmarks.
+    conn.execute_batch(
+        r#"
+      -- Rename bookmarks (page-level) → page_bookmarks
+      SELECT 1 FROM sqlite_master WHERE type='table' AND name='bookmarks';
+      "#,
+    )
+    .ok();
+    let has_bookmarks: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='bookmarks'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    let has_page_bookmarks: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='page_bookmarks'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    if has_bookmarks && !has_page_bookmarks {
+        let _ = conn.execute_batch("ALTER TABLE bookmarks RENAME TO page_bookmarks;");
+        let _ = conn.execute_batch(
+            "ALTER INDEX idx_bookmarks_chapter_id RENAME TO idx_page_bookmarks_chapter_id;",
+        );
+    }
+
+    // Rename chapter_favorites → bookmarks
+    let has_chapter_favorites: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='chapter_favorites'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    let has_bookmarks_new: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='bookmarks'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    if has_chapter_favorites && !has_bookmarks_new {
+        let _ = conn.execute_batch("ALTER TABLE chapter_favorites RENAME TO bookmarks;");
+        let _ = conn.execute_batch(
+            "ALTER INDEX idx_chapter_favorites_comic RENAME TO idx_bookmarks_comic;",
+        );
+    }
+
+    // Rename comic_bookmarks → favorites
+    let has_comic_bookmarks: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='comic_bookmarks'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    let has_favorites: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='favorites'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+    if has_comic_bookmarks && !has_favorites {
+        let _ = conn.execute_batch("ALTER TABLE comic_bookmarks RENAME TO favorites;");
+    }
+
     conn.execute_batch(
         r#"
       CREATE TABLE IF NOT EXISTS libraries (
@@ -170,7 +241,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         FOREIGN KEY(chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
       );
 
-      CREATE TABLE IF NOT EXISTS bookmarks (
+      CREATE TABLE IF NOT EXISTS page_bookmarks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         chapter_id INTEGER NOT NULL,
         page INTEGER NOT NULL,
@@ -185,13 +256,13 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         updated_at INTEGER NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS comic_bookmarks (
+      CREATE TABLE IF NOT EXISTS favorites (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         comic_source_path TEXT NOT NULL UNIQUE,
         created_at INTEGER NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS chapter_favorites (
+      CREATE TABLE IF NOT EXISTS bookmarks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         chapter_source_path TEXT NOT NULL UNIQUE,
         comic_source_path TEXT NOT NULL,
@@ -220,8 +291,8 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         r#"
       CREATE INDEX IF NOT EXISTS idx_chapters_comic_id ON chapters(comic_id);
       CREATE INDEX IF NOT EXISTS idx_chapters_chapter_index ON chapters(chapter_index);
-      CREATE INDEX IF NOT EXISTS idx_bookmarks_chapter_id ON bookmarks(chapter_id);
-      CREATE INDEX IF NOT EXISTS idx_chapter_favorites_comic ON chapter_favorites(comic_source_path);
+      CREATE INDEX IF NOT EXISTS idx_page_bookmarks_chapter_id ON page_bookmarks(chapter_id);
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_comic ON bookmarks(comic_source_path);
       CREATE INDEX IF NOT EXISTS idx_reading_progress_updated_at ON reading_progress(updated_at);
       CREATE INDEX IF NOT EXISTS idx_comics_date_modified ON comics(date_modified);
       CREATE INDEX IF NOT EXISTS idx_libraries_updated_at ON libraries(updated_at);

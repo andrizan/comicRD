@@ -133,6 +133,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   int _renderStart = 0;
   int _renderEnd = -1;
   int _readerGeneration = 0;
+  final Set<int> _pageBookmarkedPages = {};
 
   @override
   void initState() {
@@ -241,15 +242,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final comicPath = reader.asData?.value.context?.comicSourcePath ?? '';
     final chapterSourcePath =
         reader.asData?.value.context?.chapterSourcePath ?? '';
-    final favoritePaths = comicPath.isEmpty
+    final bookmarkedChapterPaths = comicPath.isEmpty
         ? const <String>[]
-        : ref.watch(chapterFavoritesProvider(comicPath)).asData?.value ??
+        : ref.watch(chapterBookmarksProvider(comicPath)).asData?.value ??
               const <String>[];
-    final isFavorited =
+    final isBookmarked =
         chapterSourcePath.isNotEmpty &&
-        favoritePaths.contains(chapterSourcePath);
-    final isComicBookmarked =
-        ref.watch(comicBookmarkedProvider(comicPath)).asData?.value ?? false;
+        bookmarkedChapterPaths.contains(chapterSourcePath);
+    final isFavorited =
+        ref.watch(comicFavoritedProvider(comicPath)).asData?.value ?? false;
     return KeyboardListener(
       autofocus: true,
       focusNode: _focusNode,
@@ -265,6 +266,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             _lastReaderData = data;
             _lastReaderChapterId = widget.chapterId;
             _restoreProgress(data);
+            if (_pageBookmarkedPages.isEmpty) {
+              unawaited(_loadPageBookmarks(widget.chapterId));
+            }
             return Stack(
               children: [
                 Positioned.fill(
@@ -314,8 +318,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             zoom: readerSettings.zoom,
                             fullscreen: _fullscreen,
                             unlimitedScroll: readerSettings.unlimitedScroll,
+                            isBookmarked: isBookmarked,
                             isFavorited: isFavorited,
-                            isComicBookmarked: isComicBookmarked,
                             onClose: () => _close(data),
                             onPreviousPage: () => _jumpBy(-1),
                             onNextPage: () => _jumpBy(1),
@@ -348,10 +352,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                     !readerSettings.unlimitedScroll,
                                   );
                             },
-                            onToggleFavorite: () =>
-                                _toggleFavorite(chapterSourcePath, comicPath),
-                            onToggleComicBookmark: () =>
-                                _toggleComicBookmark(comicPath),
+                            onToggleBookmark: () =>
+                                _toggleBookmark(chapterSourcePath, comicPath),
+                            onToggleFavorite: () => _toggleFavorite(comicPath),
+                            onTogglePageBookmark: _togglePageBookmark,
+                            isPageBookmarked: _pageBookmarkedPages.contains(
+                              _currentPage,
+                            ),
                           ),
                         ),
                       ),
@@ -395,6 +402,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                           child: _ReferencePageIndicator(
                             currentPage: _currentPage,
                             pageCount: data.pages.length,
+                            pageBookmarkedPages: _pageBookmarkedPages,
                             onSelected: _jumpToPage,
                           ),
                         ),
@@ -454,10 +462,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               : readerSettings.pageGap;
           final prevPage = index > 0 ? data.pages[index - 1] : null;
           return _pageDisplayHeight(
-            data.pages[index],
-            readerSettings.zoom,
-            prevPage: prevPage,
-          ) + pageGap;
+                data.pages[index],
+                readerSettings.zoom,
+                prevPage: prevPage,
+              ) +
+              pageGap;
         },
         padding: EdgeInsets.only(
           top: _topPadding,
@@ -681,7 +690,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     var top = _topPadding;
     for (var i = 0; i < pages.length; i++) {
       final prevPage = i > 0 ? pages[i - 1] : null;
-      final bottom = top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
+      final bottom =
+          top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
       if (bottom >= visibleTop && top <= visibleBottom) {
         first = first == -1 ? i : first;
         last = i;
@@ -711,7 +721,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     var top = _topPadding;
     for (var i = 0; i < pages.length; i++) {
       final prevPage = i > 0 ? pages[i - 1] : null;
-      final bottom = top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
+      final bottom =
+          top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
       if (offset <= bottom || i == pages.length - 1) {
         return i;
       }
@@ -1125,7 +1136,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  Future<void> _toggleFavorite(
+  Future<void> _toggleBookmark(
     String chapterSourcePath,
     String comicSourcePath,
   ) async {
@@ -1133,32 +1144,79 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     final api = ref.read(comicRdApiProvider);
-    final favorites =
-        ref.read(chapterFavoritesProvider(comicSourcePath)).asData?.value ?? [];
-    final isFavorited = favorites.contains(chapterSourcePath);
-    if (isFavorited) {
-      await api.removeChapterFavorite(chapterSourcePath);
+    final chapterBookmarks =
+        ref.read(chapterBookmarksProvider(comicSourcePath)).asData?.value ?? [];
+    final isBookmarked = chapterBookmarks.contains(chapterSourcePath);
+    if (isBookmarked) {
+      await api.removeBookmark(chapterSourcePath: chapterSourcePath);
     } else {
-      await api.addChapterFavorite(
+      await api.addBookmark(
         chapterSourcePath: chapterSourcePath,
         comicSourcePath: comicSourcePath,
       );
     }
-    ref.invalidate(chapterFavoritesProvider(comicSourcePath));
+    ref.invalidate(chapterBookmarksProvider(comicSourcePath));
   }
 
-  Future<void> _toggleComicBookmark(String comicPath) async {
+  Future<void> _toggleFavorite(String comicPath) async {
     if (comicPath.isEmpty) return;
     final api = ref.read(comicRdApiProvider);
-    final bookmarked =
-        ref.read(comicBookmarkedProvider(comicPath)).asData?.value ?? false;
-    if (bookmarked) {
-      await api.removeComicBookmark(comicPath);
+    final favorited =
+        ref.read(comicFavoritedProvider(comicPath)).asData?.value ?? false;
+    if (favorited) {
+      await api.removeFavorite(comicSourcePath: comicPath);
     } else {
-      await api.addComicBookmark(comicPath);
+      await api.addFavorite(comicSourcePath: comicPath);
     }
-    ref.invalidate(comicBookmarkedProvider(comicPath));
-    ref.invalidate(allBookmarksProvider);
+    ref.invalidate(comicFavoritedProvider(comicPath));
+    ref.invalidate(allFavoritesProvider);
+  }
+
+  Future<void> _loadPageBookmarks(int chapterId) async {
+    try {
+      final bookmarks = await _api.listPageBookmarks(chapterId: chapterId);
+      if (!mounted) return;
+      setState(() {
+        _pageBookmarkedPages
+          ..clear()
+          ..addAll(bookmarks.map((b) => b.page.toInt()));
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _togglePageBookmark() async {
+    final data = _lastReaderData;
+    if (data == null || data.pages.isEmpty) return;
+    final pageIndex = _currentPage;
+    if (pageIndex < 0 || pageIndex >= data.pages.length) return;
+    final chapterId = widget.chapterId;
+
+    if (_pageBookmarkedPages.contains(pageIndex)) {
+      // Find and remove the bookmark
+      try {
+        final bookmarks = await _api.listPageBookmarks(chapterId: chapterId);
+        final match = bookmarks.where((b) => b.page.toInt() == pageIndex);
+        if (match.isNotEmpty) {
+          await _api.removePageBookmark(bookmarkId: match.first.id);
+        }
+      } catch (_) {}
+      if (mounted) {
+        setState(() => _pageBookmarkedPages.remove(pageIndex));
+      }
+    } else {
+      try {
+        await _api.addPageBookmark(
+          bridge.SavePageBookmarkPayload(
+            chapterId: chapterId,
+            page: pageIndex,
+            note: '',
+          ),
+        );
+      } catch (_) {}
+      if (mounted) {
+        setState(() => _pageBookmarkedPages.add(pageIndex));
+      }
+    }
   }
 }
 
@@ -1296,8 +1354,8 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.zoom,
     required this.fullscreen,
     required this.unlimitedScroll,
+    required this.isBookmarked,
     required this.isFavorited,
-    required this.isComicBookmarked,
     required this.onClose,
     required this.onPreviousPage,
     required this.onNextPage,
@@ -1307,8 +1365,10 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.onZoomChanged,
     required this.onToggleFullscreen,
     required this.onToggleUnlimitedScroll,
+    required this.onToggleBookmark,
     required this.onToggleFavorite,
-    required this.onToggleComicBookmark,
+    required this.onTogglePageBookmark,
+    required this.isPageBookmarked,
   });
 
   final AppStrings text;
@@ -1318,8 +1378,9 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final double zoom;
   final bool fullscreen;
   final bool unlimitedScroll;
+  final bool isBookmarked;
   final bool isFavorited;
-  final bool isComicBookmarked;
+  final bool isPageBookmarked;
   final VoidCallback onClose;
   final VoidCallback onPreviousPage;
   final VoidCallback onNextPage;
@@ -1329,8 +1390,9 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onToggleFullscreen;
   final VoidCallback onToggleUnlimitedScroll;
+  final VoidCallback onToggleBookmark;
   final VoidCallback onToggleFavorite;
-  final VoidCallback onToggleComicBookmark;
+  final VoidCallback onTogglePageBookmark;
 
   @override
   Widget build(BuildContext context) {
@@ -1411,6 +1473,15 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       onPressed: onNextChapter,
                     ),
                     _ReferenceReaderIconButton(
+                      tooltip: isBookmarked
+                          ? text.removeBookmark
+                          : text.addBookmark,
+                      icon: AppIcons.folderBookmark,
+                      active: isBookmarked,
+                      activeColor: context.appReader.star,
+                      onPressed: onToggleBookmark,
+                    ),
+                    _ReferenceReaderIconButton(
                       tooltip: isFavorited
                           ? text.removeFavorite
                           : text.addFavorite,
@@ -1420,13 +1491,13 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       onPressed: onToggleFavorite,
                     ),
                     _ReferenceReaderIconButton(
-                      tooltip: isComicBookmarked
-                          ? text.removeBookmark
-                          : text.addBookmark,
+                      tooltip: isPageBookmarked
+                          ? text.removePageBookmark
+                          : text.addPageBookmark,
                       icon: AppIcons.bookmark,
-                      active: isComicBookmarked,
-                      activeColor: context.appReader.star,
-                      onPressed: onToggleComicBookmark,
+                      active: isPageBookmarked,
+                      activeColor: const Color(0xffffb020),
+                      onPressed: onTogglePageBookmark,
                     ),
                     const SizedBox(width: 4),
                     _ReaderControlChip(
@@ -1632,11 +1703,13 @@ class _ReferencePageIndicator extends StatefulWidget {
   const _ReferencePageIndicator({
     required this.currentPage,
     required this.pageCount,
+    required this.pageBookmarkedPages,
     required this.onSelected,
   });
 
   final int currentPage;
   final int pageCount;
+  final Set<int> pageBookmarkedPages;
   final ValueChanged<int> onSelected;
 
   @override
@@ -1722,6 +1795,8 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
                                   current: current,
                                   pageCount: count,
                                   hovered: _hovered,
+                                  pageBookmarkedPages:
+                                      widget.pageBookmarkedPages,
                                 ),
                               ),
                             ),
@@ -1838,11 +1913,13 @@ class _PageIndicatorPainter extends CustomPainter {
     required this.current,
     required this.pageCount,
     required this.hovered,
+    required this.pageBookmarkedPages,
   });
 
   final int current;
   final int pageCount;
   final bool hovered;
+  final Set<int> pageBookmarkedPages;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1853,6 +1930,7 @@ class _PageIndicatorPainter extends CustomPainter {
     final top = (size.height - barHeight) / 2;
     final filledPaint = Paint()..color = const Color(0xff9aa7b5);
     final emptyPaint = Paint()..color = Colors.white.withValues(alpha: 0.20);
+    final bookmarkPaint = Paint()..color = const Color(0xffffb020);
     final radius = Radius.circular(99);
 
     for (var i = 0; i < pageCount; i++) {
@@ -1863,7 +1941,11 @@ class _PageIndicatorPainter extends CustomPainter {
         Rect.fromLTRB(left, top, right, top + barHeight),
         radius,
       );
-      canvas.drawRRect(rect, i <= current ? filledPaint : emptyPaint);
+      if (pageBookmarkedPages.contains(i)) {
+        canvas.drawRRect(rect, bookmarkPaint);
+      } else {
+        canvas.drawRRect(rect, i <= current ? filledPaint : emptyPaint);
+      }
     }
   }
 
@@ -1871,6 +1953,7 @@ class _PageIndicatorPainter extends CustomPainter {
   bool shouldRepaint(_PageIndicatorPainter oldDelegate) {
     return oldDelegate.current != current ||
         oldDelegate.pageCount != pageCount ||
-        oldDelegate.hovered != hovered;
+        oldDelegate.hovered != hovered ||
+        oldDelegate.pageBookmarkedPages != pageBookmarkedPages;
   }
 }

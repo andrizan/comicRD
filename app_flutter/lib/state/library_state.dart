@@ -115,8 +115,8 @@ final readingHistoryProvider = FutureProvider<List<bridge.ReadingHistoryEntry>>(
   },
 );
 
-final allBookmarksProvider = FutureProvider<List<bridge.ComicBookmark>>((ref) {
-  return ref.watch(comicRdApiProvider).listAllBookmarks();
+final allFavoritesProvider = FutureProvider<List<bridge.Favorite>>((ref) {
+  return ref.watch(comicRdApiProvider).listFavorites();
 });
 
 class LibraryCountNotifier extends Notifier<int> {
@@ -132,9 +132,9 @@ final libraryCountProvider = NotifierProvider<LibraryCountNotifier, int>(
   LibraryCountNotifier.new,
 );
 
-final bookmarkCountProvider = Provider<int>((ref) {
-  final bookmarks = ref.watch(allBookmarksProvider);
-  return bookmarks.asData?.value.length ?? 0;
+final favoriteCountProvider = Provider<int>((ref) {
+  final favorites = ref.watch(allFavoritesProvider);
+  return favorites.asData?.value.length ?? 0;
 });
 
 final comicsWithProgressProvider = FutureProvider<List<String>>((ref) {
@@ -166,12 +166,12 @@ enum LibraryViewMode { all, unread, reading }
 
 enum LibraryDisplayMode { grid, list }
 
-enum LibraryTab { history, library, bookmarks }
+enum LibraryTab { history, library, favorites }
 
 class LibraryPreferences {
   const LibraryPreferences({
     this.libraryQuery = '',
-    this.bookmarksQuery = '',
+    this.favoritesQuery = '',
     this.historyQuery = '',
     this.sortBy = bridge.SortBy.name,
     this.sortDir = bridge.SortDir.asc,
@@ -181,7 +181,7 @@ class LibraryPreferences {
   });
 
   final String libraryQuery;
-  final String bookmarksQuery;
+  final String favoritesQuery;
   final String historyQuery;
   final bridge.SortBy sortBy;
   final bridge.SortDir sortDir;
@@ -191,13 +191,13 @@ class LibraryPreferences {
 
   String get query => switch (selectedTab) {
     LibraryTab.library => libraryQuery,
-    LibraryTab.bookmarks => bookmarksQuery,
+    LibraryTab.favorites => favoritesQuery,
     LibraryTab.history => historyQuery,
   };
 
   LibraryPreferences copyWith({
     String? libraryQuery,
-    String? bookmarksQuery,
+    String? favoritesQuery,
     String? historyQuery,
     bridge.SortBy? sortBy,
     bridge.SortDir? sortDir,
@@ -206,7 +206,7 @@ class LibraryPreferences {
     LibraryTab? selectedTab,
   }) => LibraryPreferences(
     libraryQuery: libraryQuery ?? this.libraryQuery,
-    bookmarksQuery: bookmarksQuery ?? this.bookmarksQuery,
+    favoritesQuery: favoritesQuery ?? this.favoritesQuery,
     historyQuery: historyQuery ?? this.historyQuery,
     sortBy: sortBy ?? this.sortBy,
     sortDir: sortDir ?? this.sortDir,
@@ -239,7 +239,7 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
   void setQuery(String query) {
     state = switch (state.selectedTab) {
       LibraryTab.library => state.copyWith(libraryQuery: query),
-      LibraryTab.bookmarks => state.copyWith(bookmarksQuery: query),
+      LibraryTab.favorites => state.copyWith(favoritesQuery: query),
       LibraryTab.history => state.copyWith(historyQuery: query),
     };
   }
@@ -293,7 +293,7 @@ LibraryDisplayMode _decodeDisplayMode(String? raw) {
 LibraryTab _decodeLibraryTab(String? raw) {
   return switch (_decodeString(raw, 'library')) {
     'history' => LibraryTab.history,
-    'bookmarks' => LibraryTab.bookmarks,
+    'favorites' => LibraryTab.favorites,
     _ => LibraryTab.library,
   };
 }
@@ -330,7 +330,7 @@ String encodeDisplayMode(LibraryDisplayMode value) {
 String encodeLibraryTab(LibraryTab value) {
   return switch (value) {
     LibraryTab.history => 'history',
-    LibraryTab.bookmarks => 'bookmarks',
+    LibraryTab.favorites => 'favorites',
     LibraryTab.library => 'library',
   };
 }

@@ -22,9 +22,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
-  Bookmark dco_decode_bookmark(dynamic raw);
-
-  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -48,7 +45,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RenderPagePayload dco_decode_box_autoadd_render_page_payload(dynamic raw);
 
   @protected
-  SaveBookmarkPayload dco_decode_box_autoadd_save_bookmark_payload(dynamic raw);
+  SavePageBookmarkPayload dco_decode_box_autoadd_save_page_bookmark_payload(
+    dynamic raw,
+  );
 
   @protected
   SaveProgressPayload dco_decode_box_autoadd_save_progress_payload(dynamic raw);
@@ -66,7 +65,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChapterContext dco_decode_chapter_context(dynamic raw);
 
   @protected
-  ComicBookmark dco_decode_comic_bookmark(dynamic raw);
+  Favorite dco_decode_favorite(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -90,13 +89,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
-  List<Bookmark> dco_decode_list_bookmark(dynamic raw);
-
-  @protected
-  List<ComicBookmark> dco_decode_list_comic_bookmark(dynamic raw);
+  List<Favorite> dco_decode_list_favorite(dynamic raw);
 
   @protected
   List<Library> dco_decode_list_library(dynamic raw);
+
+  @protected
+  List<PageBookmark> dco_decode_list_page_bookmark(dynamic raw);
 
   @protected
   List<PageInfo> dco_decode_list_page_info(dynamic raw);
@@ -147,6 +146,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
+  PageBookmark dco_decode_page_bookmark(dynamic raw);
+
+  @protected
   PageInfo dco_decode_page_info(dynamic raw);
 
   @protected
@@ -171,7 +173,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RenderedPage dco_decode_rendered_page(dynamic raw);
 
   @protected
-  SaveBookmarkPayload dco_decode_save_bookmark_payload(dynamic raw);
+  SavePageBookmarkPayload dco_decode_save_page_bookmark_payload(dynamic raw);
 
   @protected
   SaveProgressPayload dco_decode_save_progress_payload(dynamic raw);
@@ -202,9 +204,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
-
-  @protected
-  Bookmark sse_decode_bookmark(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -238,7 +237,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  SaveBookmarkPayload sse_decode_box_autoadd_save_bookmark_payload(
+  SavePageBookmarkPayload sse_decode_box_autoadd_save_page_bookmark_payload(
     SseDeserializer deserializer,
   );
 
@@ -262,7 +261,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChapterContext sse_decode_chapter_context(SseDeserializer deserializer);
 
   @protected
-  ComicBookmark sse_decode_comic_bookmark(SseDeserializer deserializer);
+  Favorite sse_decode_favorite(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -292,15 +291,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
-  List<Bookmark> sse_decode_list_bookmark(SseDeserializer deserializer);
-
-  @protected
-  List<ComicBookmark> sse_decode_list_comic_bookmark(
-    SseDeserializer deserializer,
-  );
+  List<Favorite> sse_decode_list_favorite(SseDeserializer deserializer);
 
   @protected
   List<Library> sse_decode_list_library(SseDeserializer deserializer);
+
+  @protected
+  List<PageBookmark> sse_decode_list_page_bookmark(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<PageInfo> sse_decode_list_page_info(SseDeserializer deserializer);
@@ -365,6 +364,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
+  PageBookmark sse_decode_page_bookmark(SseDeserializer deserializer);
+
+  @protected
   PageInfo sse_decode_page_info(SseDeserializer deserializer);
 
   @protected
@@ -395,7 +397,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RenderedPage sse_decode_rendered_page(SseDeserializer deserializer);
 
   @protected
-  SaveBookmarkPayload sse_decode_save_bookmark_payload(
+  SavePageBookmarkPayload sse_decode_save_page_bookmark_payload(
     SseDeserializer deserializer,
   );
 
@@ -430,9 +432,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_bookmark(Bookmark self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -474,8 +473,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_box_autoadd_save_bookmark_payload(
-    SaveBookmarkPayload self,
+  void sse_encode_box_autoadd_save_page_bookmark_payload(
+    SavePageBookmarkPayload self,
     SseSerializer serializer,
   );
 
@@ -507,7 +506,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_comic_bookmark(ComicBookmark self, SseSerializer serializer);
+  void sse_encode_favorite(Favorite self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -540,16 +539,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_bookmark(List<Bookmark> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_comic_bookmark(
-    List<ComicBookmark> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_favorite(List<Favorite> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_library(List<Library> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_page_bookmark(
+    List<PageBookmark> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_page_info(List<PageInfo> self, SseSerializer serializer);
@@ -636,6 +635,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_page_bookmark(PageBookmark self, SseSerializer serializer);
+
+  @protected
   void sse_encode_page_info(PageInfo self, SseSerializer serializer);
 
   @protected
@@ -672,8 +674,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_rendered_page(RenderedPage self, SseSerializer serializer);
 
   @protected
-  void sse_encode_save_bookmark_payload(
-    SaveBookmarkPayload self,
+  void sse_encode_save_page_bookmark_payload(
+    SavePageBookmarkPayload self,
     SseSerializer serializer,
   );
 

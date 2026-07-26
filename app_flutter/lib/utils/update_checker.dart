@@ -72,14 +72,21 @@ class UpdateChecker {
   }
 
   static bool _isNewer(String latest, String current) {
-    final lParts = latest.split('.').map(int.tryParse).toList();
-    final cParts = current.split('.').map(int.tryParse).toList();
-    final len = [lParts.length, cParts.length].reduce((a, b) => a > b ? a : b);
+    final latestSegments = latest.split('.').map(int.tryParse).toList();
+    final currentSegments = current.split('.').map(int.tryParse).toList();
+    final len = [
+      latestSegments.length,
+      currentSegments.length,
+    ].reduce((a, b) => a > b ? a : b);
     for (var i = 0; i < len; i++) {
-      final l = i < lParts.length ? (lParts[i] ?? 0) : 0;
-      final c = i < cParts.length ? (cParts[i] ?? 0) : 0;
-      if (l > c) return true;
-      if (l < c) return false;
+      final latestVal = i < latestSegments.length
+          ? (latestSegments[i] ?? 0)
+          : 0;
+      final currentVal = i < currentSegments.length
+          ? (currentSegments[i] ?? 0)
+          : 0;
+      if (latestVal > currentVal) return true;
+      if (latestVal < currentVal) return false;
     }
     return false;
   }

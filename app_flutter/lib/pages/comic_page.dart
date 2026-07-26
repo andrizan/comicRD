@@ -99,20 +99,21 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       ),
     );
     final chaptersRaw = ref.watch(comicChaptersProvider(widget.comicPath));
-    final favorites = ref.watch(chapterFavoritesProvider(widget.comicPath));
+    final chapterBookmarks = ref.watch(
+      chapterBookmarksProvider(widget.comicPath),
+    );
     final chapters = chaptersRaw.whenData(
       (data) => filterAndSortChapters(
         chapters: data,
-        favorites: favorites.asData?.value ?? [],
+        chapterBookmarks: chapterBookmarks.asData?.value ?? [],
         preferences: preferences,
       ),
     );
     final stats = ref.watch(comicStatsProvider(widget.comicPath));
     final history = ref.watch(comicReadingHistoryProvider(widget.comicPath));
-    final bookmarkedAsync = ref.watch(
-      comicBookmarkedProvider(widget.comicPath),
-    );
-    final favoritePaths = favorites.asData?.value.toSet() ?? const <String>{};
+    final favoritedAsync = ref.watch(comicFavoritedProvider(widget.comicPath));
+    final bookmarkedChapterPaths =
+        chapterBookmarks.asData?.value.toSet() ?? const <String>{};
     final title = widget.comicPath.split(RegExp(r'[/\\]')).last;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateBackToTopVisibility();
@@ -152,10 +153,10 @@ class _ComicPageState extends ConsumerState<ComicPage> {
               title: title.isEmpty ? text.comic : title,
               stats: stats,
               history: history,
-              bookmarked: bookmarkedAsync.asData?.value ?? false,
+              favorited: favoritedAsync.asData?.value ?? false,
               onContinueReading: _continueReading,
               onStartFromBeginning: _startFromBeginning,
-              onToggleBookmark: _toggleComicBookmark,
+              onToggleFavorite: _toggleFavorite,
               onOpenFolder: _openContainingFolder,
             ),
             const SizedBox(height: 24),
@@ -189,11 +190,11 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                         return _ChapterList(
                           text: text,
                           chapters: items,
-                          favorites: favoritePaths,
+                          bookmarkedChapterPaths: bookmarkedChapterPaths,
                           controller: _scroll,
                           emptyLabel: text.emptyLibrary,
                           onOpen: _openChapter,
-                          onToggleFavorite: _toggleFavorite,
+                          onToggleBookmark: _toggleBookmark,
                         );
                       },
                       error: (error, _) => Align(
@@ -256,28 +257,31 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     }
   }
 
-  Future<void> _toggleFavorite(bridge.RawChapter chapter, bool favorite) async {
+  Future<void> _toggleBookmark(
+    bridge.RawChapter chapter,
+    bool isBookmarked,
+  ) async {
     final api = ref.read(comicRdApiProvider);
-    if (favorite) {
-      await api.removeChapterFavorite(chapter.sourcePath);
+    if (isBookmarked) {
+      await api.removeBookmark(chapterSourcePath: chapter.sourcePath);
     } else {
-      await api.addChapterFavorite(
+      await api.addBookmark(
         chapterSourcePath: chapter.sourcePath,
         comicSourcePath: widget.comicPath,
       );
     }
-    ref.invalidate(chapterFavoritesProvider(widget.comicPath));
+    ref.invalidate(chapterBookmarksProvider(widget.comicPath));
   }
 
-  Future<void> _toggleComicBookmark(bool bookmarked) async {
+  Future<void> _toggleFavorite(bool favorited) async {
     final api = ref.read(comicRdApiProvider);
-    if (bookmarked) {
-      await api.removeComicBookmark(widget.comicPath);
+    if (favorited) {
+      await api.removeFavorite(comicSourcePath: widget.comicPath);
     } else {
-      await api.addComicBookmark(widget.comicPath);
+      await api.addFavorite(comicSourcePath: widget.comicPath);
     }
-    ref.invalidate(comicBookmarkedProvider(widget.comicPath));
-    ref.invalidate(allBookmarksProvider);
+    ref.invalidate(comicFavoritedProvider(widget.comicPath));
+    ref.invalidate(allFavoritesProvider);
   }
 
   Future<void> _openContainingFolder() async {
@@ -382,7 +386,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
 
   void _scrollToChapter(String chapterSourcePath) {
     final chaptersRaw = ref.read(comicChaptersProvider(widget.comicPath));
-    final favs = ref.read(chapterFavoritesProvider(widget.comicPath));
+    final chapterBookmarks = ref.read(
+      chapterBookmarksProvider(widget.comicPath),
+    );
     final prefs = ref
         .read(comicPreferencesProvider.notifier)
         .preferencesFor(widget.comicPath);
@@ -390,7 +396,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     if (items == null) return;
     final filtered = filterAndSortChapters(
       chapters: items,
-      favorites: favs.asData?.value ?? [],
+      chapterBookmarks: chapterBookmarks.asData?.value ?? [],
       preferences: prefs,
     );
     final index = filtered.indexWhere(
@@ -485,10 +491,10 @@ class _ComicHero extends StatelessWidget {
     required this.title,
     required this.stats,
     required this.history,
-    required this.bookmarked,
+    required this.favorited,
     required this.onContinueReading,
     required this.onStartFromBeginning,
-    required this.onToggleBookmark,
+    required this.onToggleFavorite,
     required this.onOpenFolder,
   });
 
@@ -497,10 +503,10 @@ class _ComicHero extends StatelessWidget {
   final String title;
   final ComicStats stats;
   final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
-  final bool bookmarked;
+  final bool favorited;
   final VoidCallback onContinueReading;
   final VoidCallback onStartFromBeginning;
-  final void Function(bool bookmarked) onToggleBookmark;
+  final void Function(bool favorited) onToggleFavorite;
   final VoidCallback onOpenFolder;
 
   @override
@@ -583,10 +589,10 @@ class _ComicHero extends StatelessWidget {
                     onPressed: onStartFromBeginning,
                   ),
                   _OutlineActionButton(
-                    label: bookmarked ? text.bookmarked : text.bookmark,
-                    icon: AppIcons.bookmark,
-                    iconColor: bookmarked ? context.appReader.star : null,
-                    onPressed: () => onToggleBookmark(bookmarked),
+                    label: favorited ? text.removeFavorite : text.addFavorite,
+                    icon: AppIcons.star,
+                    iconColor: favorited ? context.appReader.star : null,
+                    onPressed: () => onToggleFavorite(favorited),
                   ),
                   _OutlineActionButton(
                     label: text.openFolder,
@@ -979,9 +985,9 @@ class _ChapterTabs extends StatelessWidget {
         ),
         const SizedBox(width: 20),
         _ChapterTab(
-          label: text.favoriteChapters,
-          selected: selectedTab == ChapterTab.favorites,
-          onTap: () => onSetTab(ChapterTab.favorites),
+          label: text.bookmarkChapters,
+          selected: selectedTab == ChapterTab.bookmarks,
+          onTap: () => onSetTab(ChapterTab.bookmarks),
         ),
       ],
     );
@@ -1199,21 +1205,21 @@ class _ChapterList extends StatelessWidget {
   const _ChapterList({
     required this.text,
     required this.chapters,
-    required this.favorites,
+    required this.bookmarkedChapterPaths,
     required this.controller,
     required this.emptyLabel,
     required this.onOpen,
-    required this.onToggleFavorite,
+    required this.onToggleBookmark,
   });
 
   final AppStrings text;
   final List<bridge.RawChapter> chapters;
-  final Set<String> favorites;
+  final Set<String> bookmarkedChapterPaths;
   final ScrollController controller;
   final String emptyLabel;
   final Future<void> Function(bridge.RawChapter chapter) onOpen;
-  final Future<void> Function(bridge.RawChapter chapter, bool favorite)
-  onToggleFavorite;
+  final Future<void> Function(bridge.RawChapter chapter, bool isBookmarked)
+  onToggleBookmark;
 
   @override
   Widget build(BuildContext context) {
@@ -1230,13 +1236,15 @@ class _ChapterList extends StatelessWidget {
       itemCount: chapters.length,
       itemBuilder: (context, index) {
         final chapter = chapters[index];
-        final favorite = favorites.contains(chapter.sourcePath);
+        final isBookmarked = bookmarkedChapterPaths.contains(
+          chapter.sourcePath,
+        );
         return _ChapterListRow(
           chapter: chapter,
-          favorite: favorite,
+          isBookmarked: isBookmarked,
           text: text,
           onOpen: () => onOpen(chapter),
-          onToggleFavorite: () => onToggleFavorite(chapter, favorite),
+          onToggleBookmark: () => onToggleBookmark(chapter, isBookmarked),
         );
       },
     );
@@ -1246,17 +1254,17 @@ class _ChapterList extends StatelessWidget {
 class _ChapterListRow extends StatefulWidget {
   const _ChapterListRow({
     required this.chapter,
-    required this.favorite,
+    required this.isBookmarked,
     required this.text,
     required this.onOpen,
-    required this.onToggleFavorite,
+    required this.onToggleBookmark,
   });
 
   final bridge.RawChapter chapter;
-  final bool favorite;
+  final bool isBookmarked;
   final AppStrings text;
   final VoidCallback onOpen;
-  final VoidCallback onToggleFavorite;
+  final VoidCallback onToggleBookmark;
 
   @override
   State<_ChapterListRow> createState() => _ChapterListRowState();
@@ -1334,19 +1342,12 @@ class _ChapterListRowState extends State<_ChapterListRow> {
                   ),
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: widget.onToggleFavorite,
-                      child: Icon(
-                        AppIcons.star,
-                        size: 16,
-                        color: widget.favorite
-                            ? context.appReader.star
-                            : colors.mutedForeground.withValues(alpha: 0.3),
-                      ),
-                    ),
+                  child: _BookmarkButton(
+                    bookmarked: widget.isBookmarked,
+                    onToggle: widget.onToggleBookmark,
+                    tooltip: widget.isBookmarked
+                        ? widget.text.removeBookmark
+                        : widget.text.addBookmark,
                   ),
                 ),
                 Text(
@@ -1369,5 +1370,39 @@ class _ChapterListRowState extends State<_ChapterListRow> {
       return context.appAccent.withValues(alpha: 0.6);
     }
     return context.appAccent;
+  }
+}
+
+class _BookmarkButton extends StatelessWidget {
+  const _BookmarkButton({
+    required this.bookmarked,
+    required this.onToggle,
+    required this.tooltip,
+  });
+
+  final bool bookmarked;
+  final VoidCallback onToggle;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return Tooltip(
+      message: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onToggle,
+          child: Icon(
+            AppIcons.folderBookmark,
+            size: 16,
+            color: bookmarked
+                ? context.appReader.star
+                : colors.mutedForeground.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+    );
   }
 }

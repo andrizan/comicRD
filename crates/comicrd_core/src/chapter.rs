@@ -629,7 +629,6 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
             .copied()
             .unwrap_or((0, false, 0, 0, modified_at, 0));
         out.push(RawChapter {
-            key: chapter_path.clone(),
             title: chapter_title.clone(),
             chapter_index: *chapter_index,
             source_path: chapter_path.clone(),
@@ -702,7 +701,7 @@ pub(crate) fn open_chapter_for_reading_conn(
         let chapter_key = chapter_history_key(&library_path, &chapter_path, chapter_index);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
         let cached_page_count = chapter_snapshot_by_history_key(&tx, &chapter_key)?
-            .map(|(pc, _, _)| pc.max(0) as usize)
+            .map(|(page_count, _, _)| page_count.max(0) as usize)
             .unwrap_or(0);
         let chapter_size = chapter_size_bytes(Path::new(&chapter_path), &chapter_type);
         total_size_bytes = total_size_bytes.saturating_add(chapter_size);

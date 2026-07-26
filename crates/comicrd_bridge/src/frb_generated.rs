@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 899852775;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 427574724;
 
 // Section: executor
 
@@ -68,55 +68,20 @@ fn wire__crate__api__add_bookmark_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_payload = <crate::api::SaveBookmarkPayload>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::add_bookmark(api_payload)?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__add_chapter_favorite_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "add_chapter_favorite",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_chapter_source_path = <String>::sse_decode(&mut deserializer);
             let api_comic_source_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::add_chapter_favorite(
-                        api_chapter_source_path,
-                        api_comic_source_path,
-                    )?;
+                    let output_ok =
+                        crate::api::add_bookmark(api_chapter_source_path, api_comic_source_path)?;
                     Ok(output_ok)
                 })())
             }
         },
     )
 }
-fn wire__crate__api__add_comic_bookmark_impl(
+fn wire__crate__api__add_favorite_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -124,7 +89,7 @@ fn wire__crate__api__add_comic_bookmark_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "add_comic_bookmark",
+            debug_name: "add_favorite",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -142,7 +107,7 @@ fn wire__crate__api__add_comic_bookmark_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::add_comic_bookmark(api_comic_source_path)?;
+                    let output_ok = crate::api::add_favorite(api_comic_source_path)?;
                     Ok(output_ok)
                 })())
             }
@@ -176,6 +141,39 @@ fn wire__crate__api__add_library_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::add_library(api_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__add_page_bookmark_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "add_page_bookmark",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_payload = <crate::api::SavePageBookmarkPayload>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::add_page_bookmark(api_payload)?;
                     Ok(output_ok)
                 })())
             }
@@ -615,7 +613,7 @@ fn wire__crate__api__init_app_impl(
         },
     )
 }
-fn wire__crate__api__is_comic_bookmarked_impl(
+fn wire__crate__api__is_favorited_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -623,7 +621,7 @@ fn wire__crate__api__is_comic_bookmarked_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "is_comic_bookmarked",
+            debug_name: "is_favorited",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -641,7 +639,7 @@ fn wire__crate__api__is_comic_bookmarked_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::is_comic_bookmarked(api_comic_source_path)?;
+                    let output_ok = crate::api::is_favorited(api_comic_source_path)?;
                     Ok(output_ok)
                 })())
             }
@@ -681,38 +679,6 @@ fn wire__crate__api__library_storage_stats_default_impl(
         },
     )
 }
-fn wire__crate__api__list_all_bookmarks_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "list_all_bookmarks",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::list_all_bookmarks()?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
 fn wire__crate__api__list_bookmarks_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -735,44 +701,11 @@ fn wire__crate__api__list_bookmarks_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_chapter_id = <i64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::list_bookmarks(api_chapter_id)?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__list_chapter_favorites_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "list_chapter_favorites",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_comic_source_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::list_chapter_favorites(api_comic_source_path)?;
+                    let output_ok = crate::api::list_bookmarks(api_comic_source_path)?;
                     Ok(output_ok)
                 })())
             }
@@ -844,6 +777,38 @@ fn wire__crate__api__list_comics_with_progress_impl(
         },
     )
 }
+fn wire__crate__api__list_favorites_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "list_favorites",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::list_favorites()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__list_libraries_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -904,6 +869,39 @@ fn wire__crate__api__list_library_comics_raw_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::list_library_comics_raw(api_sort_by, api_sort_dir)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__list_page_bookmarks_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "list_page_bookmarks",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_chapter_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::list_page_bookmarks(api_chapter_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -1095,51 +1093,18 @@ fn wire__crate__api__remove_bookmark_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_bookmark_id = <i64>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::remove_bookmark(api_bookmark_id)?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__remove_chapter_favorite_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "remove_chapter_favorite",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_chapter_source_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::remove_chapter_favorite(api_chapter_source_path)?;
+                    let output_ok = crate::api::remove_bookmark(api_chapter_source_path)?;
                     Ok(output_ok)
                 })())
             }
         },
     )
 }
-fn wire__crate__api__remove_comic_bookmark_impl(
+fn wire__crate__api__remove_favorite_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1147,7 +1112,7 @@ fn wire__crate__api__remove_comic_bookmark_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "remove_comic_bookmark",
+            debug_name: "remove_favorite",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -1165,7 +1130,40 @@ fn wire__crate__api__remove_comic_bookmark_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::remove_comic_bookmark(api_comic_source_path)?;
+                    let output_ok = crate::api::remove_favorite(api_comic_source_path)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__remove_page_bookmark_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "remove_page_bookmark",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_bookmark_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::remove_page_bookmark(api_bookmark_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -1347,24 +1345,6 @@ impl SseDecode for String {
     }
 }
 
-impl SseDecode for crate::api::Bookmark {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <i64>::sse_decode(deserializer);
-        let mut var_chapterId = <i64>::sse_decode(deserializer);
-        let mut var_page = <i64>::sse_decode(deserializer);
-        let mut var_createdAt = <i64>::sse_decode(deserializer);
-        let mut var_note = <String>::sse_decode(deserializer);
-        return crate::api::Bookmark {
-            id: var_id,
-            chapter_id: var_chapterId,
-            page: var_page,
-            created_at: var_createdAt,
-            note: var_note,
-        };
-    }
-}
-
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1406,14 +1386,14 @@ impl SseDecode for crate::api::ChapterContext {
     }
 }
 
-impl SseDecode for crate::api::ComicBookmark {
+impl SseDecode for crate::api::Favorite {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <i64>::sse_decode(deserializer);
         let mut var_comicSourcePath = <String>::sse_decode(deserializer);
         let mut var_comicTitle = <String>::sse_decode(deserializer);
         let mut var_createdAt = <i64>::sse_decode(deserializer);
-        return crate::api::ComicBookmark {
+        return crate::api::Favorite {
             id: var_id,
             comic_source_path: var_comicSourcePath,
             comic_title: var_comicTitle,
@@ -1516,25 +1496,13 @@ impl SseDecode for Vec<String> {
     }
 }
 
-impl SseDecode for Vec<crate::api::Bookmark> {
+impl SseDecode for Vec<crate::api::Favorite> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::Bookmark>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<crate::api::ComicBookmark> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<crate::api::ComicBookmark>::sse_decode(deserializer));
+            ans_.push(<crate::api::Favorite>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1547,6 +1515,18 @@ impl SseDecode for Vec<crate::api::Library> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::Library>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::PageBookmark> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::PageBookmark>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1725,6 +1705,24 @@ impl SseDecode for Option<u32> {
     }
 }
 
+impl SseDecode for crate::api::PageBookmark {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_chapterId = <i64>::sse_decode(deserializer);
+        let mut var_page = <i64>::sse_decode(deserializer);
+        let mut var_createdAt = <i64>::sse_decode(deserializer);
+        let mut var_note = <String>::sse_decode(deserializer);
+        return crate::api::PageBookmark {
+            id: var_id,
+            chapter_id: var_chapterId,
+            page: var_page,
+            created_at: var_createdAt,
+            note: var_note,
+        };
+    }
+}
+
 impl SseDecode for crate::api::PageInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1875,13 +1873,13 @@ impl SseDecode for crate::api::RenderedPage {
     }
 }
 
-impl SseDecode for crate::api::SaveBookmarkPayload {
+impl SseDecode for crate::api::SavePageBookmarkPayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_chapterId = <i64>::sse_decode(deserializer);
         let mut var_page = <i64>::sse_decode(deserializer);
         let mut var_note = <Option<String>>::sse_decode(deserializer);
-        return crate::api::SaveBookmarkPayload {
+        return crate::api::SavePageBookmarkPayload {
             chapter_id: var_chapterId,
             page: var_page,
             note: var_note,
@@ -1996,9 +1994,9 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__add_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__add_chapter_favorite_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__add_comic_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__add_library_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__add_favorite_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__add_library_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__add_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
         5 => wire__crate__api__cancel_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
         6 => wire__crate__api__check_library_source_impl(port, ptr, rust_vec_len, data_len),
         7 => wire__crate__api__evict_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
@@ -2012,25 +2010,25 @@ fn pde_ffi_dispatcher_primary_impl(
         15 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
         16 => wire__crate__api__import_database_backup_impl(port, ptr, rust_vec_len, data_len),
         17 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__is_comic_bookmarked_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__is_favorited_impl(port, ptr, rust_vec_len, data_len),
         19 => {
             wire__crate__api__library_storage_stats_default_impl(port, ptr, rust_vec_len, data_len)
         }
-        20 => wire__crate__api__list_all_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__list_chapter_favorites_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__list_favorites_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__list_page_bookmarks_impl(port, ptr, rust_vec_len, data_len),
         27 => wire__crate__api__list_reading_history_impl(port, ptr, rust_vec_len, data_len),
         28 => wire__crate__api__list_settings_impl(port, ptr, rust_vec_len, data_len),
         29 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
         30 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
         31 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
         32 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__remove_chapter_favorite_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__remove_comic_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__remove_favorite_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__remove_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
         35 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
         36 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
         37 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
@@ -2054,25 +2052,6 @@ fn pde_ffi_dispatcher_sync_impl(
 
 // Section: rust2dart
 
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::Bookmark {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.id.into_into_dart().into_dart(),
-            self.chapter_id.into_into_dart().into_dart(),
-            self.page.into_into_dart().into_dart(),
-            self.created_at.into_into_dart().into_dart(),
-            self.note.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::Bookmark {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::Bookmark> for crate::api::Bookmark {
-    fn into_into_dart(self) -> crate::api::Bookmark {
-        self
-    }
-}
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::ChapterContext {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -2101,7 +2080,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ChapterContext> for crate::ap
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ComicBookmark {
+impl flutter_rust_bridge::IntoDart for crate::api::Favorite {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.id.into_into_dart().into_dart(),
@@ -2112,9 +2091,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::ComicBookmark {
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ComicBookmark {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ComicBookmark> for crate::api::ComicBookmark {
-    fn into_into_dart(self) -> crate::api::ComicBookmark {
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::Favorite {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::Favorite> for crate::api::Favorite {
+    fn into_into_dart(self) -> crate::api::Favorite {
         self
     }
 }
@@ -2222,6 +2201,25 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::OpenChapterPayload>
     for crate::api::OpenChapterPayload
 {
     fn into_into_dart(self) -> crate::api::OpenChapterPayload {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::PageBookmark {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.chapter_id.into_into_dart().into_dart(),
+            self.page.into_into_dart().into_dart(),
+            self.created_at.into_into_dart().into_dart(),
+            self.note.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PageBookmark {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::PageBookmark> for crate::api::PageBookmark {
+    fn into_into_dart(self) -> crate::api::PageBookmark {
         self
     }
 }
@@ -2395,7 +2393,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::RenderedPage> for crate::api:
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::SaveBookmarkPayload {
+impl flutter_rust_bridge::IntoDart for crate::api::SavePageBookmarkPayload {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.chapter_id.into_into_dart().into_dart(),
@@ -2406,13 +2404,13 @@ impl flutter_rust_bridge::IntoDart for crate::api::SaveBookmarkPayload {
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::SaveBookmarkPayload
+    for crate::api::SavePageBookmarkPayload
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::SaveBookmarkPayload>
-    for crate::api::SaveBookmarkPayload
+impl flutter_rust_bridge::IntoIntoDart<crate::api::SavePageBookmarkPayload>
+    for crate::api::SavePageBookmarkPayload
 {
-    fn into_into_dart(self) -> crate::api::SaveBookmarkPayload {
+    fn into_into_dart(self) -> crate::api::SavePageBookmarkPayload {
         self
     }
 }
@@ -2528,17 +2526,6 @@ impl SseEncode for String {
     }
 }
 
-impl SseEncode for crate::api::Bookmark {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i64>::sse_encode(self.id, serializer);
-        <i64>::sse_encode(self.chapter_id, serializer);
-        <i64>::sse_encode(self.page, serializer);
-        <i64>::sse_encode(self.created_at, serializer);
-        <String>::sse_encode(self.note, serializer);
-    }
-}
-
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2565,7 +2552,7 @@ impl SseEncode for crate::api::ChapterContext {
     }
 }
 
-impl SseEncode for crate::api::ComicBookmark {
+impl SseEncode for crate::api::Favorite {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.id, serializer);
@@ -2641,22 +2628,12 @@ impl SseEncode for Vec<String> {
     }
 }
 
-impl SseEncode for Vec<crate::api::Bookmark> {
+impl SseEncode for Vec<crate::api::Favorite> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::Bookmark>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<crate::api::ComicBookmark> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::api::ComicBookmark>::sse_encode(item, serializer);
+            <crate::api::Favorite>::sse_encode(item, serializer);
         }
     }
 }
@@ -2667,6 +2644,16 @@ impl SseEncode for Vec<crate::api::Library> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::Library>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::PageBookmark> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::PageBookmark>::sse_encode(item, serializer);
         }
     }
 }
@@ -2819,6 +2806,17 @@ impl SseEncode for Option<u32> {
     }
 }
 
+impl SseEncode for crate::api::PageBookmark {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.id, serializer);
+        <i64>::sse_encode(self.chapter_id, serializer);
+        <i64>::sse_encode(self.page, serializer);
+        <i64>::sse_encode(self.created_at, serializer);
+        <String>::sse_encode(self.note, serializer);
+    }
+}
+
 impl SseEncode for crate::api::PageInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2910,7 +2908,7 @@ impl SseEncode for crate::api::RenderedPage {
     }
 }
 
-impl SseEncode for crate::api::SaveBookmarkPayload {
+impl SseEncode for crate::api::SavePageBookmarkPayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.chapter_id, serializer);

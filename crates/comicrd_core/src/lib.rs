@@ -39,11 +39,9 @@ pub enum SortDir {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RawComic {
-    pub key: String,
     pub title: String,
     pub source_path: String,
     pub source_type: String,
-    pub library_path: String,
     pub date_modified: i64,
     pub chapter_count: i64,
     pub read_chapter_count: i64,
@@ -107,7 +105,6 @@ impl LibraryScanState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RawChapter {
-    pub key: String,
     pub title: String,
     pub chapter_index: i64,
     pub source_path: String,
@@ -154,7 +151,7 @@ pub struct ReadingProgress {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Bookmark {
+pub struct PageBookmark {
     pub id: i64,
     pub chapter_id: i64,
     pub page: i64,
@@ -163,7 +160,7 @@ pub struct Bookmark {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ComicBookmark {
+pub struct Favorite {
     pub id: i64,
     pub comic_source_path: String,
     pub comic_title: String,
@@ -198,7 +195,7 @@ pub struct SaveProgressPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SaveBookmarkPayload {
+pub struct SavePageBookmarkPayload {
     pub chapter_id: i64,
     pub page: i64,
     pub note: Option<String>,
@@ -302,10 +299,6 @@ impl ComicRdCore {
         if let Ok(conn) = self.conn.lock() {
             let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
         }
-    }
-
-    pub fn db_path(&self) -> &Path {
-        &self.db_path
     }
 
     pub fn get_comic_thumbnail(
@@ -574,7 +567,7 @@ impl ComicRdCore {
                 .conn
                 .lock()
                 .map_err(|_| "db lock poisoned".to_string())?;
-            let (c, ch) = scan_library_entries(
+            let (lib_comic_count, lib_chapter_count) = scan_library_entries(
                 &mut conn,
                 lib_id,
                 &lib_path,
@@ -594,11 +587,9 @@ impl ComicRdCore {
             )?;
             drop(conn);
 
-            comic_count += c;
-            chapter_count += ch;
+            comic_count += lib_comic_count;
+            chapter_count += lib_chapter_count;
         }
-
-        self.update_scan_progress(None);
 
         Ok(ScanSummary {
             comics: comic_count,
@@ -832,67 +823,67 @@ impl ComicRdCore {
         }
     }
 
-    pub fn add_bookmark(&self, payload: SaveBookmarkPayload) -> Result<i64, String> {
+    pub fn add_page_bookmark(&self, payload: SavePageBookmarkPayload) -> Result<i64, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        let id = add_bookmark_conn(&conn, payload)?;
+        let id = add_page_bookmark_conn(&conn, payload)?;
         Ok(id)
     }
 
-    pub fn remove_bookmark(&self, bookmark_id: i64) -> Result<(), String> {
+    pub fn remove_page_bookmark(&self, bookmark_id: i64) -> Result<(), String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        remove_bookmark_conn(&conn, bookmark_id)?;
+        remove_page_bookmark_conn(&conn, bookmark_id)?;
         Ok(())
     }
 
-    pub fn list_bookmarks(&self, chapter_id: i64) -> Result<Vec<Bookmark>, String> {
+    pub fn list_page_bookmarks(&self, chapter_id: i64) -> Result<Vec<PageBookmark>, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        list_bookmarks_conn(&conn, chapter_id)
+        list_page_bookmarks_conn(&conn, chapter_id)
     }
 
-    pub fn list_all_bookmarks(&self) -> Result<Vec<ComicBookmark>, String> {
+    pub fn list_favorites(&self) -> Result<Vec<Favorite>, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        list_all_bookmarks_conn(&conn)
+        list_favorites_conn(&conn)
     }
 
-    pub fn add_comic_bookmark(&self, comic_source_path: &str) -> Result<i64, String> {
+    pub fn add_favorite(&self, comic_source_path: &str) -> Result<i64, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        let id = add_comic_bookmark_conn(&conn, comic_source_path)?;
+        let id = add_favorite_conn(&conn, comic_source_path)?;
         Ok(id)
     }
 
-    pub fn remove_comic_bookmark(&self, comic_source_path: &str) -> Result<(), String> {
+    pub fn remove_favorite(&self, comic_source_path: &str) -> Result<(), String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        remove_comic_bookmark_conn(&conn, comic_source_path)?;
+        remove_favorite_conn(&conn, comic_source_path)?;
         Ok(())
     }
 
-    pub fn is_comic_bookmarked(&self, comic_source_path: &str) -> Result<bool, String> {
+    pub fn is_favorited(&self, comic_source_path: &str) -> Result<bool, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        is_comic_bookmarked_conn(&conn, comic_source_path)
+        is_favorited_conn(&conn, comic_source_path)
     }
 
-    pub fn add_chapter_favorite(
+    pub fn add_bookmark(
         &self,
         chapter_source_path: &str,
         comic_source_path: &str,
@@ -901,23 +892,23 @@ impl ComicRdCore {
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        add_chapter_favorite_conn(&conn, chapter_source_path, comic_source_path)
+        add_bookmark_conn(&conn, chapter_source_path, comic_source_path)
     }
 
-    pub fn remove_chapter_favorite(&self, chapter_source_path: &str) -> Result<(), String> {
+    pub fn remove_bookmark(&self, chapter_source_path: &str) -> Result<(), String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        remove_chapter_favorite_conn(&conn, chapter_source_path)
+        remove_bookmark_conn(&conn, chapter_source_path)
     }
 
-    pub fn list_chapter_favorites(&self, comic_source_path: &str) -> Result<Vec<String>, String> {
+    pub fn list_bookmarks(&self, comic_source_path: &str) -> Result<Vec<String>, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        list_chapter_favorites_conn(&conn, comic_source_path)
+        list_bookmarks_conn(&conn, comic_source_path)
     }
 
     pub fn list_reading_history(&self) -> Result<Vec<ReadingHistoryEntry>, String> {

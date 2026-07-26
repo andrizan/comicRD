@@ -88,40 +88,40 @@ class ComicRdApi {
   Future<bridge.ReadingProgress?> getProgress(int chapterId) =>
       bridge.getProgress(chapterId: chapterId);
 
-  Future<List<bridge.Bookmark>> listBookmarks(int chapterId) =>
-      bridge.listBookmarks(chapterId: chapterId);
+  Future<List<bridge.PageBookmark>> listPageBookmarks({
+    required int chapterId,
+  }) => bridge.listPageBookmarks(chapterId: chapterId);
 
-  Future<int> addBookmark(bridge.SaveBookmarkPayload payload) =>
-      bridge.addBookmark(payload: payload);
+  Future<int> addPageBookmark(bridge.SavePageBookmarkPayload payload) =>
+      bridge.addPageBookmark(payload: payload);
 
-  Future<void> removeBookmark(int bookmarkId) =>
-      bridge.removeBookmark(bookmarkId: bookmarkId);
+  Future<void> removePageBookmark({required int bookmarkId}) =>
+      bridge.removePageBookmark(bookmarkId: bookmarkId);
 
-  Future<List<bridge.ComicBookmark>> listAllBookmarks() =>
-      bridge.listAllBookmarks();
+  Future<List<bridge.Favorite>> listFavorites() => bridge.listFavorites();
 
-  Future<int> addComicBookmark(String comicSourcePath) =>
-      bridge.addComicBookmark(comicSourcePath: comicSourcePath);
+  Future<int> addFavorite({required String comicSourcePath}) =>
+      bridge.addFavorite(comicSourcePath: comicSourcePath);
 
-  Future<void> removeComicBookmark(String comicSourcePath) =>
-      bridge.removeComicBookmark(comicSourcePath: comicSourcePath);
+  Future<void> removeFavorite({required String comicSourcePath}) =>
+      bridge.removeFavorite(comicSourcePath: comicSourcePath);
 
-  Future<bool> isComicBookmarked(String comicSourcePath) =>
-      bridge.isComicBookmarked(comicSourcePath: comicSourcePath);
+  Future<bool> isFavorited({required String comicSourcePath}) =>
+      bridge.isFavorited(comicSourcePath: comicSourcePath);
 
-  Future<int> addChapterFavorite({
+  Future<int> addBookmark({
     required String chapterSourcePath,
     required String comicSourcePath,
-  }) => bridge.addChapterFavorite(
+  }) => bridge.addBookmark(
     chapterSourcePath: chapterSourcePath,
     comicSourcePath: comicSourcePath,
   );
 
-  Future<void> removeChapterFavorite(String chapterSourcePath) =>
-      bridge.removeChapterFavorite(chapterSourcePath: chapterSourcePath);
+  Future<void> removeBookmark({required String chapterSourcePath}) =>
+      bridge.removeBookmark(chapterSourcePath: chapterSourcePath);
 
-  Future<List<String>> listChapterFavorites(String comicSourcePath) =>
-      bridge.listChapterFavorites(comicSourcePath: comicSourcePath);
+  Future<List<String>> listBookmarks({required String comicSourcePath}) =>
+      bridge.listBookmarks(comicSourcePath: comicSourcePath);
 
   Future<List<bridge.SettingEntry>> listSettings() => bridge.listSettings();
 

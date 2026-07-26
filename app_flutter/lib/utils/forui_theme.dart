@@ -185,13 +185,13 @@ class AppIcons {
 
   static const IconData menu = FLucideIcons.menu;
   static const IconData search = FLucideIcons.search;
-  static const IconData image = FLucideIcons.image;
   static const IconData chevronDown = FLucideIcons.chevronDown;
   static const IconData refresh = FLucideIcons.refreshCcw;
   static const IconData settings = FLucideIcons.settings;
   static const IconData library = FLucideIcons.bookOpen;
   static const IconData history = FLucideIcons.history;
   static const IconData bookmark = FLucideIcons.bookmark;
+  static const IconData folderBookmark = FLucideIcons.folderBookmark;
   static const IconData folderOpen = FLucideIcons.folderOpen;
   static const IconData gridView = FLucideIcons.layoutGrid;
   static const IconData list = FLucideIcons.list;
@@ -201,7 +201,6 @@ class AppIcons {
   static const IconData chevronRight = FLucideIcons.chevronRight;
   static const IconData chevronLeft = FLucideIcons.chevronLeft;
   static const IconData check = FLucideIcons.check;
-  static const IconData read = FLucideIcons.bookOpen;
   static const IconData sortUp = FLucideIcons.arrowUpNarrowWide;
   static const IconData sortDown = FLucideIcons.arrowDownWideNarrow;
   static const IconData more = FLucideIcons.ellipsis;
@@ -232,14 +231,11 @@ class AppIcons {
 // ---------------------------------------------------------------------------
 
 extension AppThemeContext on BuildContext {
-  FThemeData get appTheme => theme;
   FColors get appColors => theme.colors;
-  FTypography get appTypography => theme.typography;
 
   Color get appAccent => theme.colors.primary;
   Color get appSurface => theme.colors.background;
   Color get appMutedText => theme.colors.mutedForeground;
-  Color get appSecondarySurface => theme.colors.secondary;
   Color get appBorder => theme.colors.border;
 
   /// Reader-specific colors.
@@ -248,9 +244,6 @@ extension AppThemeContext on BuildContext {
         ComicReaderColors.light;
   }
 
-  TextStyle get appTitleStyle => theme.typography.display.lg;
-  TextStyle get appSubtitleStyle => theme.typography.display.sm;
-  TextStyle get appBodyStyle => theme.typography.body.md;
   TextStyle get appBodyStrongStyle =>
       theme.typography.body.md.copyWith(fontWeight: FontWeight.w600);
   TextStyle get appCaptionStyle => theme.typography.body.sm;

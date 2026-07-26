@@ -5,7 +5,7 @@ use rusqlite::{params, Connection};
 use crate::chapter::comic_title_for_path;
 use crate::database::now_ts;
 use crate::{
-    Bookmark, ComicBookmark, ReadingHistoryEntry, ReadingProgress, SaveBookmarkPayload,
+    PageBookmark, Favorite, ReadingHistoryEntry, ReadingProgress, SavePageBookmarkPayload,
     SaveProgressPayload,
 };
 
@@ -71,12 +71,12 @@ pub(crate) fn get_progress_conn(
     Ok(None)
 }
 
-pub(crate) fn add_bookmark_conn(
+pub(crate) fn add_page_bookmark_conn(
     conn: &Connection,
-    payload: SaveBookmarkPayload,
+    payload: SavePageBookmarkPayload,
 ) -> Result<i64, String> {
     conn.execute(
-        "INSERT INTO bookmarks (chapter_id, page, created_at, note) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO page_bookmarks (chapter_id, page, created_at, note) VALUES (?1, ?2, ?3, ?4)",
         params![
             payload.chapter_id,
             payload.page,
@@ -88,24 +88,24 @@ pub(crate) fn add_bookmark_conn(
     Ok(conn.last_insert_rowid())
 }
 
-pub(crate) fn remove_bookmark_conn(conn: &Connection, bookmark_id: i64) -> Result<(), String> {
-    conn.execute("DELETE FROM bookmarks WHERE id = ?1", params![bookmark_id])
+pub(crate) fn remove_page_bookmark_conn(conn: &Connection, bookmark_id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM page_bookmarks WHERE id = ?1", params![bookmark_id])
         .map_err(|e| format!("failed deleting bookmark: {e}"))?;
     Ok(())
 }
 
-pub(crate) fn list_bookmarks_conn(
+pub(crate) fn list_page_bookmarks_conn(
     conn: &Connection,
     chapter_id: i64,
-) -> Result<Vec<Bookmark>, String> {
+) -> Result<Vec<PageBookmark>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, chapter_id, page, created_at, note FROM bookmarks WHERE chapter_id = ?1 ORDER BY page ASC, created_at DESC",
+            "SELECT id, chapter_id, page, created_at, note FROM page_bookmarks WHERE chapter_id = ?1 ORDER BY page ASC, created_at DESC",
         )
         .map_err(|e| format!("failed preparing bookmarks query: {e}"))?;
     let rows = stmt
         .query_map(params![chapter_id], |row| {
-            Ok(Bookmark {
+            Ok(PageBookmark {
                 id: row.get(0)?,
                 chapter_id: row.get(1)?,
                 page: row.get(2)?,
@@ -118,114 +118,114 @@ pub(crate) fn list_bookmarks_conn(
         .map_err(|e| format!("failed collecting bookmarks: {e}"))
 }
 
-pub(crate) fn list_all_bookmarks_conn(conn: &Connection) -> Result<Vec<ComicBookmark>, String> {
+pub(crate) fn list_favorites_conn(conn: &Connection) -> Result<Vec<Favorite>, String> {
     let mut stmt = conn
         .prepare(
             r#"
       SELECT cb.id, cb.comic_source_path, COALESCE(c.title, ''), cb.created_at
-      FROM comic_bookmarks cb
+      FROM favorites cb
       LEFT JOIN comics c ON c.source_path = cb.comic_source_path
       ORDER BY cb.created_at DESC
       "#,
         )
-        .map_err(|e| format!("failed preparing comic bookmarks query: {e}"))?;
+        .map_err(|e| format!("failed preparing favorites query: {e}"))?;
     let rows = stmt
         .query_map([], |row| {
-            Ok(ComicBookmark {
+            Ok(Favorite {
                 id: row.get(0)?,
                 comic_source_path: row.get(1)?,
                 comic_title: row.get(2)?,
                 created_at: row.get(3)?,
             })
         })
-        .map_err(|e| format!("failed querying comic bookmarks: {e}"))?;
-    let mut bookmarks = rows
+        .map_err(|e| format!("failed querying favorites: {e}"))?;
+    let mut favorites = rows
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("failed collecting comic bookmarks: {e}"))?;
-    for bookmark in &mut bookmarks {
-        if bookmark.comic_title.trim().is_empty() {
-            bookmark.comic_title =
-                comic_title_for_path(Path::new(&bookmark.comic_source_path));
+        .map_err(|e| format!("failed collecting favorites: {e}"))?;
+    for favorite in &mut favorites {
+        if favorite.comic_title.trim().is_empty() {
+            favorite.comic_title =
+                comic_title_for_path(Path::new(&favorite.comic_source_path));
         }
     }
-    Ok(bookmarks)
+    Ok(favorites)
 }
 
-pub(crate) fn add_comic_bookmark_conn(
+pub(crate) fn add_favorite_conn(
     conn: &Connection,
     comic_source_path: &str,
 ) -> Result<i64, String> {
     conn.execute(
-        "INSERT OR IGNORE INTO comic_bookmarks (comic_source_path, created_at) VALUES (?1, ?2)",
+        "INSERT OR IGNORE INTO favorites (comic_source_path, created_at) VALUES (?1, ?2)",
         params![comic_source_path, now_ts()],
     )
-    .map_err(|e| format!("failed adding comic bookmark: {e}"))?;
+    .map_err(|e| format!("failed adding favorite: {e}"))?;
     Ok(conn.last_insert_rowid())
 }
 
-pub(crate) fn remove_comic_bookmark_conn(
+pub(crate) fn remove_favorite_conn(
     conn: &Connection,
     comic_source_path: &str,
 ) -> Result<(), String> {
     conn.execute(
-        "DELETE FROM comic_bookmarks WHERE comic_source_path = ?1",
+        "DELETE FROM favorites WHERE comic_source_path = ?1",
         params![comic_source_path],
     )
-    .map_err(|e| format!("failed removing comic bookmark: {e}"))?;
+    .map_err(|e| format!("failed removing favorite: {e}"))?;
     Ok(())
 }
 
-pub(crate) fn is_comic_bookmarked_conn(
+pub(crate) fn is_favorited_conn(
     conn: &Connection,
     comic_source_path: &str,
 ) -> Result<bool, String> {
     conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM comic_bookmarks WHERE comic_source_path = ?1)",
+        "SELECT EXISTS(SELECT 1 FROM favorites WHERE comic_source_path = ?1)",
         params![comic_source_path],
         |row| row.get(0),
     )
-    .map_err(|e| format!("failed checking comic bookmark: {e}"))
+    .map_err(|e| format!("failed checking favorite: {e}"))
 }
 
-pub(crate) fn add_chapter_favorite_conn(
+pub(crate) fn add_bookmark_conn(
     conn: &Connection,
     chapter_source_path: &str,
     comic_source_path: &str,
 ) -> Result<i64, String> {
     conn.execute(
-        "INSERT OR IGNORE INTO chapter_favorites (chapter_source_path, comic_source_path, created_at) VALUES (?1, ?2, ?3)",
+        "INSERT OR IGNORE INTO bookmarks (chapter_source_path, comic_source_path, created_at) VALUES (?1, ?2, ?3)",
         params![chapter_source_path, comic_source_path, now_ts()],
     )
-    .map_err(|e| format!("failed adding chapter favorite: {e}"))?;
+    .map_err(|e| format!("failed adding bookmark: {e}"))?;
     Ok(conn.last_insert_rowid())
 }
 
-pub(crate) fn remove_chapter_favorite_conn(
+pub(crate) fn remove_bookmark_conn(
     conn: &Connection,
     chapter_source_path: &str,
 ) -> Result<(), String> {
     conn.execute(
-        "DELETE FROM chapter_favorites WHERE chapter_source_path = ?1",
+        "DELETE FROM bookmarks WHERE chapter_source_path = ?1",
         params![chapter_source_path],
     )
-    .map_err(|e| format!("failed removing chapter favorite: {e}"))?;
+    .map_err(|e| format!("failed removing bookmark: {e}"))?;
     Ok(())
 }
 
-pub(crate) fn list_chapter_favorites_conn(
+pub(crate) fn list_bookmarks_conn(
     conn: &Connection,
     comic_source_path: &str,
 ) -> Result<Vec<String>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT chapter_source_path FROM chapter_favorites WHERE comic_source_path = ?1 ORDER BY created_at DESC",
+            "SELECT chapter_source_path FROM bookmarks WHERE comic_source_path = ?1 ORDER BY created_at DESC",
         )
-        .map_err(|e| format!("failed preparing list chapter favorites: {e}"))?;
+        .map_err(|e| format!("failed preparing list bookmarks: {e}"))?;
     let rows = stmt
         .query_map(params![comic_source_path], |row| row.get(0))
-        .map_err(|e| format!("failed listing chapter favorites: {e}"))?;
+        .map_err(|e| format!("failed listing bookmarks: {e}"))?;
     rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("failed reading chapter favorite row: {e}"))
+        .map_err(|e| format!("failed reading bookmark row: {e}"))
 }
 
 pub(crate) fn list_reading_history_conn(

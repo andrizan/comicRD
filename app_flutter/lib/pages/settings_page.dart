@@ -876,12 +876,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ref.invalidate(libraryComicsProvider);
     ref.invalidate(comicsWithProgressProvider);
     ref.invalidate(readingHistoryProvider);
-    ref.invalidate(allBookmarksProvider);
+    ref.invalidate(allFavoritesProvider);
   }
 
   Future<void> _startScan() async {
     final api = ref.read(comicRdApiProvider);
-    final t = stringsFor(ref.read(appSettingsProvider).localeCode);
+    final text = stringsFor(ref.read(appSettingsProvider).localeCode);
     setState(() {
       _scanning = true;
       _scanStatus = null;
@@ -895,7 +895,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       } else {
         setState(() {
           _scanning = false;
-          _scanStatus = t.scanNoChange;
+          _scanStatus = text.scanNoChange;
         });
       }
     } catch (e) {
@@ -925,7 +925,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ) async {
       try {
         final api = ref.read(comicRdApiProvider);
-        final t = stringsFor(ref.read(appSettingsProvider).localeCode);
+        final text = stringsFor(ref.read(appSettingsProvider).localeCode);
         final status = await api.getLibraryScanStatus();
         if (!mounted) {
           timer.cancel();
@@ -939,11 +939,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _scanProgress = 0.0;
             _scanCurrentPath = null;
             if (summary != null) {
-              _scanStatus = t.scanCompleted
+              _scanStatus = text.scanCompleted
                   .replaceAll('{comics}', '${summary.comics}')
                   .replaceAll('{chapters}', '${summary.chapters}');
             } else {
-              _scanStatus ??= t.scanNoChange;
+              _scanStatus ??= text.scanNoChange;
             }
           });
           _invalidateDataProviders();
@@ -956,11 +956,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ? progress.currentPath
                   : null;
               _scanStatus =
-                  '${t.scanProgress}: ${progress.processed} / ${progress.total}';
+                  '${text.scanProgress}: ${progress.processed} / ${progress.total}';
             } else {
               _scanProgress = 0.0;
               _scanCurrentPath = null;
-              _scanStatus = '${t.scanProgress}...';
+              _scanStatus = '${text.scanProgress}...';
             }
           });
         }

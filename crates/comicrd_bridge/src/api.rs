@@ -108,7 +108,7 @@ pub struct ReadingProgress {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Bookmark {
+pub struct PageBookmark {
     pub id: i64,
     pub chapter_id: i64,
     pub page: i64,
@@ -117,7 +117,7 @@ pub struct Bookmark {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComicBookmark {
+pub struct Favorite {
     pub id: i64,
     pub comic_source_path: String,
     pub comic_title: String,
@@ -152,7 +152,7 @@ pub struct SaveProgressPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SaveBookmarkPayload {
+pub struct SavePageBookmarkPayload {
     pub chapter_id: i64,
     pub page: i64,
     pub note: Option<String>,
@@ -335,8 +335,8 @@ impl From<core::ReadingProgress> for ReadingProgress {
     }
 }
 
-impl From<core::Bookmark> for Bookmark {
-    fn from(value: core::Bookmark) -> Self {
+impl From<core::PageBookmark> for PageBookmark {
+    fn from(value: core::PageBookmark) -> Self {
         Self {
             id: value.id,
             chapter_id: value.chapter_id,
@@ -347,8 +347,8 @@ impl From<core::Bookmark> for Bookmark {
     }
 }
 
-impl From<core::ComicBookmark> for ComicBookmark {
-    fn from(value: core::ComicBookmark) -> Self {
+impl From<core::Favorite> for Favorite {
+    fn from(value: core::Favorite) -> Self {
         Self {
             id: value.id,
             comic_source_path: value.comic_source_path,
@@ -394,8 +394,8 @@ impl From<SaveProgressPayload> for core::SaveProgressPayload {
     }
 }
 
-impl From<SaveBookmarkPayload> for core::SaveBookmarkPayload {
-    fn from(value: SaveBookmarkPayload) -> Self {
+impl From<SavePageBookmarkPayload> for core::SavePageBookmarkPayload {
+    fn from(value: SavePageBookmarkPayload) -> Self {
         Self {
             chapter_id: value.chapter_id,
             page: value.page,
@@ -604,55 +604,55 @@ pub fn get_progress(chapter_id: i64) -> Result<Option<ReadingProgress>, String> 
     Ok(core()?.get_progress(chapter_id)?.map(Into::into))
 }
 
-pub fn list_bookmarks(chapter_id: i64) -> Result<Vec<Bookmark>, String> {
+pub fn list_page_bookmarks(chapter_id: i64) -> Result<Vec<PageBookmark>, String> {
     Ok(core()?
-        .list_bookmarks(chapter_id)?
+        .list_page_bookmarks(chapter_id)?
         .into_iter()
         .map(Into::into)
         .collect())
 }
 
-pub fn add_bookmark(payload: SaveBookmarkPayload) -> Result<i64, String> {
-    core()?.add_bookmark(payload.into())
+pub fn add_page_bookmark(payload: SavePageBookmarkPayload) -> Result<i64, String> {
+    core()?.add_page_bookmark(payload.into())
 }
 
-pub fn remove_bookmark(bookmark_id: i64) -> Result<(), String> {
-    core()?.remove_bookmark(bookmark_id)
+pub fn remove_page_bookmark(bookmark_id: i64) -> Result<(), String> {
+    core()?.remove_page_bookmark(bookmark_id)
 }
 
-pub fn list_all_bookmarks() -> Result<Vec<ComicBookmark>, String> {
+pub fn list_favorites() -> Result<Vec<Favorite>, String> {
     Ok(core()?
-        .list_all_bookmarks()?
+        .list_favorites()?
         .into_iter()
         .map(Into::into)
         .collect())
 }
 
-pub fn add_comic_bookmark(comic_source_path: String) -> Result<i64, String> {
-    core()?.add_comic_bookmark(&comic_source_path)
+pub fn add_favorite(comic_source_path: String) -> Result<i64, String> {
+    core()?.add_favorite(&comic_source_path)
 }
 
-pub fn remove_comic_bookmark(comic_source_path: String) -> Result<(), String> {
-    core()?.remove_comic_bookmark(&comic_source_path)
+pub fn remove_favorite(comic_source_path: String) -> Result<(), String> {
+    core()?.remove_favorite(&comic_source_path)
 }
 
-pub fn is_comic_bookmarked(comic_source_path: String) -> Result<bool, String> {
-    core()?.is_comic_bookmarked(&comic_source_path)
+pub fn is_favorited(comic_source_path: String) -> Result<bool, String> {
+    core()?.is_favorited(&comic_source_path)
 }
 
-pub fn add_chapter_favorite(
+pub fn add_bookmark(
     chapter_source_path: String,
     comic_source_path: String,
 ) -> Result<i64, String> {
-    core()?.add_chapter_favorite(&chapter_source_path, &comic_source_path)
+    core()?.add_bookmark(&chapter_source_path, &comic_source_path)
 }
 
-pub fn remove_chapter_favorite(chapter_source_path: String) -> Result<(), String> {
-    core()?.remove_chapter_favorite(&chapter_source_path)
+pub fn remove_bookmark(chapter_source_path: String) -> Result<(), String> {
+    core()?.remove_bookmark(&chapter_source_path)
 }
 
-pub fn list_chapter_favorites(comic_source_path: String) -> Result<Vec<String>, String> {
-    core()?.list_chapter_favorites(&comic_source_path)
+pub fn list_bookmarks(comic_source_path: String) -> Result<Vec<String>, String> {
+    core()?.list_bookmarks(&comic_source_path)
 }
 
 pub fn list_settings() -> Result<Vec<SettingEntry>, String> {

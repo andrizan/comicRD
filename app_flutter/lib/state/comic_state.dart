@@ -8,11 +8,13 @@ final comicChaptersProvider =
       return ref.watch(comicRdApiProvider).listComicChaptersRaw(comicPath);
     });
 
-final chapterFavoritesProvider = FutureProvider.family<List<String>, String>((
+final chapterBookmarksProvider = FutureProvider.family<List<String>, String>((
   ref,
   comicPath,
 ) {
-  return ref.watch(comicRdApiProvider).listChapterFavorites(comicPath);
+  return ref
+      .watch(comicRdApiProvider)
+      .listBookmarks(comicSourcePath: comicPath);
 });
 
 final comicReadingHistoryProvider =
@@ -60,36 +62,36 @@ final comicStatsProvider = Provider.family<ComicStats, String>((
   }
   final totalSize = chapters.fold<int>(
     0,
-    (sum, c) => sum + c.sizeBytes.toInt(),
+    (sum, chapter) => sum + chapter.sizeBytes.toInt(),
   );
-  final readCount = chapters.where((c) => c.isRead).length;
+  final readCount = chapters.where((chapter) => chapter.isRead).length;
   final inProgressCount = chapters
-      .where((c) => c.lastPage > 0 && !c.isRead)
+      .where((chapter) => chapter.lastPage > 0 && !chapter.isRead)
       .length;
 
   String? continueTitle;
   final lastOpened = ref.watch(lastOpenedChapterProvider)[comicPath];
   if (lastOpened != null) {
-    for (final c in chapters) {
-      if (c.sourcePath == lastOpened) {
-        continueTitle = c.title;
+    for (final chapter in chapters) {
+      if (chapter.sourcePath == lastOpened) {
+        continueTitle = chapter.title;
         break;
       }
     }
   }
 
   if (continueTitle == null) {
-    for (final c in chapters) {
-      if (c.lastPage > 0 && !c.isRead) {
-        continueTitle = c.title;
+    for (final chapter in chapters) {
+      if (chapter.lastPage > 0 && !chapter.isRead) {
+        continueTitle = chapter.title;
         break;
       }
     }
   }
   if (continueTitle == null) {
-    for (final c in chapters) {
-      if (!c.isRead) {
-        continueTitle = c.title;
+    for (final chapter in chapters) {
+      if (!chapter.isRead) {
+        continueTitle = chapter.title;
         break;
       }
     }
@@ -104,17 +106,17 @@ final comicStatsProvider = Provider.family<ComicStats, String>((
   );
 });
 
-final comicBookmarkedProvider = FutureProvider.family<bool, String>(
+final comicFavoritedProvider = FutureProvider.family<bool, String>(
   (ref, comicPath) =>
-      ref.watch(comicRdApiProvider).isComicBookmarked(comicPath),
+      ref.watch(comicRdApiProvider).isFavorited(comicSourcePath: comicPath),
 );
 
 List<bridge.RawChapter> filterAndSortChapters({
   required List<bridge.RawChapter> chapters,
-  required List<String> favorites,
+  required List<String> chapterBookmarks,
   required ComicPreferences preferences,
 }) {
-  final favSet = favorites.toSet();
+  final bookmarkSet = chapterBookmarks.toSet();
   final query = preferences.query.trim().toLowerCase();
   var filtered = chapters.where((chapter) {
     final matchesQuery =
@@ -123,7 +125,7 @@ List<bridge.RawChapter> filterAndSortChapters({
         chapter.sourcePath.toLowerCase().contains(query);
     final matchesTab = switch (preferences.selectedTab) {
       ChapterTab.all => true,
-      ChapterTab.favorites => favSet.contains(chapter.sourcePath),
+      ChapterTab.bookmarks => bookmarkSet.contains(chapter.sourcePath),
     };
     return matchesQuery && matchesTab;
   }).toList();
@@ -156,7 +158,7 @@ final lastOpenedChapterProvider =
 
 enum ChapterSortBy { chapterIndex, name, folderDate }
 
-enum ChapterTab { all, favorites }
+enum ChapterTab { all, bookmarks }
 
 class ComicPreferences {
   const ComicPreferences({
