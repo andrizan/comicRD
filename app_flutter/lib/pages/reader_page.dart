@@ -129,7 +129,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Completer<void>? _prefetchQueue;
   int? _prefetchQueuedStart;
   int? _prefetchQueuedEnd;
-  bool _wasReset = false;
   int _renderStart = 0;
   int _renderEnd = -1;
   int _readerGeneration = 0;
@@ -187,7 +186,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _ignoreNextScrollUpdate = false;
     _restoredProgress = false;
     _initialScrollDone = false;
-    _wasReset = false;
     _renderStart = 0;
     _renderEnd = -1;
     _toolbarVisible = true;
@@ -551,7 +549,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (progress != null && !progress.isRead) {
       return;
     }
-    _wasReset = true;
     await _api.saveProgress(
       bridge.SaveProgressPayload(
         chapterId: chapterId,
@@ -754,17 +751,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (data == null || data.pages.isEmpty || _currentPage == _lastSavedPage) {
       return;
     }
-    final isRead = _currentPage >= data.pages.length - 1;
-    if (!_wasReset) {
-      final savedLastPage = data.progress?.lastPage ?? 0;
-      final savedIsRead = data.progress?.isRead ?? false;
-      if (_currentPage <= savedLastPage && !(isRead && !savedIsRead)) {
-        _lastSavedPage = _currentPage;
-        return;
-      }
-    }
-    _wasReset = false;
     _lastSavedPage = _currentPage;
+    final isRead = _currentPage >= data.pages.length - 1;
     await ref
         .read(comicRdApiProvider)
         .saveProgress(
@@ -775,6 +763,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             isRead: isRead,
           ),
         );
+    ReaderSaveGuard.track(widget.chapterId, _currentPage, data.pages.length);
     _invalidateProgressProviders(data, onClose: false);
   }
 
@@ -794,6 +783,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         totalPages: targetData.pages.length,
         isRead: isRead,
       ),
+    );
+    ReaderSaveGuard.track(
+      targetChapterId,
+      _currentPage,
+      targetData.pages.length,
     );
   }
 

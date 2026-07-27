@@ -81,6 +81,15 @@ final comicStatsProvider = Provider.family<ComicStats, String>((
   }
 
   if (continueTitle == null) {
+    final chaptersWithProgress =
+        chapters.where((c) => c.progressUpdatedAt > 0);
+    if (chaptersWithProgress.isNotEmpty) {
+      continueTitle = chaptersWithProgress.reduce(
+        (a, b) => a.progressUpdatedAt > b.progressUpdatedAt ? a : b,
+      ).title;
+    }
+  }
+  if (continueTitle == null) {
     for (final chapter in chapters) {
       if (chapter.lastPage > 0 && !chapter.isRead) {
         continueTitle = chapter.title;

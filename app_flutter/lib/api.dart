@@ -500,6 +500,7 @@ class RawChapter {
   final PlatformInt64 lastPage;
   final PlatformInt64 totalPages;
   final PlatformInt64 sizeBytes;
+  final PlatformInt64 progressUpdatedAt;
 
   const RawChapter({
     required this.title,
@@ -512,6 +513,7 @@ class RawChapter {
     required this.lastPage,
     required this.totalPages,
     required this.sizeBytes,
+    required this.progressUpdatedAt,
   });
 
   @override
@@ -525,7 +527,8 @@ class RawChapter {
       isRead.hashCode ^
       lastPage.hashCode ^
       totalPages.hashCode ^
-      sizeBytes.hashCode;
+      sizeBytes.hashCode ^
+      progressUpdatedAt.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -541,7 +544,8 @@ class RawChapter {
           isRead == other.isRead &&
           lastPage == other.lastPage &&
           totalPages == other.totalPages &&
-          sizeBytes == other.sizeBytes;
+          sizeBytes == other.sizeBytes &&
+          progressUpdatedAt == other.progressUpdatedAt;
 }
 
 class RawComic {

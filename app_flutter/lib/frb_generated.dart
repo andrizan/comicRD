@@ -1733,8 +1733,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RawChapter dco_decode_raw_chapter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return RawChapter(
       title: dco_decode_String(arr[0]),
       chapterIndex: dco_decode_i_64(arr[1]),
@@ -1746,6 +1746,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lastPage: dco_decode_i_64(arr[7]),
       totalPages: dco_decode_i_64(arr[8]),
       sizeBytes: dco_decode_i_64(arr[9]),
+      progressUpdatedAt: dco_decode_i_64(arr[10]),
     );
   }
 
@@ -2438,6 +2439,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_lastPage = sse_decode_i_64(deserializer);
     var var_totalPages = sse_decode_i_64(deserializer);
     var var_sizeBytes = sse_decode_i_64(deserializer);
+    var var_progressUpdatedAt = sse_decode_i_64(deserializer);
     return RawChapter(
       title: var_title,
       chapterIndex: var_chapterIndex,
@@ -2449,6 +2451,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lastPage: var_lastPage,
       totalPages: var_totalPages,
       sizeBytes: var_sizeBytes,
+      progressUpdatedAt: var_progressUpdatedAt,
     );
   }
 
@@ -3102,6 +3105,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.lastPage, serializer);
     sse_encode_i_64(self.totalPages, serializer);
     sse_encode_i_64(self.sizeBytes, serializer);
+    sse_encode_i_64(self.progressUpdatedAt, serializer);
   }
 
   @protected

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'api.dart' as bridge;
 import 'api/comicrd_api.dart';
 import 'app.dart';
+import 'state/api_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,19 @@ class _WindowListener extends WindowListener {
 
   @override
   void onWindowClose() async {
+    final chapterId = ReaderSaveGuard.chapterId;
+    if (chapterId != null) {
+      try {
+        await bridge.saveProgress(
+          payload: bridge.SaveProgressPayload(
+            chapterId: chapterId,
+            lastPage: ReaderSaveGuard.lastPage,
+            totalPages: ReaderSaveGuard.totalPages,
+            isRead: ReaderSaveGuard.lastPage >= ReaderSaveGuard.totalPages - 1,
+          ),
+        );
+      } catch (_) {}
+    }
     await onClose();
     await windowManager.destroy();
   }

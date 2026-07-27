@@ -142,6 +142,7 @@ class _ManyChaptersApi extends ComicRdApi {
           lastPage: 0,
           totalPages: 12,
           sizeBytes: 0,
+          progressUpdatedAt: 0,
         ),
     ];
   }

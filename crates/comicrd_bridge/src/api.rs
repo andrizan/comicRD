@@ -72,6 +72,7 @@ pub struct RawChapter {
     pub last_page: i64,
     pub total_pages: i64,
     pub size_bytes: i64,
+    pub progress_updated_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -289,6 +290,7 @@ impl From<core::RawChapter> for RawChapter {
             last_page: value.last_page,
             total_pages: value.total_pages,
             size_bytes: value.size_bytes,
+            progress_updated_at: value.progress_updated_at,
         }
     }
 }

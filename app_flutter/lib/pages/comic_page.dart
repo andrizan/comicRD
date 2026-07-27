@@ -305,16 +305,23 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     }
 
     bridge.RawChapter? target;
-    for (final chapter in items) {
-      if (chapter.lastPage > 0 && !chapter.isRead) {
-        target = chapter;
-        break;
+    final chaptersWithProgress = items.where((c) => c.progressUpdatedAt > 0);
+    if (chaptersWithProgress.isNotEmpty) {
+      target = chaptersWithProgress.reduce(
+        (a, b) => a.progressUpdatedAt > b.progressUpdatedAt ? a : b,
+      );
+    } else {
+      for (final chapter in items) {
+        if (chapter.lastPage > 0 && !chapter.isRead) {
+          target = chapter;
+          break;
+        }
       }
+      target ??= items.firstWhere(
+        (chapter) => !chapter.isRead,
+        orElse: () => items.first,
+      );
     }
-    target ??= items.firstWhere(
-      (chapter) => !chapter.isRead,
-      orElse: () => items.first,
-    );
     await _openChapter(target);
   }
 

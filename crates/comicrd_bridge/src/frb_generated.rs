@@ -1764,6 +1764,7 @@ impl SseDecode for crate::api::RawChapter {
         let mut var_lastPage = <i64>::sse_decode(deserializer);
         let mut var_totalPages = <i64>::sse_decode(deserializer);
         let mut var_sizeBytes = <i64>::sse_decode(deserializer);
+        let mut var_progressUpdatedAt = <i64>::sse_decode(deserializer);
         return crate::api::RawChapter {
             title: var_title,
             chapter_index: var_chapterIndex,
@@ -1775,6 +1776,7 @@ impl SseDecode for crate::api::RawChapter {
             last_page: var_lastPage,
             total_pages: var_totalPages,
             size_bytes: var_sizeBytes,
+            progress_updated_at: var_progressUpdatedAt,
         };
     }
 }
@@ -2276,6 +2278,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::RawChapter {
             self.last_page.into_into_dart().into_dart(),
             self.total_pages.into_into_dart().into_dart(),
             self.size_bytes.into_into_dart().into_dart(),
+            self.progress_updated_at.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2848,6 +2851,7 @@ impl SseEncode for crate::api::RawChapter {
         <i64>::sse_encode(self.last_page, serializer);
         <i64>::sse_encode(self.total_pages, serializer);
         <i64>::sse_encode(self.size_bytes, serializer);
+        <i64>::sse_encode(self.progress_updated_at, serializer);
     }
 }
 
