@@ -202,8 +202,9 @@ class LibraryPreferences {
     this.librarySortDir = bridge.SortDir.asc,
     this.favoritesSortBy = bridge.SortBy.name,
     this.favoritesSortDir = bridge.SortDir.asc,
+    this.libraryDisplayMode = LibraryDisplayMode.grid,
+    this.favoritesDisplayMode = LibraryDisplayMode.grid,
     this.viewMode = LibraryViewMode.all,
-    this.displayMode = LibraryDisplayMode.grid,
     this.selectedTab = LibraryTab.library,
   });
 
@@ -214,8 +215,9 @@ class LibraryPreferences {
   final bridge.SortDir librarySortDir;
   final bridge.SortBy favoritesSortBy;
   final bridge.SortDir favoritesSortDir;
+  final LibraryDisplayMode libraryDisplayMode;
+  final LibraryDisplayMode favoritesDisplayMode;
   final LibraryViewMode viewMode;
-  final LibraryDisplayMode displayMode;
   final LibraryTab selectedTab;
 
   String get query => switch (selectedTab) {
@@ -230,6 +232,12 @@ class LibraryPreferences {
     LibraryTab.history => (librarySortBy, librarySortDir),
   };
 
+  LibraryDisplayMode get displayMode => switch (selectedTab) {
+    LibraryTab.library => libraryDisplayMode,
+    LibraryTab.favorites => favoritesDisplayMode,
+    LibraryTab.history => libraryDisplayMode,
+  };
+
   LibraryPreferences copyWith({
     String? libraryQuery,
     String? favoritesQuery,
@@ -238,8 +246,9 @@ class LibraryPreferences {
     bridge.SortDir? librarySortDir,
     bridge.SortBy? favoritesSortBy,
     bridge.SortDir? favoritesSortDir,
+    LibraryDisplayMode? libraryDisplayMode,
+    LibraryDisplayMode? favoritesDisplayMode,
     LibraryViewMode? viewMode,
-    LibraryDisplayMode? displayMode,
     LibraryTab? selectedTab,
   }) => LibraryPreferences(
     libraryQuery: libraryQuery ?? this.libraryQuery,
@@ -249,8 +258,9 @@ class LibraryPreferences {
     librarySortDir: librarySortDir ?? this.librarySortDir,
     favoritesSortBy: favoritesSortBy ?? this.favoritesSortBy,
     favoritesSortDir: favoritesSortDir ?? this.favoritesSortDir,
+    libraryDisplayMode: libraryDisplayMode ?? this.libraryDisplayMode,
+    favoritesDisplayMode: favoritesDisplayMode ?? this.favoritesDisplayMode,
     viewMode: viewMode ?? this.viewMode,
-    displayMode: displayMode ?? this.displayMode,
     selectedTab: selectedTab ?? this.selectedTab,
   );
 }
@@ -271,8 +281,9 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
       librarySortDir: _decodeSortDir(values['library_sort_dir']),
       favoritesSortBy: _decodeSortBy(values['favorites_sort_by']),
       favoritesSortDir: _decodeSortDir(values['favorites_sort_dir']),
+      libraryDisplayMode: _decodeDisplayMode(values['library_display_mode']),
+      favoritesDisplayMode: _decodeDisplayMode(values['favorites_display_mode']),
       viewMode: _decodeViewMode(values['library_view_mode']),
-      displayMode: _decodeDisplayMode(values['library_display_mode']),
       selectedTab: _decodeLibraryTab(values['library_selected_tab']),
     );
   }
@@ -298,7 +309,11 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
   }
 
   void setDisplayMode(LibraryDisplayMode displayMode) {
-    state = state.copyWith(displayMode: displayMode);
+    state = switch (state.selectedTab) {
+      LibraryTab.library => state.copyWith(libraryDisplayMode: displayMode),
+      LibraryTab.favorites => state.copyWith(favoritesDisplayMode: displayMode),
+      LibraryTab.history => state.copyWith(libraryDisplayMode: displayMode),
+    };
   }
 
   void setSelectedTab(LibraryTab selectedTab) {

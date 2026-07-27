@@ -401,12 +401,17 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   Future<void> _setDisplayMode(LibraryDisplayMode displayMode) async {
     ref.read(libraryPreferencesProvider.notifier).setDisplayMode(displayMode);
-    await ref
-        .read(comicRdApiProvider)
-        .setSetting(
-          'library_display_mode',
-          jsonEncode(encodeDisplayMode(displayMode)),
-        );
+    final api = ref.read(comicRdApiProvider);
+    final selectedTab = ref.read(libraryPreferencesProvider).selectedTab;
+    final prefix = switch (selectedTab) {
+      LibraryTab.library => 'library',
+      LibraryTab.favorites => 'favorites',
+      LibraryTab.history => 'library',
+    };
+    await api.setSetting(
+      '${prefix}_display_mode',
+      jsonEncode(encodeDisplayMode(displayMode)),
+    );
   }
 
   Future<void> _refreshLibrary() async {
