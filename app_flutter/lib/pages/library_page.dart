@@ -313,6 +313,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           LibraryTab.history => _HistoryList(
                             text: text,
                             history: history,
+                            query: preferences.query,
                             controller: _historyScroll,
                             emptyLabel: text.emptyLibrary,
                           ),
@@ -1483,12 +1484,14 @@ class _HistoryList extends StatelessWidget {
   const _HistoryList({
     required this.text,
     required this.history,
+    required this.query,
     required this.controller,
     required this.emptyLabel,
   });
 
   final AppStrings text;
   final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
+  final String query;
   final ScrollController controller;
   final String emptyLabel;
 
@@ -1496,16 +1499,26 @@ class _HistoryList extends StatelessWidget {
   Widget build(BuildContext context) {
     return history.when(
       data: (items) {
-        if (items.isEmpty) {
+        final filteredQuery = query.trim().toLowerCase();
+        final filtered = filteredQuery.isEmpty
+            ? items
+            : items
+                  .where(
+                    (item) =>
+                        item.comicTitle.toLowerCase().contains(filteredQuery) ||
+                        item.chapterTitle.toLowerCase().contains(filteredQuery),
+                  )
+                  .toList();
+        if (filtered.isEmpty) {
           return _EmptyState(label: emptyLabel);
         }
         return ListView.separated(
           controller: controller,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          itemCount: items.length,
+          itemCount: filtered.length,
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
-            final item = items[index];
+            final item = filtered[index];
             return _HistoryItem(
               text: text,
               item: item,
