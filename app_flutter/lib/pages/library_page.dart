@@ -338,6 +338,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                             favorites: favorites,
                             comics: _rawComics,
                             query: preferences.query,
+                            sortBy: preferences.favoritesSortBy,
+                            sortDir: preferences.favoritesSortDir,
                             displayMode: preferences.displayMode,
                             controller: _favoritesScroll,
                             emptyLabel: text.emptyLibrary,
@@ -373,11 +375,14 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   Future<void> _setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) async {
     ref.read(libraryPreferencesProvider.notifier).setSort(sortBy, sortDir);
     final api = ref.read(comicRdApiProvider);
-    await api.setSetting('library_sort_by', jsonEncode(encodeSortBy(sortBy)));
-    await api.setSetting(
-      'library_sort_dir',
-      jsonEncode(encodeSortDir(sortDir)),
-    );
+    final selectedTab = ref.read(libraryPreferencesProvider).selectedTab;
+    final prefix = switch (selectedTab) {
+      LibraryTab.library => 'library',
+      LibraryTab.favorites => 'favorites',
+      LibraryTab.history => 'library',
+    };
+    await api.setSetting('${prefix}_sort_by', jsonEncode(encodeSortBy(sortBy)));
+    await api.setSetting('${prefix}_sort_dir', jsonEncode(encodeSortDir(sortDir)));
     if (_libraryScroll.hasClients) {
       _libraryScroll.animateTo(
         0,
@@ -610,6 +615,7 @@ class _Toolbar extends StatelessWidget {
     final isLibrary = preferences.selectedTab == LibraryTab.library;
     final isFavorites = preferences.selectedTab == LibraryTab.favorites;
     final isHistory = preferences.selectedTab == LibraryTab.history;
+    final (activeSortBy, activeSortDir) = preferences.sort;
 
     return Material(
       type: MaterialType.transparency,
@@ -655,17 +661,17 @@ class _Toolbar extends StatelessWidget {
               color: context.theme.colors.border,
             ),
             _FilterSelect<bridge.SortBy>(
-              value: preferences.sortBy,
+              value: activeSortBy,
               items: {
                 text.name: bridge.SortBy.name,
                 text.folderDate: bridge.SortBy.folderDate,
               },
-              onChanged: (sortBy) => onSetSort(sortBy, preferences.sortDir),
+              onChanged: (sortBy) => onSetSort(sortBy, activeSortDir),
             ),
             _SortDirToggle(
               text: text,
-              sortDir: preferences.sortDir,
-              onChanged: (sortDir) => onSetSort(preferences.sortBy, sortDir),
+              sortDir: activeSortDir,
+              onChanged: (sortDir) => onSetSort(activeSortBy, sortDir),
             ),
           ],
         ],
@@ -1655,6 +1661,8 @@ class _FavoritesList extends StatelessWidget {
     required this.favorites,
     required this.comics,
     required this.query,
+    required this.sortBy,
+    required this.sortDir,
     required this.displayMode,
     required this.controller,
     required this.emptyLabel,
@@ -1668,6 +1676,8 @@ class _FavoritesList extends StatelessWidget {
   final AsyncValue<List<bridge.Favorite>> favorites;
   final List<bridge.RawComic> comics;
   final String query;
+  final bridge.SortBy sortBy;
+  final bridge.SortDir sortDir;
   final LibraryDisplayMode displayMode;
   final ScrollController controller;
   final String emptyLabel;
@@ -1684,10 +1694,20 @@ class _FavoritesList extends StatelessWidget {
     }
     return favorites.when(
       data: (items) {
+        var sorted = List<bridge.Favorite>.from(items);
+        sorted.sort((a, b) {
+          final cmp = switch (sortBy) {
+            bridge.SortBy.name => a.comicTitle.toLowerCase().compareTo(
+              b.comicTitle.toLowerCase(),
+            ),
+            bridge.SortBy.folderDate => a.createdAt.compareTo(b.createdAt),
+          };
+          return sortDir == bridge.SortDir.asc ? cmp : -cmp;
+        });
         final filteredQuery = query.trim().toLowerCase();
         final filtered = filteredQuery.isEmpty
-            ? items
-            : items
+            ? sorted
+            : sorted
                   .where(
                     (item) =>
                         item.comicTitle.toLowerCase().contains(filteredQuery) ||

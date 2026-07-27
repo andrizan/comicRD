@@ -26,10 +26,10 @@ final rawLibraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
   }
   final api = ref.watch(comicRdApiProvider);
   final sortBy = ref.watch(
-    libraryPreferencesProvider.select((preferences) => preferences.sortBy),
+    libraryPreferencesProvider.select((preferences) => preferences.librarySortBy),
   );
   final sortDir = ref.watch(
-    libraryPreferencesProvider.select((preferences) => preferences.sortDir),
+    libraryPreferencesProvider.select((preferences) => preferences.librarySortDir),
   );
   return api.listLibraryComicsRaw(sortBy: sortBy, sortDir: sortDir);
 });
@@ -198,8 +198,10 @@ class LibraryPreferences {
     this.libraryQuery = '',
     this.favoritesQuery = '',
     this.historyQuery = '',
-    this.sortBy = bridge.SortBy.name,
-    this.sortDir = bridge.SortDir.asc,
+    this.librarySortBy = bridge.SortBy.name,
+    this.librarySortDir = bridge.SortDir.asc,
+    this.favoritesSortBy = bridge.SortBy.name,
+    this.favoritesSortDir = bridge.SortDir.asc,
     this.viewMode = LibraryViewMode.all,
     this.displayMode = LibraryDisplayMode.grid,
     this.selectedTab = LibraryTab.library,
@@ -208,8 +210,10 @@ class LibraryPreferences {
   final String libraryQuery;
   final String favoritesQuery;
   final String historyQuery;
-  final bridge.SortBy sortBy;
-  final bridge.SortDir sortDir;
+  final bridge.SortBy librarySortBy;
+  final bridge.SortDir librarySortDir;
+  final bridge.SortBy favoritesSortBy;
+  final bridge.SortDir favoritesSortDir;
   final LibraryViewMode viewMode;
   final LibraryDisplayMode displayMode;
   final LibraryTab selectedTab;
@@ -220,12 +224,20 @@ class LibraryPreferences {
     LibraryTab.history => historyQuery,
   };
 
+  (bridge.SortBy, bridge.SortDir) get sort => switch (selectedTab) {
+    LibraryTab.library => (librarySortBy, librarySortDir),
+    LibraryTab.favorites => (favoritesSortBy, favoritesSortDir),
+    LibraryTab.history => (librarySortBy, librarySortDir),
+  };
+
   LibraryPreferences copyWith({
     String? libraryQuery,
     String? favoritesQuery,
     String? historyQuery,
-    bridge.SortBy? sortBy,
-    bridge.SortDir? sortDir,
+    bridge.SortBy? librarySortBy,
+    bridge.SortDir? librarySortDir,
+    bridge.SortBy? favoritesSortBy,
+    bridge.SortDir? favoritesSortDir,
     LibraryViewMode? viewMode,
     LibraryDisplayMode? displayMode,
     LibraryTab? selectedTab,
@@ -233,8 +245,10 @@ class LibraryPreferences {
     libraryQuery: libraryQuery ?? this.libraryQuery,
     favoritesQuery: favoritesQuery ?? this.favoritesQuery,
     historyQuery: historyQuery ?? this.historyQuery,
-    sortBy: sortBy ?? this.sortBy,
-    sortDir: sortDir ?? this.sortDir,
+    librarySortBy: librarySortBy ?? this.librarySortBy,
+    librarySortDir: librarySortDir ?? this.librarySortDir,
+    favoritesSortBy: favoritesSortBy ?? this.favoritesSortBy,
+    favoritesSortDir: favoritesSortDir ?? this.favoritesSortDir,
     viewMode: viewMode ?? this.viewMode,
     displayMode: displayMode ?? this.displayMode,
     selectedTab: selectedTab ?? this.selectedTab,
@@ -253,8 +267,10 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
     }
     _hydrated = true;
     state = state.copyWith(
-      sortBy: _decodeSortBy(values['library_sort_by']),
-      sortDir: _decodeSortDir(values['library_sort_dir']),
+      librarySortBy: _decodeSortBy(values['library_sort_by']),
+      librarySortDir: _decodeSortDir(values['library_sort_dir']),
+      favoritesSortBy: _decodeSortBy(values['favorites_sort_by']),
+      favoritesSortDir: _decodeSortDir(values['favorites_sort_dir']),
       viewMode: _decodeViewMode(values['library_view_mode']),
       displayMode: _decodeDisplayMode(values['library_display_mode']),
       selectedTab: _decodeLibraryTab(values['library_selected_tab']),
@@ -270,7 +286,11 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
   }
 
   void setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) {
-    state = state.copyWith(sortBy: sortBy, sortDir: sortDir);
+    state = switch (state.selectedTab) {
+      LibraryTab.library => state.copyWith(librarySortBy: sortBy, librarySortDir: sortDir),
+      LibraryTab.favorites => state.copyWith(favoritesSortBy: sortBy, favoritesSortDir: sortDir),
+      LibraryTab.history => state.copyWith(librarySortBy: sortBy, librarySortDir: sortDir),
+    };
   }
 
   void setViewMode(LibraryViewMode viewMode) {
