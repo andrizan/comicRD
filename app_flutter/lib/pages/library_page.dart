@@ -230,7 +230,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         );
       }
       _updateBackToTopVisibility(_activeScrollController());
-      ref.read(libraryCountProvider.notifier).update(comicsState.items.length);
     });
 
     return KeyboardListener(

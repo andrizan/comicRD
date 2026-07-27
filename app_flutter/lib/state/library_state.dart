@@ -119,22 +119,47 @@ final allFavoritesProvider = FutureProvider<List<bridge.Favorite>>((ref) {
   return ref.watch(comicRdApiProvider).listFavorites();
 });
 
-class LibraryCountNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-
-  void update(int count) {
-    state = count;
-  }
-}
-
-final libraryCountProvider = NotifierProvider<LibraryCountNotifier, int>(
-  LibraryCountNotifier.new,
-);
+final libraryCountProvider = Provider<int>((ref) {
+  final comics = ref.watch(rawLibraryComicsProvider).asData?.value ?? const [];
+  final query = ref
+      .watch(libraryPreferencesProvider.select((p) => p.libraryQuery))
+      .trim()
+      .toLowerCase();
+  final viewMode = ref.watch(
+    libraryPreferencesProvider.select((p) => p.viewMode),
+  );
+  return comics
+      .where(
+        (comic) =>
+            query.isEmpty ||
+            comic.title.toLowerCase().contains(query) ||
+            comic.sourcePath.toLowerCase().contains(query),
+      )
+      .where((comic) {
+        return switch (viewMode) {
+          LibraryViewMode.all => true,
+          LibraryViewMode.unread =>
+            comic.readChapterCount == 0 && comic.inProgressChapterCount == 0,
+          LibraryViewMode.reading => comic.inProgressChapterCount > 0,
+        };
+      })
+      .length;
+});
 
 final favoriteCountProvider = Provider<int>((ref) {
-  final favorites = ref.watch(allFavoritesProvider);
-  return favorites.asData?.value.length ?? 0;
+  final favorites = ref.watch(allFavoritesProvider).asData?.value ?? const [];
+  final query = ref
+      .watch(libraryPreferencesProvider.select((p) => p.favoritesQuery))
+      .trim()
+      .toLowerCase();
+  if (query.isEmpty) return favorites.length;
+  return favorites
+      .where(
+        (f) =>
+            f.comicTitle.toLowerCase().contains(query) ||
+            f.comicSourcePath.toLowerCase().contains(query),
+      )
+      .length;
 });
 
 final comicsWithProgressProvider = FutureProvider<List<String>>((ref) {
