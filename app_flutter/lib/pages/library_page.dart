@@ -415,11 +415,19 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   Future<void> _refreshLibrary() async {
-    ref.invalidate(libraryPaginationProvider);
-    await Future.wait<void>([
-      ref.refresh(librarySourceStatusProvider.future),
-      ref.refresh(rawLibraryComicsProvider.future),
-    ]);
+    final selectedTab = ref.read(libraryPreferencesProvider).selectedTab;
+    switch (selectedTab) {
+      case LibraryTab.library:
+        ref.invalidate(libraryPaginationProvider);
+        await Future.wait<void>([
+          ref.refresh(librarySourceStatusProvider.future),
+          ref.refresh(rawLibraryComicsProvider.future),
+        ]);
+      case LibraryTab.favorites:
+        unawaited(ref.refresh(allFavoritesProvider.future));
+      case LibraryTab.history:
+        unawaited(ref.refresh(readingHistoryProvider.future));
+    }
   }
 
   Future<void> _toggleComicFavorite(
