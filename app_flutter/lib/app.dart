@@ -125,6 +125,26 @@ class ComicRdShell extends ConsumerStatefulWidget {
 
 class _ComicRdShellState extends ConsumerState<ComicRdShell> {
   bool _sidebarCollapsed = false;
+  int _libraryCount = 0;
+  int _favoriteCount = 0;
+  bool _countsHooked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_countsHooked) {
+      _countsHooked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.listenManual<int>(libraryCountProvider, (_, next) {
+          if (mounted) setState(() => _libraryCount = next);
+        }, fireImmediately: true);
+        ref.listenManual<int>(favoriteCountProvider, (_, next) {
+          if (mounted) setState(() => _favoriteCount = next);
+        }, fireImmediately: true);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,8 +200,8 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                       setState(() => _sidebarCollapsed = !_sidebarCollapsed),
                   text: text,
                   selectedTab: selectedTab,
-                  libraryCount: ref.watch(libraryCountProvider),
-                  favoriteCount: ref.watch(favoriteCountProvider),
+                  libraryCount: _libraryCount,
+                  favoriteCount: _favoriteCount,
                   onSelectTab: _setSelectedTab,
                 ),
                 Expanded(

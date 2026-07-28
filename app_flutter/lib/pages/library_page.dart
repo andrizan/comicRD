@@ -223,7 +223,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final text = stringsFor(ref.watch(appSettingsProvider).localeCode);
     final preferences = ref.watch(libraryPreferencesProvider);
     final sourceStatus = ref.watch(librarySourceStatusProvider);
-    final history = ref.watch(readingHistoryProvider);
     final comicsState = _comicsState;
     final favorites = ref.watch(allFavoritesProvider);
     final favoritedPaths =
@@ -269,7 +268,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                   preferences: preferences,
                   comicsState: comicsState,
                   totalSizeBytes: _totalSizeBytes,
-                  historyCount: history.asData?.value.length ?? 0,
+                  historyCount: _historyState.filteredTotal,
                   favoritesCount: favorites.asData?.value.length ?? 0,
                   searchController: _search,
                   onSearchChanged: (value) {
@@ -325,7 +324,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                         child: switch (preferences.selectedTab) {
                           LibraryTab.history => _HistoryList(
                             text: text,
-                            history: history,
                             items: _historyState.items,
                             visibleCount: _historyState.visibleCount,
                             hasMore: _historyState.hasMore,
@@ -1502,10 +1500,9 @@ class _ProgressBar extends StatelessWidget {
   }
 }
 
-class _HistoryList extends StatelessWidget {
+class _HistoryList extends ConsumerWidget {
   const _HistoryList({
     required this.text,
-    required this.history,
     required this.items,
     required this.visibleCount,
     required this.hasMore,
@@ -1515,7 +1512,6 @@ class _HistoryList extends StatelessWidget {
   });
 
   final AppStrings text;
-  final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
   final List<bridge.ReadingHistoryEntry> items;
   final int visibleCount;
   final bool hasMore;
@@ -1524,7 +1520,8 @@ class _HistoryList extends StatelessWidget {
   final String emptyLabel;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(readingHistoryProvider);
     return history.when(
       data: (entries) {
         if (entries.isEmpty) {
@@ -1602,6 +1599,22 @@ class _HistoryItem extends StatelessWidget {
         Text(
           item.chapterTitle,
           style: TextStyle(fontSize: 13, color: colors.mutedForeground),
+        ),
+        Builder(
+          builder: (_) {
+            final lastRead = formatModifiedDate(item.updatedAt.toInt());
+            if (lastRead.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '${text.lastRead}: $lastRead',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colors.mutedForeground.withValues(alpha: 0.75),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
