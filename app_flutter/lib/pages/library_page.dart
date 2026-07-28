@@ -938,7 +938,7 @@ class _ViewToggleButton extends StatelessWidget {
   }
 }
 
-class _ComicList extends StatelessWidget {
+class _ComicList extends ConsumerWidget {
   const _ComicList({
     required this.text,
     required this.comics,
@@ -971,69 +971,88 @@ class _ComicList extends StatelessWidget {
   final Future<void> Function(bridge.RawComic comic) onOpenFolder;
 
   @override
-  Widget build(BuildContext context) {
-    if (visibleCount == 0) {
-      return _EmptyState(label: emptyLabel);
-    }
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        if (hasMore &&
-            notification.metrics.pixels >=
-                notification.metrics.maxScrollExtent - 200) {
-          onLoadMore();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final raw = ref.watch(rawLibraryComicsProvider);
+    return raw.when(
+      data: (_) {
+        if (visibleCount == 0) {
+          return _EmptyState(label: emptyLabel);
         }
-        return false;
+        return NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (hasMore &&
+                notification.metrics.pixels >=
+                    notification.metrics.maxScrollExtent - 200) {
+              onLoadMore();
+            }
+            return false;
+          },
+          child: displayMode == LibraryDisplayMode.grid
+              ? GridView.builder(
+                  controller: controller,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 180,
+                        mainAxisExtent: 290,
+                        crossAxisSpacing: 20,
+                        mainAxisSpacing: 20,
+                      ),
+                  itemCount: visibleCount,
+                  itemBuilder: (context, index) {
+                    final comic = comics[index];
+                    final favorited = favoritedPaths.contains(
+                      comic.sourcePath,
+                    );
+                    return _ComicCard(
+                      text: text,
+                      comic: comic,
+                      favorited: favorited,
+                      displayMode: LibraryDisplayMode.grid,
+                      onOpen: () => context.go(
+                        '/comic/${encodeRoutePath(comic.sourcePath)}',
+                      ),
+                      onToggleFavorite: () =>
+                          onToggleFavorite(comic, favorited),
+                      onCopyTitle: () => onCopyTitle(comic),
+                      onCopyPath: () => onCopyPath(comic),
+                      onOpenFolder: () => onOpenFolder(comic),
+                    );
+                  },
+                )
+              : ListView.separated(
+                  controller: controller,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  itemCount: visibleCount,
+                  separatorBuilder: (_, _) => const SizedBox(height: 16),
+                  itemBuilder: (context, index) {
+                    final comic = comics[index];
+                    final favorited = favoritedPaths.contains(
+                      comic.sourcePath,
+                    );
+                    return _ComicCard(
+                      text: text,
+                      comic: comic,
+                      favorited: favorited,
+                      displayMode: LibraryDisplayMode.list,
+                      onOpen: () => context.go(
+                        '/comic/${encodeRoutePath(comic.sourcePath)}',
+                      ),
+                      onToggleFavorite: () =>
+                          onToggleFavorite(comic, favorited),
+                      onCopyTitle: () => onCopyTitle(comic),
+                      onCopyPath: () => onCopyPath(comic),
+                      onOpenFolder: () => onOpenFolder(comic),
+                    );
+                  },
+                ),
+        );
       },
-      child: displayMode == LibraryDisplayMode.grid
-          ? GridView.builder(
-              controller: controller,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 180,
-                mainAxisExtent: 290,
-                crossAxisSpacing: 20,
-                mainAxisSpacing: 20,
-              ),
-              itemCount: visibleCount,
-              itemBuilder: (context, index) {
-                final comic = comics[index];
-                final favorited = favoritedPaths.contains(comic.sourcePath);
-                return _ComicCard(
-                  text: text,
-                  comic: comic,
-                  favorited: favorited,
-                  displayMode: LibraryDisplayMode.grid,
-                  onOpen: () =>
-                      context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
-                  onToggleFavorite: () => onToggleFavorite(comic, favorited),
-                  onCopyTitle: () => onCopyTitle(comic),
-                  onCopyPath: () => onCopyPath(comic),
-                  onOpenFolder: () => onOpenFolder(comic),
-                );
-              },
-            )
-          : ListView.separated(
-              controller: controller,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              itemCount: visibleCount,
-              separatorBuilder: (_, _) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                final comic = comics[index];
-                final favorited = favoritedPaths.contains(comic.sourcePath);
-                return _ComicCard(
-                  text: text,
-                  comic: comic,
-                  favorited: favorited,
-                  displayMode: LibraryDisplayMode.list,
-                  onOpen: () =>
-                      context.go('/comic/${encodeRoutePath(comic.sourcePath)}'),
-                  onToggleFavorite: () => onToggleFavorite(comic, favorited),
-                  onCopyTitle: () => onCopyTitle(comic),
-                  onCopyPath: () => onCopyPath(comic),
-                  onOpenFolder: () => onOpenFolder(comic),
-                );
-              },
-            ),
+      error: (error, _) => _ErrorState(message: error.toString()),
+      loading: () => const Align(
+        alignment: Alignment.center,
+        child: FCircularProgress.loader(),
+      ),
     );
   }
 }
