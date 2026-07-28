@@ -334,7 +334,10 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOutCubic,
+      clipBehavior: Clip.hardEdge,
       width: collapsed ? 72.0 : 260.0,
       decoration: BoxDecoration(
         color: colors.card,
@@ -357,19 +360,25 @@ class _Sidebar extends StatelessWidget {
             text: text,
           ),
           const SizedBox(height: 32),
-          if (!collapsed)
-            Padding(
-              padding: const EdgeInsets.only(left: 12, bottom: 12),
-              child: Text(
-                text.menu.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.6,
-                  color: colors.mutedForeground,
-                ),
-              ),
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topLeft,
+            curve: Curves.easeOutCubic,
+            child: collapsed
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 12),
+                    child: Text(
+                      text.menu.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                        color: colors.mutedForeground,
+                      ),
+                    ),
+                  ),
+          ),
           const SizedBox(height: 8),
           _SidebarNavItem(
             collapsed: collapsed,
@@ -398,19 +407,25 @@ class _Sidebar extends StatelessWidget {
           ),
           const Spacer(),
           const SizedBox(height: 4),
-          if (!collapsed)
-            Padding(
-              padding: const EdgeInsets.only(left: 12, bottom: 12),
-              child: Text(
-                text.settings.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.6,
-                  color: colors.mutedForeground,
-                ),
-              ),
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topLeft,
+            curve: Curves.easeOutCubic,
+            child: collapsed
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 12),
+                    child: Text(
+                      text.settings.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                        color: colors.mutedForeground,
+                      ),
+                    ),
+                  ),
+          ),
           _SidebarNavItem(
             collapsed: collapsed,
             icon: AppIcons.settings,
@@ -531,65 +546,71 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Row(
-            mainAxisAlignment: widget.collapsed
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            children: [
-              if (widget.selected && !widget.collapsed)
-                Container(
-                  width: 3,
-                  height: 18,
-                  margin: const EdgeInsets.only(right: 9),
-                  decoration: BoxDecoration(
-                    color: colors.primary,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                )
-              else if (!widget.collapsed)
-                const SizedBox(width: 12),
-              Icon(
-                widget.icon,
-                size: 20,
-                color: widget.selected
-                    ? colors.primary
-                    : colors.mutedForeground,
-              ),
-              if (!widget.collapsed) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: widget.selected
-                          ? colors.primary
-                          : colors.foreground,
-                    ),
-                  ),
-                ),
-                if (widget.count != null && widget.count! > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.secondary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${widget.count}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final hasSpace = constraints.maxWidth > 100;
+              return Row(
+                mainAxisAlignment: !hasSpace
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  if (widget.selected && hasSpace)
+                    Container(
+                      width: 3,
+                      height: 18,
+                      margin: const EdgeInsets.only(right: 9),
+                      decoration: BoxDecoration(
                         color: colors.primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    )
+                  else if (hasSpace)
+                    const SizedBox(width: 12),
+                  Icon(
+                    widget.icon,
+                    size: 20,
+                    color: widget.selected
+                        ? colors.primary
+                        : colors.mutedForeground,
+                  ),
+                  if (hasSpace) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: widget.selected
+                              ? colors.primary
+                              : colors.foreground,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ],
+                    if (widget.count != null && widget.count! > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.secondary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${widget.count}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colors.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ),
