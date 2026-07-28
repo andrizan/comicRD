@@ -96,23 +96,27 @@ class ReaderSettings {
     this.pageGap = 20.0,
     this.unlimitedScroll = false,
     this.unlimitedScrollUp = true,
+    this.forcePortrait = false,
   });
 
   final double zoom;
   final double pageGap;
   final bool unlimitedScroll;
   final bool unlimitedScrollUp;
+  final bool forcePortrait;
 
   ReaderSettings copyWith({
     double? zoom,
     double? pageGap,
     bool? unlimitedScroll,
     bool? unlimitedScrollUp,
+    bool? forcePortrait,
   }) => ReaderSettings(
     zoom: zoom ?? this.zoom,
     pageGap: pageGap ?? this.pageGap,
     unlimitedScroll: unlimitedScroll ?? this.unlimitedScroll,
     unlimitedScrollUp: unlimitedScrollUp ?? this.unlimitedScrollUp,
+    forcePortrait: forcePortrait ?? this.forcePortrait,
   );
 }
 
@@ -140,6 +144,11 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     _saveToDatabase();
   }
 
+  void setForcePortrait(bool value) {
+    state = state.copyWith(forcePortrait: value);
+    _saveToDatabase();
+  }
+
   void _saveToDatabase() {
     final api = ref.read(comicRdApiProvider);
     unawaited(api.setSetting('default_zoom', state.zoom.toStringAsFixed(1)));
@@ -150,6 +159,7 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     unawaited(
       api.setSetting('unlimited_scroll_up', state.unlimitedScrollUp.toString()),
     );
+    unawaited(api.setSetting('force_portrait', state.forcePortrait.toString()));
   }
 
   void hydrateFromSettings(Map<String, String> values) {
@@ -157,11 +167,13 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     final gap = _decodeDouble(values['page_gap'], 20.0);
     final unlimitedScroll = _decodeBool(values['unlimited_scroll'], false);
     final unlimitedScrollUp = _decodeBool(values['unlimited_scroll_up'], true);
+    final forcePortrait = _decodeBool(values['force_portrait'], false);
     state = ReaderSettings(
       zoom: zoom.clamp(0.5, 3.0),
       pageGap: gap.clamp(0, 80),
       unlimitedScroll: unlimitedScroll,
       unlimitedScrollUp: unlimitedScrollUp,
+      forcePortrait: forcePortrait,
     );
   }
 
@@ -227,6 +239,7 @@ class AppStrings {
     required this.fullscreen,
     required this.unlimitedScroll,
     required this.unlimitedScrollUp,
+    required this.forcePortrait,
     // Chapter status
     required this.read,
     required this.reading,
@@ -348,6 +361,7 @@ class AppStrings {
   final String fullscreen;
   final String unlimitedScroll;
   final String unlimitedScrollUp;
+  final String forcePortrait;
   // Chapter status
   final String read;
   final String reading;
@@ -465,6 +479,7 @@ class AppStrings {
     fullscreen: 'Fullscreen',
     unlimitedScroll: 'Unlimited Scroll',
     unlimitedScrollUp: 'Unlimited Scroll Up',
+    forcePortrait: 'Force Portrait',
     read: 'Read',
     reading: 'Reading',
     unread: 'Unread',
@@ -573,6 +588,7 @@ class AppStrings {
     fullscreen: 'Layar Penuh',
     unlimitedScroll: 'Scroll Tanpa Batas',
     unlimitedScrollUp: 'Scroll Tanpa Batas ke Atas',
+    forcePortrait: 'Mode Potret',
     read: 'Dibaca',
     reading: 'Sedang Dibaca',
     unread: 'Belum Dibaca',

@@ -224,6 +224,7 @@ class AppIcons {
   static const IconData copyPath = FLucideIcons.copy;
   static const IconData info = FLucideIcons.info;
   static const IconData code = FLucideIcons.code;
+  static const IconData portrait = FLucideIcons.smartphone;
 }
 
 // ---------------------------------------------------------------------------

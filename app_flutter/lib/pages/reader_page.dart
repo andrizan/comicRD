@@ -33,6 +33,8 @@ class _ReaderPageLayout {
   static const double _landscapeTargetWidth = 1500.0;
   static const double _minDisplayWidth = 240.0;
   static const double _viewportWidthPadding = 24.0;
+  static const double _landscapeAspectThreshold = 1.5;
+  static const double _landscapeSizeRatio = 1.5;
 
   static double maxDisplayWidth(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -50,22 +52,40 @@ class _ReaderPageLayout {
     return _isLandscape(page) ? _landscapeTargetWidth : _portraitTargetWidth;
   }
 
-  /// If a landscape page has the same actual width as the portrait page
-  /// above it, use the portrait target width so the column stays visually
-  /// consistent.
+  /// Landscape layout is reserved for spreads. A page is treated as
+  /// landscape only when:
+  ///   1. its aspect ratio is clearly wider than tall (> 1.5), and
+  ///   2. its width is more than 1.5x the previous page's longer side.
+  /// Anything that doesn't satisfy both follows the previous page's
+  /// target width so the column stays visually consistent.
+  ///
+  /// When [forcePortrait] is true, every page is sized to the portrait
+  /// target width regardless of aspect ratio or surrounding pages.
   static double _effectiveTargetWidth(
     bridge.PageInfo page,
-    bridge.PageInfo? prevPage,
-  ) {
-    if (!_isLandscape(page) || prevPage == null) {
+    bridge.PageInfo? prevPage, {
+    bool forcePortrait = false,
+  }) {
+    if (forcePortrait) {
+      return _portraitTargetWidth;
+    }
+    if (!_isLandscape(page)) {
+      return _portraitTargetWidth;
+    }
+    if (aspectRatio(page) <= _landscapeAspectThreshold) {
+      return prevPage != null ? _targetWidth(prevPage) : _portraitTargetWidth;
+    }
+    if (prevPage == null) {
       return _targetWidth(page);
     }
     final curWidth = page.width ?? 0;
-    final prevWidth = prevPage.width ?? 0;
-    if (curWidth > 0 && curWidth == prevWidth) {
-      return _targetWidth(prevPage);
+    final prevLargerDim = math.max(prevPage.width ?? 0, prevPage.height ?? 0);
+    if (curWidth > 0 &&
+        prevLargerDim > 0 &&
+        curWidth > prevLargerDim * _landscapeSizeRatio) {
+      return _targetWidth(page);
     }
-    return _targetWidth(page);
+    return _targetWidth(prevPage);
   }
 
   static double displayWidth(
@@ -73,8 +93,11 @@ class _ReaderPageLayout {
     double zoom,
     double maxWidth, {
     bridge.PageInfo? prevPage,
+    bool forcePortrait = false,
   }) {
-    final target = _effectiveTargetWidth(page, prevPage) * zoom;
+    final target =
+        _effectiveTargetWidth(page, prevPage, forcePortrait: forcePortrait) *
+        zoom;
     return target.clamp(_minDisplayWidth, maxWidth);
   }
 
@@ -83,8 +106,15 @@ class _ReaderPageLayout {
     double zoom,
     double maxWidth, {
     bridge.PageInfo? prevPage,
+    bool forcePortrait = false,
   }) {
-    final width = displayWidth(page, zoom, maxWidth, prevPage: prevPage);
+    final width = displayWidth(
+      page,
+      zoom,
+      maxWidth,
+      prevPage: prevPage,
+      forcePortrait: forcePortrait,
+    );
     return width / aspectRatio(page);
   }
 
@@ -316,6 +346,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                             zoom: readerSettings.zoom,
                             fullscreen: _fullscreen,
                             unlimitedScroll: readerSettings.unlimitedScroll,
+                            forcePortrait: readerSettings.forcePortrait,
                             isBookmarked: isBookmarked,
                             isFavorited: isFavorited,
                             onClose: () => _close(data),
@@ -348,6 +379,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                   .read(readerSettingsProvider.notifier)
                                   .setUnlimitedScroll(
                                     !readerSettings.unlimitedScroll,
+                                  );
+                            },
+                            onToggleForcePortrait: () {
+                              ref
+                                  .read(readerSettingsProvider.notifier)
+                                  .setForcePortrait(
+                                    !readerSettings.forcePortrait,
                                   );
                             },
                             onToggleBookmark: () =>
@@ -463,6 +501,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 data.pages[index],
                 readerSettings.zoom,
                 prevPage: prevPage,
+                forcePortrait: readerSettings.forcePortrait,
               ) +
               pageGap;
         },
@@ -494,6 +533,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         page: page,
         zoom: readerSettings.zoom,
         prevPage: prevPage,
+        forcePortrait: readerSettings.forcePortrait,
       ),
     );
   }
@@ -597,6 +637,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       pages: data.pages,
       zoom: settings.zoom,
       pageGap: settings.pageGap,
+      forcePortrait: settings.forcePortrait,
     );
 
     // Check for next chapter (scroll to end)
@@ -630,11 +671,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       pages: data.pages,
       zoom: settings.zoom,
       pageGap: settings.pageGap,
+      forcePortrait: settings.forcePortrait,
     );
     final page = _pageAtViewportCenter(
       pages: data.pages,
       zoom: settings.zoom,
       pageGap: settings.pageGap,
+      forcePortrait: settings.forcePortrait,
     );
     final start = math.max(0, range.first - 2);
     final end = math.min(data.pages.length - 1, range.last + 2);
@@ -658,6 +701,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     required List<bridge.PageInfo> pages,
     required double zoom,
     required double pageGap,
+    bool forcePortrait = false,
   }) {
     if (!_scroll.hasClients || pages.isEmpty) {
       return _currentPage;
@@ -669,6 +713,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       zoom: zoom,
       pageGap: pageGap,
       offset: viewportCenter,
+      forcePortrait: forcePortrait,
     );
   }
 
@@ -676,6 +721,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     required List<bridge.PageInfo> pages,
     required double zoom,
     required double pageGap,
+    bool forcePortrait = false,
   }) {
     if (!_scroll.hasClients || pages.isEmpty) {
       return (first: _currentPage, last: _currentPage);
@@ -688,7 +734,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     for (var i = 0; i < pages.length; i++) {
       final prevPage = i > 0 ? pages[i - 1] : null;
       final bottom =
-          top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
+          top +
+          _pageDisplayHeight(
+            pages[i],
+            zoom,
+            prevPage: prevPage,
+            forcePortrait: forcePortrait,
+          );
       if (bottom >= visibleTop && top <= visibleBottom) {
         first = first == -1 ? i : first;
         last = i;
@@ -703,6 +755,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         zoom: zoom,
         pageGap: pageGap,
         offset: visibleTop,
+        forcePortrait: forcePortrait,
       );
       return (first: page, last: page);
     }
@@ -714,12 +767,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     required double zoom,
     required double pageGap,
     required double offset,
+    bool forcePortrait = false,
   }) {
     var top = _topPadding;
     for (var i = 0; i < pages.length; i++) {
       final prevPage = i > 0 ? pages[i - 1] : null;
       final bottom =
-          top + _pageDisplayHeight(pages[i], zoom, prevPage: prevPage);
+          top +
+          _pageDisplayHeight(
+            pages[i],
+            zoom,
+            prevPage: prevPage,
+            forcePortrait: forcePortrait,
+          );
       if (offset <= bottom || i == pages.length - 1) {
         return i;
       }
@@ -1083,7 +1143,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     var offset = _topPadding;
     for (var i = 0; i < target; i++) {
       final prevPage = i > 0 ? pages[i - 1] : null;
-      offset += _pageDisplayHeight(pages[i], settings.zoom, prevPage: prevPage);
+      offset += _pageDisplayHeight(
+        pages[i],
+        settings.zoom,
+        prevPage: prevPage,
+        forcePortrait: settings.forcePortrait,
+      );
       offset += settings.pageGap;
     }
     return offset.clamp(0, _scroll.position.maxScrollExtent).toDouble();
@@ -1093,12 +1158,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     bridge.PageInfo page,
     double zoom, {
     bridge.PageInfo? prevPage,
+    bool forcePortrait = false,
   }) {
     return _ReaderPageLayout.displayHeight(
       page,
       zoom,
       _ReaderPageLayout.maxDisplayWidth(context),
       prevPage: prevPage,
+      forcePortrait: forcePortrait,
     );
   }
 
@@ -1220,12 +1287,14 @@ class _ReaderPageItem extends ConsumerWidget {
     required this.page,
     required this.zoom,
     this.prevPage,
+    this.forcePortrait = false,
   });
 
   final int chapterId;
   final bridge.PageInfo page;
   final double zoom;
   final bridge.PageInfo? prevPage;
+  final bool forcePortrait;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1235,6 +1304,7 @@ class _ReaderPageItem extends ConsumerWidget {
       zoom,
       maxWidth,
       prevPage: prevPage,
+      forcePortrait: forcePortrait,
     );
     final aspectRatio = _ReaderPageLayout.aspectRatio(page);
     final rendered = ref.watch(
@@ -1348,6 +1418,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.zoom,
     required this.fullscreen,
     required this.unlimitedScroll,
+    required this.forcePortrait,
     required this.isBookmarked,
     required this.isFavorited,
     required this.onClose,
@@ -1359,6 +1430,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
     required this.onZoomChanged,
     required this.onToggleFullscreen,
     required this.onToggleUnlimitedScroll,
+    required this.onToggleForcePortrait,
     required this.onToggleBookmark,
     required this.onToggleFavorite,
     required this.onTogglePageBookmark,
@@ -1372,6 +1444,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final double zoom;
   final bool fullscreen;
   final bool unlimitedScroll;
+  final bool forcePortrait;
   final bool isBookmarked;
   final bool isFavorited;
   final bool isPageBookmarked;
@@ -1384,6 +1457,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onToggleFullscreen;
   final VoidCallback onToggleUnlimitedScroll;
+  final VoidCallback onToggleForcePortrait;
   final VoidCallback onToggleBookmark;
   final VoidCallback onToggleFavorite;
   final VoidCallback onTogglePageBookmark;
@@ -1466,15 +1540,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       icon: AppIcons.chevronLast,
                       onPressed: onNextChapter,
                     ),
-                    _ReferenceReaderIconButton(
-                      tooltip: isBookmarked
-                          ? text.removeBookmark
-                          : text.addBookmark,
-                      icon: AppIcons.folderBookmark,
-                      active: isBookmarked,
-                      activeColor: context.appReader.star,
-                      onPressed: onToggleBookmark,
-                    ),
+                    const SizedBox(width: 10),
                     _ReferenceReaderIconButton(
                       tooltip: isFavorited
                           ? text.removeFavorite
@@ -1485,6 +1551,15 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       onPressed: onToggleFavorite,
                     ),
                     _ReferenceReaderIconButton(
+                      tooltip: isBookmarked
+                          ? text.removeBookmark
+                          : text.addBookmark,
+                      icon: AppIcons.folderBookmark,
+                      active: isBookmarked,
+                      activeColor: context.appReader.star,
+                      onPressed: onToggleBookmark,
+                    ),
+                    _ReferenceReaderIconButton(
                       tooltip: isPageBookmarked
                           ? text.removePageBookmark
                           : text.addPageBookmark,
@@ -1493,7 +1568,7 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       activeColor: const Color(0xffffb020),
                       onPressed: onTogglePageBookmark,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 10),
                     _ReaderControlChip(
                       icon: AppIcons.search,
                       value: '${(zoom * 100).round()}%',
@@ -1525,6 +1600,12 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       icon: AppIcons.scroll,
                       active: unlimitedScroll,
                       onPressed: onToggleUnlimitedScroll,
+                    ),
+                    _ReferenceReaderIconButton(
+                      tooltip: text.forcePortrait,
+                      icon: AppIcons.portrait,
+                      active: forcePortrait,
+                      onPressed: onToggleForcePortrait,
                     ),
                   ],
                 ),

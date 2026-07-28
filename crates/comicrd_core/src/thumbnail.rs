@@ -105,6 +105,12 @@ impl ThumbnailCache {
 /// "no content" as a silent fallback rather than an error.
 pub(crate) fn load_cover_image_bytes(source_path: &str) -> Result<Vec<u8>, String> {
     let path = Path::new(source_path);
+    if !path.exists() {
+        // The comic source was moved or deleted after the library was listed.
+        // Treat this as a silent fallback so the UI can show a placeholder
+        // thumbnail instead of bubbling an error up through the bridge.
+        return Ok(Vec::new());
+    }
     if path.is_dir() {
         // Prefer a root-level cover image.
         let root_images = image_entries_in_dir_shallow(path);
@@ -316,6 +322,17 @@ mod tests {
         let dir = tempdir();
         let result = load_cover_image_bytes(dir.to_str().unwrap()).unwrap();
         assert!(result.is_empty(), "expected empty bytes for empty folder");
+    }
+
+    #[test]
+    fn load_cover_returns_empty_for_missing_path() {
+        let dir = tempdir();
+        let missing = dir.join("does-not-exist");
+        let result = load_cover_image_bytes(missing.to_str().unwrap()).unwrap();
+        assert!(
+            result.is_empty(),
+            "expected empty bytes for missing source path"
+        );
     }
 
     #[test]
