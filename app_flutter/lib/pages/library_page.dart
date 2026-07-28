@@ -42,6 +42,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     visibleCount: 0,
     hasMore: false,
   );
+  HistoryListState _historyState = const HistoryListState(
+    items: [],
+    filteredTotal: 0,
+    visibleCount: 0,
+    hasMore: false,
+  );
   List<bridge.RawComic> _rawComics = const [];
   int _totalSizeBytes = 0;
 
@@ -73,6 +79,13 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           if (mounted) {
             setState(() {
               _comicsState = next;
+            });
+          }
+        }, fireImmediately: true);
+        ref.listenManual<HistoryListState>(historyListProvider, (prev, next) {
+          if (mounted) {
+            setState(() {
+              _historyState = next;
             });
           }
         }, fireImmediately: true);
@@ -313,7 +326,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           LibraryTab.history => _HistoryList(
                             text: text,
                             history: history,
-                            query: preferences.query,
+                            items: _historyState.items,
+                            visibleCount: _historyState.visibleCount,
+                            hasMore: _historyState.hasMore,
+                            onLoadMore: () => ref
+                                .read(historyPaginationProvider.notifier)
+                                .loadMore(),
                             controller: _historyScroll,
                             emptyLabel: text.emptyLibrary,
                           ),
@@ -430,6 +448,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       case LibraryTab.favorites:
         unawaited(ref.refresh(allFavoritesProvider.future));
       case LibraryTab.history:
+        ref.invalidate(historyPaginationProvider);
         unawaited(ref.refresh(readingHistoryProvider.future));
     }
   }
@@ -1487,48 +1506,58 @@ class _HistoryList extends StatelessWidget {
   const _HistoryList({
     required this.text,
     required this.history,
-    required this.query,
+    required this.items,
+    required this.visibleCount,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.controller,
     required this.emptyLabel,
   });
 
   final AppStrings text;
   final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
-  final String query;
+  final List<bridge.ReadingHistoryEntry> items;
+  final int visibleCount;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final ScrollController controller;
   final String emptyLabel;
 
   @override
   Widget build(BuildContext context) {
     return history.when(
-      data: (items) {
-        final filteredQuery = query.trim().toLowerCase();
-        final filtered = filteredQuery.isEmpty
-            ? items
-            : items
-                  .where(
-                    (item) =>
-                        item.comicTitle.toLowerCase().contains(filteredQuery) ||
-                        item.chapterTitle.toLowerCase().contains(filteredQuery),
-                  )
-                  .toList();
-        if (filtered.isEmpty) {
+      data: (entries) {
+        if (entries.isEmpty) {
           return _EmptyState(label: emptyLabel);
         }
-        return ListView.separated(
-          controller: controller,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          itemCount: filtered.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final item = filtered[index];
-            return _HistoryItem(
-              text: text,
-              item: item,
-              onOpen: () =>
-                  context.go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
-            );
+        if (visibleCount == 0) {
+          return _EmptyState(label: emptyLabel);
+        }
+        return NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (hasMore &&
+                notification.metrics.pixels >=
+                    notification.metrics.maxScrollExtent - 200) {
+              onLoadMore();
+            }
+            return false;
           },
+          child: ListView.separated(
+            controller: controller,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            itemCount: visibleCount,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return _HistoryItem(
+                text: text,
+                item: item,
+                onOpen: () => context.go(
+                  '/comic/${encodeRoutePath(item.comicSourcePath)}',
+                ),
+              );
+            },
+          ),
         );
       },
       error: (error, _) => _ErrorState(message: error.toString()),

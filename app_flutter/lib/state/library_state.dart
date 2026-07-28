@@ -39,7 +39,7 @@ final rawLibraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
 });
 
 class LibraryPaginationNotifier extends Notifier<int> {
-  static const int pageSize = 60;
+  static const int pageSize = 30;
 
   @override
   int build() => pageSize;
@@ -118,6 +118,72 @@ final readingHistoryProvider = FutureProvider<List<bridge.ReadingHistoryEntry>>(
     return ref.watch(comicRdApiProvider).listReadingHistory();
   },
 );
+
+class HistoryPaginationNotifier extends Notifier<int> {
+  static const int pageSize = 30;
+
+  @override
+  int build() => pageSize;
+
+  void loadMore() {
+    state = state + pageSize;
+  }
+
+  void reset() {
+    state = pageSize;
+  }
+}
+
+final historyPaginationProvider =
+    NotifierProvider<HistoryPaginationNotifier, int>(
+      HistoryPaginationNotifier.new,
+    );
+
+final filteredHistoryProvider = Provider<List<bridge.ReadingHistoryEntry>>((
+  ref,
+) {
+  final entries = ref.watch(readingHistoryProvider).asData?.value ?? const [];
+  final query = ref
+      .watch(libraryPreferencesProvider.select((p) => p.query))
+      .trim()
+      .toLowerCase();
+  if (query.isEmpty) return entries;
+  return entries
+      .where(
+        (entry) =>
+            entry.comicTitle.toLowerCase().contains(query) ||
+            entry.chapterTitle.toLowerCase().contains(query),
+      )
+      .toList();
+});
+
+class HistoryListState {
+  const HistoryListState({
+    required this.items,
+    required this.filteredTotal,
+    required this.visibleCount,
+    required this.hasMore,
+  });
+
+  final List<bridge.ReadingHistoryEntry> items;
+  final int filteredTotal;
+  final int visibleCount;
+  final bool hasMore;
+}
+
+final historyListProvider = Provider<HistoryListState>((ref) {
+  final filtered = ref.watch(filteredHistoryProvider);
+  final visibleLimit = ref.watch(historyPaginationProvider);
+  final visibleCount = filtered.length < visibleLimit
+      ? filtered.length
+      : visibleLimit;
+  return HistoryListState(
+    items: filtered,
+    filteredTotal: filtered.length,
+    visibleCount: visibleCount,
+    hasMore: visibleCount < filtered.length,
+  );
+});
 
 final allFavoritesProvider = FutureProvider<List<bridge.Favorite>>((ref) {
   return ref.watch(comicRdApiProvider).listFavorites();
