@@ -47,3 +47,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .mimocode
+
+# Per-developer cargo config. Windows developers may add a local
+# .cargo/config.toml to set PKG_CONFIG_PATH for dav1d. Do not commit it:
+# cargo's [env] section has no per-target support and would override
+# PKG_CONFIG_PATH on Linux/macOS, breaking the build there.
+/.cargo/config.toml
+/.cargo/config

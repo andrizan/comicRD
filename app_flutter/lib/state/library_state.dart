@@ -26,10 +26,14 @@ final rawLibraryComicsProvider = FutureProvider<List<bridge.RawComic>>((
   }
   final api = ref.watch(comicRdApiProvider);
   final sortBy = ref.watch(
-    libraryPreferencesProvider.select((preferences) => preferences.librarySortBy),
+    libraryPreferencesProvider.select(
+      (preferences) => preferences.librarySortBy,
+    ),
   );
   final sortDir = ref.watch(
-    libraryPreferencesProvider.select((preferences) => preferences.librarySortDir),
+    libraryPreferencesProvider.select(
+      (preferences) => preferences.librarySortDir,
+    ),
   );
   return api.listLibraryComicsRaw(sortBy: sortBy, sortDir: sortDir);
 });
@@ -282,7 +286,9 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
       favoritesSortBy: _decodeSortBy(values['favorites_sort_by']),
       favoritesSortDir: _decodeSortDir(values['favorites_sort_dir']),
       libraryDisplayMode: _decodeDisplayMode(values['library_display_mode']),
-      favoritesDisplayMode: _decodeDisplayMode(values['favorites_display_mode']),
+      favoritesDisplayMode: _decodeDisplayMode(
+        values['favorites_display_mode'],
+      ),
       viewMode: _decodeViewMode(values['library_view_mode']),
       selectedTab: _decodeLibraryTab(values['library_selected_tab']),
     );
@@ -298,9 +304,18 @@ class LibraryPreferencesNotifier extends Notifier<LibraryPreferences> {
 
   void setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) {
     state = switch (state.selectedTab) {
-      LibraryTab.library => state.copyWith(librarySortBy: sortBy, librarySortDir: sortDir),
-      LibraryTab.favorites => state.copyWith(favoritesSortBy: sortBy, favoritesSortDir: sortDir),
-      LibraryTab.history => state.copyWith(librarySortBy: sortBy, librarySortDir: sortDir),
+      LibraryTab.library => state.copyWith(
+        librarySortBy: sortBy,
+        librarySortDir: sortDir,
+      ),
+      LibraryTab.favorites => state.copyWith(
+        favoritesSortBy: sortBy,
+        favoritesSortDir: sortDir,
+      ),
+      LibraryTab.history => state.copyWith(
+        librarySortBy: sortBy,
+        librarySortDir: sortDir,
+      ),
     };
   }
 

@@ -138,6 +138,32 @@ setx PKG_CONFIG_PATH "C:\Users\<you>\dav1d-install\lib\pkgconfig"
 After `setx`, open a **new terminal** so the variable takes effect. In the
 current terminal, run `$env:PKG_CONFIG_PATH = "C:\Users\<you>\dav1d-install\lib\pkgconfig"` instead.
 
+**Persistent `PKG_CONFIG_PATH` via `.cargo/config.toml` (alternative to `setx`, Windows only)**
+
+`setx` and shell session env vars only take effect in new terminals, and tools
+like Git for Windows can overwrite `PKG_CONFIG_PATH` on launch. For a
+shell-independent fix that always works for `cargo` (including invocations
+triggered by `flutter_rust_bridge_codegen generate`), create a local
+`.cargo/config.toml` at the repository root:
+
+```toml
+# .cargo/config.toml  (local, not committed — see .gitignore)
+[env]
+PKG_CONFIG_PATH = { value = "C:/Users/<you>/dav1d-install/lib/pkgconfig", force = true }
+```
+
+Replace the path with wherever dav1d was installed (for example
+`C:/Users/<you>/AppData/Local/dav1d/lib/pkgconfig` when using the meson script
+in `scripts/setup-dav1d.ps1`).
+
+**This file is Windows-only and must not be committed.** Cargo's `[env]`
+section has no per-target/cfg support, so `force = true` would override
+`PKG_CONFIG_PATH` on Linux/macOS too and break the build (the path does not
+exist on those platforms, where dav1d is provided by the system package
+manager). `.cargo/config.toml` is already in `.gitignore` to prevent
+accidental commits; if your install path differs from other Windows
+developers, each Windows developer should create the file locally.
+
 Install the bridge generator and helper tooling:
 
 ```bash

@@ -383,7 +383,10 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       LibraryTab.history => 'library',
     };
     await api.setSetting('${prefix}_sort_by', jsonEncode(encodeSortBy(sortBy)));
-    await api.setSetting('${prefix}_sort_dir', jsonEncode(encodeSortDir(sortDir)));
+    await api.setSetting(
+      '${prefix}_sort_dir',
+      jsonEncode(encodeSortDir(sortDir)),
+    );
     if (_libraryScroll.hasClients) {
       _libraryScroll.animateTo(
         0,
