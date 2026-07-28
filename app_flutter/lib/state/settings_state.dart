@@ -296,7 +296,9 @@ class AppStrings {
     required this.refreshSourceStatus,
     required this.readerSection,
     required this.defaultZoom,
+    required this.defaultZoomDescription,
     required this.pageGap,
+    required this.pageGapDescription,
     required this.applicationSection,
     // Update
     required this.updateSection,
@@ -313,18 +315,27 @@ class AppStrings {
     required this.viewOnGithub,
     required this.backupSection,
     required this.exportBackup,
+    required this.exportBackupDescription,
     required this.importBackup,
+    required this.importBackupDescription,
     required this.save,
     required this.settingsSaved,
     required this.backupExported,
     required this.backupImported,
     // Scan
     required this.scanLibrary,
+    required this.scanLibraryDescription,
     required this.scanning,
     required this.scanNoChange,
     required this.scanProgress,
     required this.scanCompleted,
     required this.cancelScan,
+    // Per-setting descriptions (Win 11-style cards)
+    required this.themeDescription,
+    required this.localeDescription,
+    required this.unlimitedScrollDescription,
+    required this.unlimitedScrollUpDescription,
+    required this.settingsDescription,
   });
 
   // App identity
@@ -418,7 +429,9 @@ class AppStrings {
   final String refreshSourceStatus;
   final String readerSection;
   final String defaultZoom;
+  final String defaultZoomDescription;
   final String pageGap;
+  final String pageGapDescription;
   final String applicationSection;
   // Update
   final String updateSection;
@@ -435,18 +448,27 @@ class AppStrings {
   final String viewOnGithub;
   final String backupSection;
   final String exportBackup;
+  final String exportBackupDescription;
   final String importBackup;
+  final String importBackupDescription;
   final String save;
   final String settingsSaved;
   final String backupExported;
   final String backupImported;
   // Scan
   final String scanLibrary;
+  final String scanLibraryDescription;
   final String scanning;
   final String scanNoChange;
   final String scanProgress;
   final String scanCompleted;
   final String cancelScan;
+  // Per-setting descriptions (Win 11-style cards)
+  final String themeDescription;
+  final String localeDescription;
+  final String unlimitedScrollDescription;
+  final String unlimitedScrollUpDescription;
+  final String settingsDescription;
 
   static const en = AppStrings(
     appName: 'ComicRD',
@@ -529,7 +551,9 @@ class AppStrings {
     refreshSourceStatus: 'Refresh Source Status',
     readerSection: 'Reader',
     defaultZoom: 'Default Zoom',
+    defaultZoomDescription: 'Set the default zoom level for pages',
     pageGap: 'Page Gap',
+    pageGapDescription: 'Spacing between pages',
     applicationSection: 'Application',
     updateSection: 'Update',
     checkForUpdates: 'Check for Updates',
@@ -544,17 +568,25 @@ class AppStrings {
     viewOnGithub: 'View on GitHub',
     backupSection: 'Backup',
     exportBackup: 'Export Backup',
+    exportBackupDescription: 'Export your database to a backup file',
     importBackup: 'Import Backup',
+    importBackupDescription: 'Import a backup file to restore your data',
     save: 'Save',
     settingsSaved: 'Settings Saved',
     backupExported: 'Backup Exported',
     backupImported: 'Backup Imported',
     scanLibrary: 'Scan Library',
+    scanLibraryDescription: 'Scan your library for new comics',
     scanning: 'Scanning...',
     scanNoChange: 'No Changes Detected',
     scanProgress: 'Scanning',
     scanCompleted: 'Scan Complete: {comics} Comics, {chapters} Chapters Found',
     cancelScan: 'Cancel Scan',
+    themeDescription: 'Choose the app theme',
+    localeDescription: 'Choose the app language',
+    unlimitedScrollDescription: 'Continue to next chapter at the end',
+    unlimitedScrollUpDescription: 'Continue to previous chapter at the top',
+    settingsDescription: 'Manage your library, reader, and app preferences.',
   );
 
   static const id = AppStrings(
@@ -638,7 +670,9 @@ class AppStrings {
     refreshSourceStatus: 'Perbarui Status Sumber',
     readerSection: 'Reader',
     defaultZoom: 'Zoom Default',
+    defaultZoomDescription: 'Atur level zoom default untuk halaman',
     pageGap: 'Jarak Halaman',
+    pageGapDescription: 'Jarak antar halaman',
     applicationSection: 'Aplikasi',
     updateSection: 'Pembaruan',
     checkForUpdates: 'Periksa Pembaruan',
@@ -653,17 +687,26 @@ class AppStrings {
     viewOnGithub: 'Lihat di GitHub',
     backupSection: 'Cadangan',
     exportBackup: 'Ekspor Cadangan',
+    exportBackupDescription: 'Ekspor database ke file cadangan',
     importBackup: 'Impor Cadangan',
+    importBackupDescription: 'Impor file cadangan untuk memulihkan data',
     save: 'Simpan',
     settingsSaved: 'Pengaturan Disimpan',
     backupExported: 'Cadangan Diekspor',
     backupImported: 'Cadangan Diimpor',
     scanLibrary: 'Pindai Pustaka',
+    scanLibraryDescription: 'Pindai pustaka untuk komik baru',
     scanning: 'Memindai...',
     scanNoChange: 'Tidak Ada Perubahan',
     scanProgress: 'Memindai',
     scanCompleted:
         'Pemindaian Selesai: {comics} Komik, {chapters} Chapter Ditemukan',
     cancelScan: 'Batalkan Pemindaian',
+    themeDescription: 'Pilih tema aplikasi',
+    localeDescription: 'Pilih bahasa aplikasi',
+    unlimitedScrollDescription: 'Lanjut ke chapter berikutnya di akhir',
+    unlimitedScrollUpDescription: 'Lanjut ke chapter sebelumnya di awal',
+    settingsDescription:
+        'Kelola pustaka, pembaca, dan preferensi aplikasi Anda.',
   );
 }

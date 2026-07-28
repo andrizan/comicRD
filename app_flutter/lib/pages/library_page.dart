@@ -991,19 +991,16 @@ class _ComicList extends ConsumerWidget {
               ? GridView.builder(
                   controller: controller,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 180,
-                        mainAxisExtent: 290,
-                        crossAxisSpacing: 20,
-                        mainAxisSpacing: 20,
-                      ),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 180,
+                    mainAxisExtent: 290,
+                    crossAxisSpacing: 20,
+                    mainAxisSpacing: 20,
+                  ),
                   itemCount: visibleCount,
                   itemBuilder: (context, index) {
                     final comic = comics[index];
-                    final favorited = favoritedPaths.contains(
-                      comic.sourcePath,
-                    );
+                    final favorited = favoritedPaths.contains(comic.sourcePath);
                     return _ComicCard(
                       text: text,
                       comic: comic,
@@ -1027,9 +1024,7 @@ class _ComicList extends ConsumerWidget {
                   separatorBuilder: (_, _) => const SizedBox(height: 16),
                   itemBuilder: (context, index) {
                     final comic = comics[index];
-                    final favorited = favoritedPaths.contains(
-                      comic.sourcePath,
-                    );
+                    final favorited = favoritedPaths.contains(comic.sourcePath);
                     return _ComicCard(
                       text: text,
                       comic: comic,

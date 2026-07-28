@@ -102,15 +102,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   data: (_) => ListView(
                     children: [
                       _librarySection(text, sourceStatus),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
                       _readerSection(text, readerSettings),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
                       _applicationSection(text, appSettings),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
                       _updateSection(text),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
                       _backupSection(text),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
                       _aboutSection(text),
                       const SizedBox(height: 32),
                     ],
@@ -128,59 +128,105 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _pageHeader(AppStrings text) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          text.settings,
-          style: const TextStyle(
-            fontFamily: appFontFamily,
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.01,
-          ),
-        ),
-        const SizedBox(width: 12),
-        FutureBuilder<PackageInfo>(
-          future: PackageInfo.fromPlatform(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) return const SizedBox.shrink();
-            final info = snapshot.data!;
-            return Semantics(
-              label: 'Version ${info.version}',
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: context.appAccent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'v${info.version}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: context.appAccent,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+        Row(
+          children: [
+            Text(
+              text.settings,
+              style: const TextStyle(
+                fontFamily: appFontFamily,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.01,
               ),
-            );
-          },
+            ),
+            const SizedBox(width: 12),
+            FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const SizedBox.shrink();
+                final info = snapshot.data!;
+                return Semantics(
+                  label: 'Version ${info.version}',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.appAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'v${info.version}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.appAccent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          text.settingsDescription,
+          style: TextStyle(
+            fontFamily: appFontFamily,
+            fontSize: 13,
+            color: context.appMutedText,
+          ),
         ),
       ],
     );
   }
 
+  // --- SECTIONS ---
+
   Widget _librarySection(AppStrings text, AsyncValue<dynamic> sourceStatus) {
-    return _settingsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(icon: AppIcons.library, title: text.librarySection),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final textField = KeyboardListener(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(text.librarySection),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.librarySource,
+            description: text.librarySourceDescription,
+            control: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _iconButton(
+                  tooltip: text.browseDirectory,
+                  icon: AppIcons.folderOpen,
+                  onPress: _pickLibrarySource,
+                ),
+                const SizedBox(width: 4),
+                _iconButton(
+                  tooltip: text.save,
+                  icon: AppIcons.save,
+                  onPress: _save,
+                ),
+                const SizedBox(width: 4),
+                _iconButton(
+                  tooltip: text.refreshSourceStatus,
+                  icon: AppIcons.refresh,
+                  onPress: () => ref.invalidate(librarySourceStatusProvider),
+                ),
+              ],
+            ),
+            below: Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  KeyboardListener(
                     focusNode: _librarySourceFocus,
                     autofocus: false,
                     onKeyEvent: (event) {
@@ -191,105 +237,83 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     },
                     child: FTextField(
                       control: .managed(controller: _librarySource),
-                      label: Text(text.librarySource),
                     ),
-                  );
-                  final buttons = Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _iconButton(
-                        tooltip: text.browseDirectory,
-                        icon: AppIcons.folderOpen,
-                        onPress: _pickLibrarySource,
-                      ),
-                      const SizedBox(width: 8),
-                      _iconButton(
-                        tooltip: text.save,
-                        icon: AppIcons.save,
-                        onPress: _save,
-                      ),
-                      const SizedBox(width: 8),
-                      _iconButton(
-                        tooltip: text.refreshSourceStatus,
-                        icon: AppIcons.refresh,
-                        onPress: () =>
-                            ref.invalidate(librarySourceStatusProvider),
-                      ),
-                    ],
-                  );
-                  if (constraints.maxWidth < 520) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [textField, const SizedBox(height: 8), buttons],
-                    );
-                  }
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(child: textField),
-                      const SizedBox(width: 8),
-                      buttons,
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 6),
-              Text(
-                text.librarySourceDescription,
-                style: context.appCaptionStyle.copyWith(
-                  color: context.appMutedText,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _sourceStatus(sourceStatus, text),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Divider(height: 1),
-              ),
-              Row(
-                children: [
-                  FButton(
-                    variant: .outline,
-                    onPress: _scanning ? null : _startScan,
-                    prefix: _scanning
-                        ? const FCircularProgress.loader()
-                        : const Icon(AppIcons.refresh, size: 16),
-                    child: Text(_scanning ? text.scanning : text.scanLibrary),
                   ),
-                  if (_scanning) ...[
-                    const SizedBox(width: 12),
-                    FButton(
-                      variant: .outline,
-                      onPress: _cancelScan,
-                      child: Text(text.cancelScan),
-                    ),
-                  ],
+                  const SizedBox(height: 10),
+                  _sourceStatus(sourceStatus, text),
                 ],
               ),
-              if (_scanning && _scanCurrentPath != null) ...[
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value: _scanProgress > 0 ? _scanProgress : null,
-                  minHeight: 6,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _scanStatus!,
-                  style: TextStyle(fontSize: 12, color: context.appMutedText),
-                ),
-              ] else if (!_scanning && _scanStatus != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _scanStatus!,
-                  style: TextStyle(fontSize: 12, color: context.appMutedText),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.scanLibrary,
+            description: text.scanLibraryDescription,
+            control: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_scanning) ...[
+                  FButton(
+                    variant: .outline,
+                    onPress: _cancelScan,
+                    child: Text(text.cancelScan),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                FButton(
+                  variant: .outline,
+                  onPress: _scanning ? null : _startScan,
+                  prefix: _scanning
+                      ? const FCircularProgress.loader()
+                      : const Icon(AppIcons.refresh, size: 16),
+                  child: Text(_scanning ? text.scanning : text.scanLibrary),
                 ),
               ],
-            ],
+            ),
+            below: _scanSectionBelow(text),
           ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+
+  Widget? _scanSectionBelow(AppStrings text) {
+    if (_scanning) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_scanCurrentPath != null) ...[
+              LinearProgressIndicator(
+                value: _scanProgress > 0 ? _scanProgress : null,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (_scanStatus != null)
+              Text(
+                _scanStatus!,
+                style: TextStyle(fontSize: 12, color: context.appMutedText),
+              ),
+          ],
+        ),
+      );
+    }
+    if (_scanStatus != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text(
+          _scanStatus!,
+          style: TextStyle(fontSize: 12, color: context.appMutedText),
+        ),
+      );
+    }
+    return null;
   }
 
   Widget _sourceStatus(AsyncValue<dynamic> sourceStatus, AppStrings text) {
@@ -320,256 +344,291 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _readerSection(AppStrings text, ReaderSettings readerSettings) {
-    return _settingsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(icon: AppIcons.scroll, title: text.readerSection),
-          _settingsField(
-            label:
-                '${text.defaultZoom} (${(readerSettings.zoom * 100).round()}%)',
-            child: FSlider(
-              control: .managedContinuous(
-                initial: FSliderValue(max: readerSettings.zoom),
-                onChange: (value) => Future(() {
-                  ref.read(readerSettingsProvider.notifier).setZoom(value.max);
-                }),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(text.readerSection),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.defaultZoom,
+            description:
+                '${text.defaultZoomDescription} (${(readerSettings.zoom * 100).round()}%)',
+            control: SizedBox(
+              width: 240,
+              child: FSlider(
+                control: .managedContinuous(
+                  initial: FSliderValue(max: readerSettings.zoom),
+                  onChange: (value) => Future(() {
+                    ref
+                        .read(readerSettingsProvider.notifier)
+                        .setZoom(value.max);
+                  }),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          _settingsField(
-            label: '${text.pageGap} (${readerSettings.pageGap.round()}px)',
-            child: FSlider(
-              control: .managedContinuous(
-                initial: FSliderValue(max: readerSettings.pageGap / 80),
-                onChange: (value) => Future(() {
-                  ref
-                      .read(readerSettingsProvider.notifier)
-                      .setPageGap((value.max * 80).clamp(0, 80).toDouble());
-                }),
+        ),
+        const SizedBox(height: 8),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.pageGap,
+            description:
+                '${text.pageGapDescription} (${readerSettings.pageGap.round()}px)',
+            control: SizedBox(
+              width: 240,
+              child: FSlider(
+                control: .managedContinuous(
+                  initial: FSliderValue(max: readerSettings.pageGap / 80),
+                  onChange: (value) => Future(() {
+                    ref
+                        .read(readerSettingsProvider.notifier)
+                        .setPageGap((value.max * 80).clamp(0, 80).toDouble());
+                  }),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          FSwitch(
-            label: Text(text.unlimitedScroll),
-            value: readerSettings.unlimitedScroll,
-            onChange: (value) => ref
-                .read(readerSettingsProvider.notifier)
-                .setUnlimitedScroll(value),
+        ),
+        const SizedBox(height: 8),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.unlimitedScroll,
+            description: text.unlimitedScrollDescription,
+            control: FSwitch(
+              value: readerSettings.unlimitedScroll,
+              onChange: (value) => ref
+                  .read(readerSettingsProvider.notifier)
+                  .setUnlimitedScroll(value),
+            ),
           ),
-          const SizedBox(height: 12),
-          FSwitch(
-            label: Text(text.unlimitedScrollUp),
-            value: readerSettings.unlimitedScrollUp,
-            onChange: readerSettings.unlimitedScroll
-                ? (value) => ref
-                      .read(readerSettingsProvider.notifier)
-                      .setUnlimitedScrollUp(value)
-                : null,
+        ),
+        const SizedBox(height: 8),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.unlimitedScrollUp,
+            description: text.unlimitedScrollUpDescription,
+            control: FSwitch(
+              value: readerSettings.unlimitedScrollUp,
+              onChange: readerSettings.unlimitedScroll
+                  ? (value) => ref
+                        .read(readerSettingsProvider.notifier)
+                        .setUnlimitedScrollUp(value)
+                  : null,
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _applicationSection(AppStrings text, AppSettings appSettings) {
-    return _settingsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(
-            icon: AppIcons.settings,
-            title: text.applicationSection,
-          ),
-          _responsiveRow(
-            breakpoint: 480,
-            children: [
-              _settingsField(
-                label: text.theme,
-                child: FSelect<ThemeMode>.rich(
-                  format: (value) => switch (value) {
-                    ThemeMode.light => text.themeLight,
-                    ThemeMode.dark => text.themeDark,
-                    ThemeMode.system => text.themeSystem,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(text.applicationSection),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.theme,
+            description: text.themeDescription,
+            control: SizedBox(
+              width: 220,
+              child: FSelect<ThemeMode>.rich(
+                format: (value) => switch (value) {
+                  ThemeMode.light => text.themeLight,
+                  ThemeMode.dark => text.themeDark,
+                  ThemeMode.system => text.themeSystem,
+                },
+                control: .managed(
+                  initial: appSettings.themeMode,
+                  onChange: (value) async {
+                    if (value != null) {
+                      ref
+                          .read(appSettingsProvider.notifier)
+                          .setThemeMode(value);
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting(
+                            'app_theme',
+                            jsonEncode(themeModeToSetting(value)),
+                          );
+                    }
                   },
-                  control: .managed(
-                    initial: appSettings.themeMode,
-                    onChange: (value) async {
-                      if (value != null) {
-                        ref
-                            .read(appSettingsProvider.notifier)
-                            .setThemeMode(value);
-                        await ref
-                            .read(comicRdApiProvider)
-                            .setSetting(
-                              'app_theme',
-                              jsonEncode(themeModeToSetting(value)),
-                            );
-                      }
-                    },
-                  ),
-                  children: [
-                    FSelectItem.item(
-                      title: Text(text.themeLight),
-                      value: ThemeMode.light,
-                      prefix: const Icon(AppIcons.sun, size: 16),
-                      suffixBuilder: _activeIndicator,
-                    ),
-                    FSelectItem.item(
-                      title: Text(text.themeDark),
-                      value: ThemeMode.dark,
-                      prefix: const Icon(AppIcons.moon, size: 16),
-                      suffixBuilder: _activeIndicator,
-                    ),
-                    FSelectItem.item(
-                      title: Text(text.themeSystem),
-                      value: ThemeMode.system,
-                      prefix: const Icon(AppIcons.monitor, size: 16),
-                      suffixBuilder: _activeIndicator,
-                    ),
-                  ],
                 ),
-              ),
-              _settingsField(
-                label: text.locale,
-                child: FSelect<String>.rich(
-                  format: (value) => switch (value) {
-                    'en' => text.english,
-                    'id' => text.indonesian,
-                    _ => value,
-                  },
-                  control: .managed(
-                    initial: appSettings.localeCode,
-                    onChange: (value) async {
-                      if (value != null) {
-                        ref.read(appSettingsProvider.notifier).setLocale(value);
-                        await ref
-                            .read(comicRdApiProvider)
-                            .setSetting('app_locale', jsonEncode(value));
-                      }
-                    },
+                children: [
+                  FSelectItem.item(
+                    title: Text(text.themeLight),
+                    value: ThemeMode.light,
+                    prefix: const Icon(AppIcons.sun, size: 16),
+                    suffixBuilder: _activeIndicator,
                   ),
-                  children: [
-                    FSelectItem.item(
-                      title: Text(text.english),
-                      value: 'en',
-                      prefix: const Icon(AppIcons.languages, size: 16),
-                      suffixBuilder: _activeIndicator,
-                    ),
-                    FSelectItem.item(
-                      title: Text(text.indonesian),
-                      value: 'id',
-                      prefix: const Icon(AppIcons.languages, size: 16),
-                      suffixBuilder: _activeIndicator,
-                    ),
-                  ],
-                ),
+                  FSelectItem.item(
+                    title: Text(text.themeDark),
+                    value: ThemeMode.dark,
+                    prefix: const Icon(AppIcons.moon, size: 16),
+                    suffixBuilder: _activeIndicator,
+                  ),
+                  FSelectItem.item(
+                    title: Text(text.themeSystem),
+                    value: ThemeMode.system,
+                    prefix: const Icon(AppIcons.monitor, size: 16),
+                    suffixBuilder: _activeIndicator,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.locale,
+            description: text.localeDescription,
+            control: SizedBox(
+              width: 220,
+              child: FSelect<String>.rich(
+                format: (value) => switch (value) {
+                  'en' => text.english,
+                  'id' => text.indonesian,
+                  _ => value,
+                },
+                control: .managed(
+                  initial: appSettings.localeCode,
+                  onChange: (value) async {
+                    if (value != null) {
+                      ref.read(appSettingsProvider.notifier).setLocale(value);
+                      await ref
+                          .read(comicRdApiProvider)
+                          .setSetting('app_locale', jsonEncode(value));
+                    }
+                  },
+                ),
+                children: [
+                  FSelectItem.item(
+                    title: Text(text.english),
+                    value: 'en',
+                    prefix: const Icon(AppIcons.languages, size: 16),
+                    suffixBuilder: _activeIndicator,
+                  ),
+                  FSelectItem.item(
+                    title: Text(text.indonesian),
+                    value: 'id',
+                    prefix: const Icon(AppIcons.languages, size: 16),
+                    suffixBuilder: _activeIndicator,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _updateSection(AppStrings text) {
     final updateState = ref.watch(updateProvider);
-    return _settingsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(icon: AppIcons.download, title: text.updateSection),
-          // Status-specific content
-          if (updateState.status == UpdateStatus.checking)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: FCircularProgress.loader(),
-              ),
-            ),
-          if (updateState.status == UpdateStatus.upToDate)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                text.appUpToDate,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: context.appColors.mutedForeground,
-                ),
-              ),
-            ),
-          if (updateState.status == UpdateStatus.error)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                text.updateCheckFailed,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: context.appColors.mutedForeground,
-                ),
-              ),
-            ),
-          if (updateState.status == UpdateStatus.available) ...[
-            Text(
-              '${text.updateAvailable}: v${updateState.info!.latestVersion}',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            if (updateState.info!.releaseNotes.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                constraints: const BoxConstraints(maxHeight: 120),
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: context.appColors.muted.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    updateState.info!.releaseNotes,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.appColors.mutedForeground,
-                    ),
+    final isAvailable = updateState.status == UpdateStatus.available;
+    final isChecking = updateState.status == UpdateStatus.checking;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(text.updateSection),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: _updateCardTitle(updateState, text),
+            description: _updateCardDescription(updateState, text),
+            control: isChecking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: FCircularProgress.loader(),
+                  )
+                : FButton(
+                    variant: .outline,
+                    onPress: () =>
+                        ref.read(updateProvider.notifier).checkForUpdates(),
+                    prefix: const Icon(AppIcons.refresh, size: 16),
+                    child: Text(text.checkForUpdates),
                   ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FButton(
-                  onPress: () => _openReleasePage(updateState.info!.releaseUrl),
-                  prefix: const Icon(AppIcons.download, size: 16),
-                  child: Text(text.downloadUpdate),
-                ),
-                FButton(
-                  variant: .outline,
-                  onPress: () => _openReleasePage(updateState.info!.releaseUrl),
-                  child: Text(text.viewRelease),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-          // Manual check button — always visible except while checking
-          if (updateState.status != UpdateStatus.checking)
-            FButton(
-              variant: .outline,
-              onPress: () =>
-                  ref.read(updateProvider.notifier).checkForUpdates(),
-              prefix: const Icon(AppIcons.refresh, size: 16),
-              child: Text(text.checkForUpdates),
-            ),
-        ],
-      ),
+            below: isAvailable
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (updateState.info!.releaseNotes.isNotEmpty) ...[
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 120),
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: context.appColors.muted.withValues(
+                                alpha: 0.3,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: SingleChildScrollView(
+                              child: Text(
+                                updateState.info!.releaseNotes,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.appColors.mutedForeground,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FButton(
+                              onPress: () => _openReleasePage(
+                                updateState.info!.releaseUrl,
+                              ),
+                              prefix: const Icon(AppIcons.download, size: 16),
+                              child: Text(text.downloadUpdate),
+                            ),
+                            FButton(
+                              variant: .outline,
+                              onPress: () => _openReleasePage(
+                                updateState.info!.releaseUrl,
+                              ),
+                              child: Text(text.viewRelease),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  )
+                : null,
+          ),
+        ),
+      ],
     );
+  }
+
+  String _updateCardTitle(UpdateState updateState, AppStrings text) {
+    return switch (updateState.status) {
+      UpdateStatus.idle => text.updateSection,
+      UpdateStatus.checking => text.checkingForUpdates,
+      UpdateStatus.upToDate => text.appUpToDate,
+      UpdateStatus.error => text.updateCheckFailed,
+      UpdateStatus.available =>
+        '${text.updateAvailable}: v${updateState.info!.latestVersion}',
+    };
+  }
+
+  String? _updateCardDescription(UpdateState updateState, AppStrings text) {
+    return switch (updateState.status) {
+      UpdateStatus.idle => text.checkForUpdates,
+      UpdateStatus.checking => null,
+      UpdateStatus.upToDate => null,
+      UpdateStatus.error => null,
+      UpdateStatus.available => text.viewRelease,
+    };
   }
 
   void _openReleasePage(String url) {
@@ -584,195 +643,92 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Widget _backupSection(AppStrings text) {
-    return _settingsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(icon: AppIcons.download, title: text.backupSection),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final buttons = [
-                FButton(
-                  onPress: _exportBackup,
-                  prefix: const Icon(AppIcons.download, size: 16),
-                  child: Text(text.exportBackup),
-                ),
-                FButton(
-                  variant: .outline,
-                  onPress: _importBackup,
-                  prefix: const Icon(AppIcons.upload, size: 16),
-                  child: Text(text.importBackup),
-                ),
-              ];
-              if (constraints.maxWidth < 420) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: _intersperse(buttons, const SizedBox(height: 8)),
-                );
-              }
-              return Wrap(spacing: 8, runSpacing: 8, children: buttons);
-            },
-          ),
-          if (_message != null) ...[
-            const SizedBox(height: 12),
-            FAlert(
-              icon: const Icon(FLucideIcons.check),
-              title: Text(_message!),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _aboutSection(AppStrings text) {
-    return _settingsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader(icon: AppIcons.info, title: text.aboutSection),
-          FutureBuilder<PackageInfo>(
-            future: PackageInfo.fromPlatform(),
-            builder: (context, snapshot) {
-              final info = snapshot.data;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    info != null ? 'ComicRD v${info.version}' : 'ComicRD',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    text.aboutDescription,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.appColors.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      FButton(
-                        variant: .outline,
-                        onPress: () => _openReleasePage(
-                          'https://github.com/andrizan/comicRD',
-                        ),
-                        prefix: const Icon(AppIcons.code, size: 16),
-                        child: Text(text.viewOnGithub),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _settingsCard({required Widget child}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.appColors.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.appColors.border),
-      ),
-      child: Padding(padding: const EdgeInsets.all(20), child: child),
-    );
-  }
-
-  Widget _sectionHeader({required IconData icon, required String title}) {
-    return Semantics(
-      header: true,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: context.appAccent),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: context.appBodyStrongStyle.copyWith(fontSize: 15),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _settingsField({
-    required String label,
-    required Widget child,
-    String? helper,
-  }) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          label,
-          style: context.appCaptionStyle.copyWith(fontWeight: FontWeight.w600),
-        ),
-        if (helper != null) ...[
-          const SizedBox(height: 2),
-          Text(
-            helper,
-            style: context.appCaptionStyle.copyWith(
-              color: context.appMutedText,
+        _SectionTitle(text.backupSection),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.exportBackup,
+            description: text.exportBackupDescription,
+            control: FButton(
+              onPress: _exportBackup,
+              prefix: const Icon(AppIcons.download, size: 16),
+              child: Text(text.exportBackup),
             ),
           ),
-        ],
+        ),
         const SizedBox(height: 8),
-        child,
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.importBackup,
+            description: text.importBackupDescription,
+            control: FButton(
+              variant: .outline,
+              onPress: _importBackup,
+              prefix: const Icon(AppIcons.upload, size: 16),
+              child: Text(text.importBackup),
+            ),
+            below: _message != null
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: FAlert(
+                      icon: const Icon(FLucideIcons.check),
+                      title: Text(_message!),
+                    ),
+                  )
+                : null,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _responsiveRow({
-    required double breakpoint,
-    required List<Widget> children,
-    double spacing = 16,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < breakpoint) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: _intersperse(children, SizedBox(height: spacing)),
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: _intersperse(
-            children.map((child) => Expanded(child: child)).toList(),
-            SizedBox(width: spacing),
+  Widget _aboutSection(AppStrings text) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(text.aboutSection),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.appName,
+            description: text.aboutDescription,
+            control: FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                final version = snapshot.data?.version;
+                return Text(
+                  version != null ? 'v$version' : '',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: context.appColors.mutedForeground,
+                  ),
+                );
+              },
+            ),
+            below: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: FButton(
+                variant: .outline,
+                onPress: () =>
+                    _openReleasePage('https://github.com/andrizan/comicRD'),
+                prefix: const Icon(AppIcons.code, size: 16),
+                child: Text(text.viewOnGithub),
+              ),
+            ),
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 
-  List<Widget> _intersperse(List<Widget> items, Widget separator) {
-    if (items.isEmpty) return const [];
-    final result = <Widget>[items.first];
-    for (var i = 1; i < items.length; i++) {
-      result.add(separator);
-      result.add(items[i]);
-    }
-    return result;
-  }
+  // --- HELPERS ---
 
-  Widget? _activeIndicator(BuildContext context, bool selected) {
+  Widget _activeIndicator(BuildContext context, bool selected) {
     return selected
         ? Icon(AppIcons.check, size: 16, color: context.appAccent)
-        : null;
+        : const SizedBox.shrink();
   }
 
   Widget _iconButton({
@@ -974,5 +930,130 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         }
       }
     });
+  }
+}
+
+// --- Win 11 style widgets ---
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      header: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+        child: Text(
+          text.toUpperCase(),
+          style: TextStyle(
+            fontFamily: appFontFamily,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: context.appAccent,
+            letterSpacing: 1.0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsCard extends StatelessWidget {
+  const _SettingsCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.appColors.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: context.appColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.title,
+    this.description,
+    required this.control,
+    this.below,
+  });
+
+  static const double _narrowBreakpoint = 520;
+
+  final String title;
+  final String? description;
+  final Widget control;
+  final Widget? below;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < _narrowBreakpoint;
+            final labelColumn = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: appFontFamily,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (description != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    description!,
+                    style: TextStyle(fontSize: 12, color: context.appMutedText),
+                  ),
+                ],
+              ],
+            );
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: isNarrow
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        labelColumn,
+                        const SizedBox(height: 10),
+                        control,
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: labelColumn),
+                        const SizedBox(width: 16),
+                        control,
+                      ],
+                    ),
+            );
+          },
+        ),
+        if (below != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+            child: below!,
+          ),
+      ],
+    );
   }
 }
