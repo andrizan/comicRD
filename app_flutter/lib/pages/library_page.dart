@@ -1785,7 +1785,10 @@ class _FavoritesList extends StatelessWidget {
             bridge.SortBy.name => a.comicTitle.toLowerCase().compareTo(
               b.comicTitle.toLowerCase(),
             ),
-            bridge.SortBy.folderDate => a.createdAt.compareTo(b.createdAt),
+            bridge.SortBy.folderDate =>
+              (comicByPath[a.comicSourcePath]?.dateModified ?? 0).compareTo(
+                comicByPath[b.comicSourcePath]?.dateModified ?? 0,
+              ),
           };
           return sortDir == bridge.SortDir.asc ? cmp : -cmp;
         });
