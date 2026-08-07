@@ -1732,7 +1732,7 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _chipButton(AppIcons.minus, widget.onDecrease),
+              _chipButton(AppIcons.minus, widget.onDecrease, '${widget.tooltip} -'),
               GestureDetector(
                 onDoubleTap: widget.onReset,
                 child: SizedBox(
@@ -1749,7 +1749,7 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
                   ),
                 ),
               ),
-              _chipButton(AppIcons.plus, widget.onIncrease),
+              _chipButton(AppIcons.plus, widget.onIncrease, '${widget.tooltip} +'),
             ],
           ),
         ),
@@ -1757,10 +1757,15 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
     );
   }
 
-  Widget _chipButton(IconData icon, VoidCallback onPressed) {
-    return GestureDetector(
-      onTap: onPressed,
+  Widget _chipButton(
+    IconData icon,
+    VoidCallback onPressed,
+    String semanticsTooltip,
+  ) {
+    return FTappable(
+      semanticsTooltip: semanticsTooltip,
       behavior: HitTestBehavior.opaque,
+      onPress: onPressed,
       child: SizedBox(
         width: 32,
         height: 36,
