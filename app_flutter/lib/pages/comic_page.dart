@@ -37,6 +37,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lastAutoScrollSignature;
+  bool _suppressLastOpenedRestore = false;
   bool _showBackToTop = false;
 
   @override
@@ -238,9 +239,26 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   }
 
   Future<void> _setSort(ChapterSortBy sortBy, bridge.SortDir sortDir) async {
+    _suppressLastOpenedRestore = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _suppressLastOpenedRestore = false;
+    });
     ref
         .read(comicPreferencesProvider.notifier)
         .setSort(widget.comicPath, sortBy, sortDir);
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) {
+          _scroll.jumpTo(0);
+        }
+      });
+    }
     final api = ref.read(comicRdApiProvider);
     await api.setSetting(
       'chapter_sort_by',
@@ -250,13 +268,6 @@ class _ComicPageState extends ConsumerState<ComicPage> {
       'chapter_sort_dir',
       jsonEncode(sortDir == bridge.SortDir.asc ? 'asc' : 'desc'),
     );
-    if (_scroll.hasClients) {
-      _scroll.animateTo(
-        0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-      );
-    }
   }
 
   Future<void> _toggleBookmark(
@@ -427,6 +438,9 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   }
 
   void _restoreLastOpenedChapter() {
+    if (_suppressLastOpenedRestore) {
+      return;
+    }
     final chapterSourcePath = ref
         .read(lastOpenedChapterProvider.notifier)
         .sourcePathFor(widget.comicPath);

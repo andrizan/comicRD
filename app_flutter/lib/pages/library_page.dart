@@ -391,6 +391,20 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
 
   Future<void> _setSort(bridge.SortBy sortBy, bridge.SortDir sortDir) async {
     ref.read(libraryPreferencesProvider.notifier).setSort(sortBy, sortDir);
+    final controller = _activeScrollController();
+    if (controller.hasClients) {
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (controller.hasClients) {
+          controller.jumpTo(0);
+        }
+      });
+    }
     final api = ref.read(comicRdApiProvider);
     final selectedTab = ref.read(libraryPreferencesProvider).selectedTab;
     final prefix = switch (selectedTab) {
@@ -403,13 +417,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       '${prefix}_sort_dir',
       jsonEncode(encodeSortDir(sortDir)),
     );
-    if (_libraryScroll.hasClients) {
-      _libraryScroll.animateTo(
-        0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-      );
-    }
   }
 
   Future<void> _setViewMode(LibraryViewMode viewMode) async {
