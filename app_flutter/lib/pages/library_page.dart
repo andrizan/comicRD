@@ -1618,7 +1618,6 @@ class _HistoryItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    final cover = _HistoryCover(sourcePath: item.comicSourcePath);
     final textColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -1673,7 +1672,6 @@ class _HistoryItem extends StatelessWidget {
       child: GestureDetector(
         onTap: onOpen,
         child: Container(
-          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: colors.card,
             border: Border.all(color: colors.border),
@@ -1692,25 +1690,53 @@ class _HistoryItem extends StatelessWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    cover,
-                    const SizedBox(height: 12),
-                    textColumn,
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: continueButton,
+                    _HistoryCover(
+                      sourcePath: item.comicSourcePath,
+                      isNarrow: true,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          textColumn,
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: continueButton,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 );
               }
-              return Row(
-                children: [
-                  cover,
-                  const SizedBox(width: 16),
-                  Expanded(child: textColumn),
-                  const SizedBox(width: 16),
-                  continueButton,
-                ],
+              return SizedBox(
+                height: 136,
+                child: Row(
+                  children: [
+                    _HistoryCover(
+                      sourcePath: item.comicSourcePath,
+                      isNarrow: false,
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [textColumn],
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: continueButton,
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -1721,9 +1747,10 @@ class _HistoryItem extends StatelessWidget {
 }
 
 class _HistoryCover extends ConsumerWidget {
-  const _HistoryCover({required this.sourcePath});
+  const _HistoryCover({required this.sourcePath, required this.isNarrow});
 
   final String sourcePath;
+  final bool isNarrow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1731,34 +1758,38 @@ class _HistoryCover extends ConsumerWidget {
     final thumbnail = ref.watch(
       comicThumbnailProvider((
         sourcePath: sourcePath,
-        maxWidth: 100,
-        maxHeight: 140,
+        maxWidth: 200,
+        maxHeight: 300,
       )),
     );
+    final borderRadius = isNarrow
+        ? const BorderRadius.vertical(top: Radius.circular(14))
+        : const BorderRadius.horizontal(left: Radius.circular(14));
 
-    return Container(
-      width: 60,
-      height: 80,
-      decoration: BoxDecoration(
-        color: colors.muted,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: thumbnail.when(
-        data: (bytes) {
-          if (bytes == null) {
-            return Icon(
-              AppIcons.library,
-              size: 24,
-              color: colors.mutedForeground,
-            );
-          }
-          return Image.memory(bytes, fit: BoxFit.cover);
-        },
-        loading: () =>
-            Icon(AppIcons.library, size: 24, color: colors.mutedForeground),
-        error: (_, _) =>
-            Icon(AppIcons.library, size: 24, color: colors.mutedForeground),
+    return SizedBox(
+      width: isNarrow ? double.infinity : 110,
+      height: isNarrow ? 150 : double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: colors.muted),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: thumbnail.when(
+            data: (bytes) {
+              if (bytes == null) {
+                return Icon(
+                  AppIcons.library,
+                  size: 28,
+                  color: colors.mutedForeground,
+                );
+              }
+              return Image.memory(bytes, fit: BoxFit.cover);
+            },
+            loading: () =>
+                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
+            error: (_, _) =>
+                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
+          ),
+        ),
       ),
     );
   }
