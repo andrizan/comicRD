@@ -736,22 +736,39 @@ class _SearchBox extends StatelessWidget {
         border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        style: TextStyle(fontSize: 13, color: colors.foreground),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(fontSize: 13, color: colors.mutedForeground),
-          prefixIcon: Icon(
-            AppIcons.search,
-            size: 18,
-            color: colors.mutedForeground,
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 10,
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, _) => TextField(
+          controller: controller,
+          onChanged: onChanged,
+          style: TextStyle(fontSize: 13, color: colors.foreground),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(fontSize: 13, color: colors.mutedForeground),
+            prefixIcon: Icon(
+              AppIcons.search,
+              size: 18,
+              color: colors.mutedForeground,
+            ),
+            suffixIcon: value.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: Icon(
+                      AppIcons.close,
+                      size: 16,
+                      color: colors.mutedForeground,
+                    ),
+                    tooltip: hint,
+                    onPressed: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                  ),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
           ),
         ),
       ),
