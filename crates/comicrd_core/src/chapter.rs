@@ -184,18 +184,19 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
     Ok(conn.last_insert_rowid())
 }
 
-pub(crate) fn chapter_snapshot_by_history_key(
+pub(crate) fn chapter_snapshot_by_source_path(
     conn: &Connection,
-    history_key: &str,
-) -> Result<Option<(i64, i64, i64)>, String> {
+    source_path: &str,
+) -> Result<Option<(i64, i64, i64, i64)>, String> {
     conn.query_row(
-        "SELECT page_count, date_modified, size_bytes FROM chapters WHERE history_key = ?1",
-        params![history_key],
+        "SELECT page_count, date_modified, size_bytes, chapter_index FROM chapters WHERE source_path = ?1",
+        params![source_path],
         |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, i64>(1)?,
                 row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
             ))
         },
     )
@@ -703,8 +704,8 @@ pub(crate) fn open_chapter_for_reading_conn(
     for (chapter_title, chapter_path, chapter_type, chapter_index) in chapter_entries {
         let chapter_key = chapter_history_key(&library_path, &chapter_path, chapter_index);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
-        let cached_page_count = chapter_snapshot_by_history_key(&tx, &chapter_key)?
-            .map(|(page_count, _, _)| page_count.max(0) as usize)
+        let cached_page_count = chapter_snapshot_by_source_path(&tx, &chapter_path)?
+            .map(|(page_count, _, _, _)| page_count.max(0) as usize)
             .unwrap_or(0);
         let chapter_size = chapter_size_bytes(Path::new(&chapter_path), &chapter_type);
         total_size_bytes = total_size_bytes.saturating_add(chapter_size);

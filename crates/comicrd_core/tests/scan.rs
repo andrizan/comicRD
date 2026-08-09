@@ -104,3 +104,75 @@ fn start_scan_libraries_updates_core_owned_scan_status() {
     assert_eq!(scan_status.error, None);
     assert_eq!(scan_status.last_summary.expect("summary").comics, 1);
 }
+
+#[test]
+fn scan_reindexes_chapters_when_new_chapter_inserted_in_middle() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+
+    let chapter_5 = comic.join("Chapter 05");
+    let chapter_6_5 = comic.join("Chapter 06.5");
+    let chapter_7 = comic.join("Chapter 07");
+    fs::create_dir_all(&chapter_5).expect("chapter 05");
+    fs::create_dir_all(&chapter_6_5).expect("chapter 06.5");
+    fs::create_dir_all(&chapter_7).expect("chapter 07");
+    fs::write(chapter_5.join("001.png"), b"").expect("page 1");
+    fs::write(chapter_6_5.join("001.png"), b"").expect("page 2");
+    fs::write(chapter_7.join("001.png"), b"").expect("page 3");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+    core.scan_libraries().expect("scan libraries");
+
+    let chapter_6 = comic.join("Chapter 06");
+    fs::create_dir_all(&chapter_6).expect("chapter 06");
+    fs::write(chapter_6.join("001.png"), b"").expect("page 4");
+
+    core.scan_libraries().expect("rescan libraries");
+
+    let chapters = core
+        .list_comic_chapters_raw(&comic.to_string_lossy())
+        .expect("list chapters");
+    assert_eq!(chapters.len(), 4);
+    let titles: Vec<&str> = chapters
+        .iter()
+        .map(|chapter| chapter.title.as_str())
+        .collect();
+    assert_eq!(
+        titles,
+        vec!["Chapter 05", "Chapter 06", "Chapter 06.5", "Chapter 07"]
+    );
+
+    let chapter_5_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter_5.to_string_lossy().to_string(),
+        })
+        .expect("open chapter 05");
+    let context = core
+        .get_chapter_context(chapter_5_id)
+        .expect("get context")
+        .expect("context exists");
+    assert_eq!(context.next_chapter_title.as_deref(), Some("Chapter 06"));
+
+    let chapter_6_5_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter_6_5.to_string_lossy().to_string(),
+        })
+        .expect("open chapter 06.5");
+    let context = core
+        .get_chapter_context(chapter_6_5_id)
+        .expect("get context")
+        .expect("context exists");
+    assert_eq!(context.prev_chapter_title.as_deref(), Some("Chapter 06"));
+    assert_eq!(context.next_chapter_title.as_deref(), Some("Chapter 07"));
+}

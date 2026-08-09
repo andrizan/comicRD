@@ -3,7 +3,7 @@ use std::path::Path;
 use rusqlite::{params, Connection};
 
 use crate::chapter::{
-    chapter_history_key, chapter_size_bytes, chapter_snapshot_by_history_key,
+    chapter_history_key, chapter_size_bytes, chapter_snapshot_by_source_path,
     comic_history_key, comic_title_for_path, discover_chapter_entries_from_comic_dir, is_archive,
     source_type_for_path, upsert_chapter, upsert_comic, ChapterUpsert,
 };
@@ -340,15 +340,19 @@ pub(crate) fn scan_comic_dir(
         let modified_at = file_modified_ts(Path::new(&chapter_path));
 
         let mut cached_page_count = 0i64;
-        if let Some((existing_page_count, cached_modified_at, cached_size)) =
-            chapter_snapshot_by_history_key(conn, &chapter_key)?
+        let mut skip_upsert = false;
+        if let Some((existing_page_count, cached_modified_at, cached_size, cached_index)) =
+            chapter_snapshot_by_source_path(conn, &chapter_path)?
         {
             cached_page_count = existing_page_count;
-            if cached_modified_at == modified_at {
+            if cached_modified_at == modified_at && cached_index == idx {
                 total_size_bytes = total_size_bytes.saturating_add(cached_size);
                 chapter_count += 1;
-                continue;
+                skip_upsert = true;
             }
+        }
+        if skip_upsert {
+            continue;
         }
 
         let chapter_size = chapter_size_bytes(Path::new(&chapter_path), &chapter_type);
@@ -422,10 +426,10 @@ where
             let chapter_key = chapter_history_key(library_path, &source_path, 1);
             let mut should_upsert_chapter = true;
             let page_count =
-                if let Some((cached_page_count, cached_modified_at, _cached_size)) =
-                    chapter_snapshot_by_history_key(&tx, &chapter_key)?
+                if let Some((cached_page_count, cached_modified_at, _cached_size, cached_index)) =
+                    chapter_snapshot_by_source_path(&tx, &source_path)?
                 {
-                    if cached_modified_at == modified_at {
+                    if cached_modified_at == modified_at && cached_index == 1 {
                         should_upsert_chapter = false;
                         cached_page_count as usize
                     } else {
