@@ -568,6 +568,11 @@ pub fn list_comic_chapters_raw(comic_source_path: String) -> Result<Vec<RawChapt
         .collect())
 }
 
+pub fn purge_caches() -> Result<(), String> {
+    core()?.purge_caches();
+    Ok(())
+}
+
 pub fn open_chapter_for_reading(payload: OpenChapterPayload) -> Result<i64, String> {
     core()?.open_chapter_for_reading(payload.into())
 }

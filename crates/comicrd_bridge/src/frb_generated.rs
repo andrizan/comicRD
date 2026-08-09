@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 427574724;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -478277584;
 
 // Section: executor
 
@@ -1071,6 +1071,38 @@ fn wire__crate__api__prefetch_pages_impl(
         },
     )
 }
+fn wire__crate__api__purge_caches_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "purge_caches",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::purge_caches()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__remove_bookmark_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2028,14 +2060,15 @@ fn pde_ffi_dispatcher_primary_impl(
         29 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
         30 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
         31 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__remove_favorite_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__remove_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__purge_caches_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__remove_favorite_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__remove_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

@@ -61,6 +61,8 @@ class ComicRdApi {
     String comicSourcePath,
   ) => bridge.listComicChaptersRaw(comicSourcePath: comicSourcePath);
 
+  Future<void> purgeCaches() => bridge.purgeCaches();
+
   Future<int> openChapterForReading(bridge.OpenChapterPayload payload) =>
       bridge.openChapterForReading(payload: payload);
 

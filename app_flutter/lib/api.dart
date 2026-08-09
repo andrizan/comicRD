@@ -65,6 +65,8 @@ Future<List<RawChapter>> listComicChaptersRaw({
   comicSourcePath: comicSourcePath,
 );
 
+Future<void> purgeCaches() => RustLib.instance.api.crateApiPurgeCaches();
+
 Future<PlatformInt64> openChapterForReading({
   required OpenChapterPayload payload,
 }) => RustLib.instance.api.crateApiOpenChapterForReading(payload: payload);

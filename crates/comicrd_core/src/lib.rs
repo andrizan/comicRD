@@ -784,6 +784,11 @@ impl ComicRdCore {
         self.page_cache.stats()
     }
 
+    pub fn purge_caches(&self) {
+        self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
+    }
+
     fn clear_library_list_cache(&self) {
         if let Ok(mut cache) = self.library_list_cache.lock() {
             *cache = None;

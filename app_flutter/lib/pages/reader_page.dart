@@ -1732,7 +1732,11 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _chipButton(AppIcons.minus, widget.onDecrease, '${widget.tooltip} -'),
+              _chipButton(
+                AppIcons.minus,
+                widget.onDecrease,
+                '${widget.tooltip} -',
+              ),
               GestureDetector(
                 onDoubleTap: widget.onReset,
                 child: SizedBox(
@@ -1749,7 +1753,11 @@ class _ReaderControlChipState extends State<_ReaderControlChip> {
                   ),
                 ),
               ),
-              _chipButton(AppIcons.plus, widget.onIncrease, '${widget.tooltip} +'),
+              _chipButton(
+                AppIcons.plus,
+                widget.onIncrease,
+                '${widget.tooltip} +',
+              ),
             ],
           ),
         ),

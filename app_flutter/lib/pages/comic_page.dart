@@ -231,6 +231,8 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   }
 
   Future<void> _refreshChapters() async {
+    final api = ref.read(comicRdApiProvider);
+    await api.purgeCaches();
     ref.invalidate(comicChaptersProvider(widget.comicPath));
     final _ = await ref.refresh(comicChaptersProvider(widget.comicPath).future);
   }
