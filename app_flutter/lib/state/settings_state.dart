@@ -125,7 +125,7 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
   ReaderSettings build() => const ReaderSettings();
 
   void setZoom(double zoom) {
-    state = state.copyWith(zoom: zoom.clamp(0.5, 3.0));
+    state = state.copyWith(zoom: zoom.clamp(0.2, 1.5));
     _saveToDatabase();
   }
 
@@ -169,7 +169,7 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     final unlimitedScrollUp = _decodeBool(values['unlimited_scroll_up'], true);
     final forcePortrait = _decodeBool(values['force_portrait'], false);
     state = ReaderSettings(
-      zoom: zoom.clamp(0.5, 3.0),
+      zoom: zoom.clamp(0.2, 1.5),
       pageGap: gap.clamp(0, 80),
       unlimitedScroll: unlimitedScroll,
       unlimitedScrollUp: unlimitedScrollUp,

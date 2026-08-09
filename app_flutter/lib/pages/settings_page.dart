@@ -357,11 +357,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               width: 240,
               child: FSlider(
                 control: .managedContinuous(
-                  initial: FSliderValue(max: readerSettings.zoom),
+                  initial: FSliderValue(
+                    max: (readerSettings.zoom - 0.2) / 1.3,
+                  ),
                   onChange: (value) => Future(() {
                     ref
                         .read(readerSettingsProvider.notifier)
-                        .setZoom(value.max);
+                        .setZoom(0.2 + value.max * 1.3);
                   }),
                 ),
               ),
