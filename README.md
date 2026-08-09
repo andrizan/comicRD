@@ -18,6 +18,7 @@ history, backup/import, and the reader image pipeline.
 - Search, sort by name/date, and unread/reading filters
 - Comic bookmarks and chapter favorites
 - Chapter listing with progress and page counts
+- Natural chapter ordering (decimal chapters like `06.5` sort after their whole chapter `06`, with or without archive extensions)
 - Vertical/webtoon reader with keyboard navigation, fullscreen, zoom, and page gap controls
 - Stable reader scroll/progress from Rust-provided page width/height metadata
 - Automatic progress save
@@ -27,6 +28,7 @@ history, backup/import, and the reader image pipeline.
 - Selectable title/path and open-folder action on comic detail page
 - SQLite-backed settings, metadata, reading progress, bookmarks, and history
 - Database backup export/import
+- Optimize Data maintenance: removes comics/chapters no longer on disk, purges orphaned progress/bookmarks/favorites, deletes junk cover thumbnails, vacuums the database, and reports database size before/after
 - Auto-update check via GitHub Releases
 - Linux packaging scripts, GitHub release assets, and AUR publishing support
 - Windows Inno Setup installer
@@ -35,12 +37,14 @@ history, backup/import, and the reader image pipeline.
 
 The main Flutter/Rust application flows are implemented, including library
 listing, scan, chapter discovery, reader flow, progress, bookmarks, history,
-settings, backup/import, and comic thumbnails. Recent work has focused on UI
-polish (library/history/detail covers, selectable metadata, open-folder action),
-performance (persistent thumbnail cache), and dependency updates. Linux
-packaging is available and the application has been smoke tested directly on
-Windows and Linux. The macOS build target is present, but still needs a native
-macOS smoke test before release claims for that platform.
+settings, backup/import, comic thumbnails, and database maintenance
+(Optimize Data). Recent work has focused on UI polish (library/history/detail
+covers, selectable metadata, open-folder action), performance (persistent
+thumbnail cache, bounded reader memory), schema cleanup (dropping unused
+columns), and dependency updates. Linux packaging is available and the
+application has been smoke tested directly on Windows and Linux. The macOS
+build target is present, but still needs a native macOS smoke test before
+release claims for that platform.
 
 ## Install
 
@@ -395,6 +399,41 @@ as a single chapter.
 An explicit scan walks the depth-1 library entries and upserts comics/chapters
 into SQLite. Opening a comic also discovers its chapters on demand.
 
+Chapter entries are natural-sorted by their display title: archive files are
+compared by file stem (not the full file name), so the `.cbz`/`.cbr` extension
+never influences ordering and decimal chapters such as `Chapter 06.5` sort
+after their whole chapter (`Chapter 06`) and before the next one
+(`Chapter 07`).
+
+The `comics` and `chapters` tables keep only fields that are actually read
+(`source_path`, `source_type`, `date_modified`, `size_bytes`, `page_count`,
+foreign keys). Unused columns such as `created_at`/`updated_at` on those two
+tables are not created on fresh databases and are dropped by a migration on
+existing databases.
+
+## Database Maintenance
+
+The **Optimize Data** section in Settings runs maintenance on the SQLite
+database and thumbnail cache:
+
+- deletes comics whose source path no longer exists on disk, cascading to
+  their chapters, reading progress, and page bookmarks
+- deletes chapters whose source path no longer exists on disk
+- purges orphaned reading-progress rows, page bookmarks, chapter bookmarks, and
+  favorites that point at missing comics/chapters
+- deletes cached cover thumbnails for comics that no longer exist, so deleted
+  comics do not leave junk covers behind
+- runs `VACUUM` and a WAL checkpoint so the database file physically shrinks
+- skips libraries whose root path is unavailable (for example an unmounted
+  drive), so a temporary mount failure can never wipe library data
+- reports database size before/after plus how many comics, chapters,
+  bookmarks, favorites, and cover images were removed, and how much space was
+  freed
+
+The thumbnail cache (`app_data_dir/thumbnails`, named `{width}x{height}-{hash}.jpg`)
+is a normal LRU cache, but its size is only trimmed as new covers are written.
+Optimize Data is the explicit cleanup that removes orphaned covers immediately.
+
 ## Flutter State
 
 The library state is split to avoid loading-state churn while filtering:
@@ -485,7 +524,8 @@ are constant for every item in a response, or are unused by Flutter.
 Rust integration tests are organized by concern in
 `crates/comicrd_core/tests/`, including library source checks, library listing,
 scan, chapters, reader flow, image pipeline, cache behavior, bookmarks, history,
-migrations, and backup/import.
+migrations, backup/import, and database optimization (stale-row purge,
+thumbnail cleanup, VACUUM consistency, unavailable-library guard).
 
 Focused checks:
 

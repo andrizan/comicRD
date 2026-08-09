@@ -1573,10 +1573,12 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                       icon: AppIcons.search,
                       value: '${(zoom * 100).round()}%',
                       tooltip: text.zoom,
-                      onDecrease: () =>
-                          onZoomChanged((zoom - 0.1).clamp(0.2, 1.5).toDouble()),
-                      onIncrease: () =>
-                          onZoomChanged((zoom + 0.1).clamp(0.2, 1.5).toDouble()),
+                      onDecrease: () => onZoomChanged(
+                        (zoom - 0.1).clamp(0.2, 1.5).toDouble(),
+                      ),
+                      onIncrease: () => onZoomChanged(
+                        (zoom + 0.1).clamp(0.2, 1.5).toDouble(),
+                      ),
                       onReset: () => onZoomChanged(1),
                     ),
                     _ReaderControlChip(

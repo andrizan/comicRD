@@ -14,6 +14,7 @@ import '../state/library_state.dart';
 import '../state/settings_data_state.dart';
 import '../state/settings_state.dart';
 import '../state/update_state.dart';
+import '../utils/format_size.dart';
 import '../utils/forui_theme.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -35,6 +36,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String? _scanCurrentPath;
   Timer? _scanPollTimer;
   ProviderSubscription<AsyncValue<Map<String, String>>>? _settingsMapSub;
+  bool _optimizingData = false;
+  List<String> _optimizeLines = const [];
+  String? _optimizeError;
+  int? _dbSizeBytes;
 
   @override
   void dispose() {
@@ -72,6 +77,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       },
       fireImmediately: true,
     );
+    _loadDatabaseSize();
   }
 
   @override
@@ -110,6 +116,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       _updateSection(text),
                       const SizedBox(height: 28),
                       _backupSection(text),
+                      const SizedBox(height: 28),
+                      _optimizeSection(text),
                       const SizedBox(height: 28),
                       _aboutSection(text),
                       const SizedBox(height: 32),
@@ -357,9 +365,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               width: 240,
               child: FSlider(
                 control: .managedContinuous(
-                  initial: FSliderValue(
-                    max: (readerSettings.zoom - 0.2) / 1.3,
-                  ),
+                  initial: FSliderValue(max: (readerSettings.zoom - 0.2) / 1.3),
                   onChange: (value) => Future(() {
                     ref
                         .read(readerSettingsProvider.notifier)
@@ -684,6 +690,164 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ],
     );
+  }
+
+  Widget _optimizeSection(AppStrings text) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(text.optimizeData),
+        _SettingsCard(
+          child: _SettingsRow(
+            title: text.optimizeData,
+            description: text.optimizeDataDescription,
+            control: _optimizingData
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: FCircularProgress.loader(),
+                  )
+                : FButton(
+                    variant: .outline,
+                    onPress: _runOptimize,
+                    prefix: const Icon(FLucideIcons.database, size: 16),
+                    child: Text(text.optimizeData),
+                  ),
+            below: _optimizeBelow(text),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget? _optimizeBelow(AppStrings text) {
+    if (_optimizeError != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text(
+          _optimizeError!,
+          style: TextStyle(fontSize: 12, color: context.appColors.destructive),
+        ),
+      );
+    }
+    if (_optimizeLines.isEmpty) {
+      if (_dbSizeBytes == null) return null;
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text(
+          '${text.databaseSize}: ${formatBytes(_dbSizeBytes!)}',
+          style: TextStyle(fontSize: 12, color: context.appMutedText),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(AppIcons.check, size: 16, color: context.appAccent),
+              const SizedBox(width: 6),
+              Text(
+                text.optimizeDataCompleted,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: context.appAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${text.databaseSize}: ${formatBytes(_dbSizeBytes ?? 0)}',
+            style: TextStyle(fontSize: 12, color: context.appMutedText),
+          ),
+          const SizedBox(height: 4),
+          for (final line in _optimizeLines)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                line,
+                style: TextStyle(fontSize: 12, color: context.appMutedText),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _loadDatabaseSize() async {
+    try {
+      final size = await ref.read(comicRdApiProvider).databaseSizeBytes();
+      if (mounted) {
+        setState(() => _dbSizeBytes = size);
+      }
+    } catch (_) {
+      // Keep the size hidden if the query fails.
+    }
+  }
+
+  Future<void> _runOptimize() async {
+    final text = stringsFor(ref.read(appSettingsProvider).localeCode);
+    setState(() {
+      _optimizingData = true;
+      _optimizeError = null;
+      _optimizeLines = const [];
+    });
+    try {
+      final result = await ref.read(comicRdApiProvider).optimizeDatabase();
+      _invalidateDataProviders();
+      final freed = result.databaseSizeBefore - result.databaseSizeAfter;
+      final lines = <String>[
+        text.optimizeRemovedComics.replaceAll(
+          '{count}',
+          '${result.removedComics}',
+        ),
+        text.optimizeRemovedChapters.replaceAll(
+          '{count}',
+          '${result.removedChapters}',
+        ),
+        text.optimizeRemovedBookmarks.replaceAll(
+          '{count}',
+          '${result.removedChapterBookmarks + result.removedPageBookmarks}',
+        ),
+        text.optimizeRemovedFavorites.replaceAll(
+          '{count}',
+          '${result.removedFavorites}',
+        ),
+        text.optimizeRemovedThumbnails.replaceAll(
+          '{count}',
+          '${result.removedThumbnails}',
+        ),
+        text.optimizeFreedSpace.replaceAll(
+          '{size}',
+          formatBytes((freed > 0 ? freed : 0) + result.removedThumbnailBytes),
+        ),
+      ];
+      if (result.skippedLibraryCount > 0) {
+        lines.add(
+          text.optimizeSkippedLibraries.replaceAll(
+            '{count}',
+            '${result.skippedLibraryCount}',
+          ),
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _optimizingData = false;
+        _optimizeLines = lines;
+        _dbSizeBytes = result.databaseSizeAfter;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _optimizingData = false;
+        _optimizeError = '$e';
+      });
+    }
   }
 
   Widget _aboutSection(AppStrings text) {

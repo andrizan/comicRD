@@ -322,6 +322,20 @@ class AppStrings {
     required this.settingsSaved,
     required this.backupExported,
     required this.backupImported,
+    // Optimize Data
+    required this.optimizeData,
+    required this.optimizeDataDescription,
+    required this.databaseSize,
+    required this.optimizingData,
+    required this.optimizeDataCompleted,
+    required this.optimizeRemovedComics,
+    required this.optimizeRemovedChapters,
+    required this.optimizeRemovedBookmarks,
+    required this.optimizeRemovedFavorites,
+    required this.optimizeRemovedThumbnails,
+    required this.optimizeFreedSpace,
+    required this.optimizeSkippedLibraries,
+    required this.optimizeDataFailed,
     // Scan
     required this.scanLibrary,
     required this.scanLibraryDescription,
@@ -455,6 +469,20 @@ class AppStrings {
   final String settingsSaved;
   final String backupExported;
   final String backupImported;
+  // Optimize Data
+  final String optimizeData;
+  final String optimizeDataDescription;
+  final String databaseSize;
+  final String optimizingData;
+  final String optimizeDataCompleted;
+  final String optimizeRemovedComics;
+  final String optimizeRemovedChapters;
+  final String optimizeRemovedBookmarks;
+  final String optimizeRemovedFavorites;
+  final String optimizeRemovedThumbnails;
+  final String optimizeFreedSpace;
+  final String optimizeSkippedLibraries;
+  final String optimizeDataFailed;
   // Scan
   final String scanLibrary;
   final String scanLibraryDescription;
@@ -575,6 +603,20 @@ class AppStrings {
     settingsSaved: 'Settings Saved',
     backupExported: 'Backup Exported',
     backupImported: 'Backup Imported',
+    optimizeData: 'Optimize Data',
+    optimizeDataDescription:
+        'Remove data for comics no longer on disk and shrink the database',
+    databaseSize: 'Database Size',
+    optimizingData: 'Optimizing...',
+    optimizeDataCompleted: 'Optimization Complete',
+    optimizeRemovedComics: '{count} comics removed',
+    optimizeRemovedChapters: '{count} chapters removed',
+    optimizeRemovedBookmarks: '{count} bookmarks removed',
+    optimizeRemovedFavorites: '{count} favorites removed',
+    optimizeRemovedThumbnails: '{count} cover images removed',
+    optimizeFreedSpace: '{size} of space freed',
+    optimizeSkippedLibraries: '{count} library path(s) unavailable, skipped',
+    optimizeDataFailed: 'Optimization Failed',
     scanLibrary: 'Scan Library',
     scanLibraryDescription: 'Scan your library for new comics',
     scanning: 'Scanning...',
@@ -694,6 +736,20 @@ class AppStrings {
     settingsSaved: 'Pengaturan Disimpan',
     backupExported: 'Cadangan Diekspor',
     backupImported: 'Cadangan Diimpor',
+    optimizeData: 'Optimalkan Data',
+    optimizeDataDescription:
+        'Hapus data komik yang sudah tidak ada di disk dan perkecil database',
+    databaseSize: 'Ukuran Database',
+    optimizingData: 'Mengoptimalkan...',
+    optimizeDataCompleted: 'Optimasi Selesai',
+    optimizeRemovedComics: '{count} komik dihapus',
+    optimizeRemovedChapters: '{count} chapter dihapus',
+    optimizeRemovedBookmarks: '{count} bookmark dihapus',
+    optimizeRemovedFavorites: '{count} favorit dihapus',
+    optimizeRemovedThumbnails: '{count} cover dihapus',
+    optimizeFreedSpace: '{size} ruang dibebaskan',
+    optimizeSkippedLibraries: '{count} jalur pustaka tidak tersedia, dilewati',
+    optimizeDataFailed: 'Optimasi Gagal',
     scanLibrary: 'Pindai Pustaka',
     scanLibraryDescription: 'Pindai pustaka untuk komik baru',
     scanning: 'Memindai...',

@@ -90,6 +90,7 @@ Invalidate cache on:
 - `add_library()` — FS structure changes
 - `import_database_backup()` — DB changes
 - `save_progress()` — DB read/in_progress counts change
+- `optimize_database()` — deletes stale comics/chapters, changes counts
 
 ## Bridge Rules
 

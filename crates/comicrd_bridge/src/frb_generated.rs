@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -478277584;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -14352141;
 
 // Section: executor
 
@@ -238,6 +238,38 @@ fn wire__crate__api__check_library_source_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::check_library_source()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__database_size_bytes_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "database_size_bytes",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::database_size_bytes()?;
                     Ok(output_ok)
                 })())
             }
@@ -1038,6 +1070,38 @@ fn wire__crate__api__open_containing_folder_impl(
         },
     )
 }
+fn wire__crate__api__optimize_database_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "optimize_database",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::optimize_database()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__prefetch_pages_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1737,6 +1801,36 @@ impl SseDecode for Option<u32> {
     }
 }
 
+impl SseDecode for crate::api::OptimizeDatabaseResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_databaseSizeBefore = <i64>::sse_decode(deserializer);
+        let mut var_databaseSizeAfter = <i64>::sse_decode(deserializer);
+        let mut var_removedComics = <i64>::sse_decode(deserializer);
+        let mut var_removedChapters = <i64>::sse_decode(deserializer);
+        let mut var_removedReadingProgress = <i64>::sse_decode(deserializer);
+        let mut var_removedPageBookmarks = <i64>::sse_decode(deserializer);
+        let mut var_removedChapterBookmarks = <i64>::sse_decode(deserializer);
+        let mut var_removedFavorites = <i64>::sse_decode(deserializer);
+        let mut var_removedThumbnails = <i64>::sse_decode(deserializer);
+        let mut var_removedThumbnailBytes = <i64>::sse_decode(deserializer);
+        let mut var_skippedLibraryCount = <i64>::sse_decode(deserializer);
+        return crate::api::OptimizeDatabaseResult {
+            database_size_before: var_databaseSizeBefore,
+            database_size_after: var_databaseSizeAfter,
+            removed_comics: var_removedComics,
+            removed_chapters: var_removedChapters,
+            removed_reading_progress: var_removedReadingProgress,
+            removed_page_bookmarks: var_removedPageBookmarks,
+            removed_chapter_bookmarks: var_removedChapterBookmarks,
+            removed_favorites: var_removedFavorites,
+            removed_thumbnails: var_removedThumbnails,
+            removed_thumbnail_bytes: var_removedThumbnailBytes,
+            skipped_library_count: var_skippedLibraryCount,
+        };
+    }
+}
+
 impl SseDecode for crate::api::PageBookmark {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2033,42 +2127,44 @@ fn pde_ffi_dispatcher_primary_impl(
         4 => wire__crate__api__add_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
         5 => wire__crate__api__cancel_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
         6 => wire__crate__api__check_library_source_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__evict_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__export_database_backup_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__get_chapter_context_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__get_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__get_comic_thumbnail_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__get_library_scan_status_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__get_library_storage_stats_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__import_database_backup_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__is_favorited_impl(port, ptr, rust_vec_len, data_len),
-        19 => {
+        7 => wire__crate__api__database_size_bytes_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__evict_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__export_database_backup_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__get_chapter_context_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__get_chapter_pages_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__get_comic_thumbnail_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__get_library_scan_status_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__get_library_storage_stats_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__import_database_backup_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__is_favorited_impl(port, ptr, rust_vec_len, data_len),
+        20 => {
             wire__crate__api__library_storage_stats_default_impl(port, ptr, rust_vec_len, data_len)
         }
-        20 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__list_favorites_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__list_page_bookmarks_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__list_reading_history_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__list_settings_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__purge_caches_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__remove_favorite_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__remove_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__list_bookmarks_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__list_comic_chapters_raw_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__list_comics_with_progress_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__list_favorites_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__list_libraries_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__list_library_comics_raw_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__list_page_bookmarks_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__list_reading_history_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__list_settings_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__optimize_database_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__purge_caches_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__remove_favorite_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__remove_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__start_scan_libraries_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2236,6 +2332,36 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::OpenChapterPayload>
     for crate::api::OpenChapterPayload
 {
     fn into_into_dart(self) -> crate::api::OpenChapterPayload {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::OptimizeDatabaseResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.database_size_before.into_into_dart().into_dart(),
+            self.database_size_after.into_into_dart().into_dart(),
+            self.removed_comics.into_into_dart().into_dart(),
+            self.removed_chapters.into_into_dart().into_dart(),
+            self.removed_reading_progress.into_into_dart().into_dart(),
+            self.removed_page_bookmarks.into_into_dart().into_dart(),
+            self.removed_chapter_bookmarks.into_into_dart().into_dart(),
+            self.removed_favorites.into_into_dart().into_dart(),
+            self.removed_thumbnails.into_into_dart().into_dart(),
+            self.removed_thumbnail_bytes.into_into_dart().into_dart(),
+            self.skipped_library_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::OptimizeDatabaseResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::OptimizeDatabaseResult>
+    for crate::api::OptimizeDatabaseResult
+{
+    fn into_into_dart(self) -> crate::api::OptimizeDatabaseResult {
         self
     }
 }
@@ -2839,6 +2965,23 @@ impl SseEncode for Option<u32> {
         if let Some(value) = self {
             <u32>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::OptimizeDatabaseResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.database_size_before, serializer);
+        <i64>::sse_encode(self.database_size_after, serializer);
+        <i64>::sse_encode(self.removed_comics, serializer);
+        <i64>::sse_encode(self.removed_chapters, serializer);
+        <i64>::sse_encode(self.removed_reading_progress, serializer);
+        <i64>::sse_encode(self.removed_page_bookmarks, serializer);
+        <i64>::sse_encode(self.removed_chapter_bookmarks, serializer);
+        <i64>::sse_encode(self.removed_favorites, serializer);
+        <i64>::sse_encode(self.removed_thumbnails, serializer);
+        <i64>::sse_encode(self.removed_thumbnail_bytes, serializer);
+        <i64>::sse_encode(self.skipped_library_count, serializer);
     }
 }
 

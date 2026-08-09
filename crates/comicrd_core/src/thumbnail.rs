@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -287,6 +287,54 @@ fn trim_disk_cache(thumbnail_dir: &Path, max_bytes: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// Delete cached thumbnail files whose source path is not in
+/// `valid_source_paths`. Returns the number of files removed and the bytes
+/// freed. Used by database optimization so deleted comics do not leave junk
+/// cover images behind.
+pub(crate) fn purge_orphan_thumbnails(
+    thumbnail_dir: &Path,
+    valid_source_paths: &HashSet<String>,
+) -> Result<(usize, u64), String> {
+    let valid_hashes: HashSet<u64> = valid_source_paths
+        .iter()
+        .map(|path| fnv1a_64(path))
+        .collect();
+
+    let mut removed = 0usize;
+    let mut freed_bytes = 0u64;
+    for entry in fs::read_dir(thumbnail_dir)
+        .map_err(|e| format!("failed reading thumbnail dir: {e}"))?
+    {
+        let entry = entry.map_err(|e| format!("failed reading dir entry: {e}"))?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        let Some((dimensions, hash_hex)) = name.split_once('-') else {
+            continue;
+        };
+        if !dimensions.contains('x') || !hash_hex.ends_with(".jpg") {
+            continue;
+        }
+        let Some(hash_hex) = hash_hex.strip_suffix(".jpg") else {
+            continue;
+        };
+        let Ok(hash) = u64::from_str_radix(hash_hex, 16) else {
+            continue;
+        };
+        if valid_hashes.contains(&hash) {
+            continue;
+        }
+        let meta = entry.metadata().ok();
+        let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        if fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+            freed_bytes += size;
+        }
+    }
+    Ok((removed, freed_bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,6 +400,51 @@ mod tests {
         let result =
             generate_thumbnail_bytes(dir.to_str().unwrap(), 200, 300).unwrap();
         assert!(result.is_empty(), "expected empty thumbnail for empty folder");
+    }
+
+    #[test]
+    fn purge_orphan_thumbnails_removes_only_stale_cover_files() {
+        let dir = tempdir();
+        let dir = Path::new(&dir);
+        let keep_path = "/library/Comic Keep";
+        let stale_path = "/library/Comic Deleted";
+        let valid: HashSet<String> = [keep_path.to_string()].into();
+
+        write_disk_thumbnail(dir, keep_path, 200, 300, b"keep-cover").unwrap();
+        write_disk_thumbnail(dir, stale_path, 200, 300, b"stale-cover").unwrap();
+        write_disk_thumbnail(dir, stale_path, 400, 600, b"stale-cover-2").unwrap();
+
+        let (removed, freed) = purge_orphan_thumbnails(dir, &valid).unwrap();
+        assert_eq!(removed, 2, "stale covers must be removed");
+        assert!(
+            freed > 0,
+            "freed bytes must count removed cover files"
+        );
+        assert!(
+            read_disk_thumbnail(dir, keep_path, 200, 300).is_some(),
+            "valid cover must be kept"
+        );
+        assert!(
+            read_disk_thumbnail(dir, stale_path, 200, 300).is_none(),
+            "stale cover must be gone"
+        );
+        assert!(
+            read_disk_thumbnail(dir, stale_path, 400, 600).is_none(),
+            "second stale cover must be gone"
+        );
+    }
+
+    #[test]
+    fn purge_orphan_thumbnails_ignores_non_thumbnail_files() {
+        let dir = tempdir();
+        let dir = Path::new(&dir);
+        let junk = dir.join("readme.txt");
+        std::fs::write(&junk, b"junk").unwrap();
+        let valid: HashSet<String> = HashSet::new();
+
+        let (removed, _freed) = purge_orphan_thumbnails(dir, &valid).unwrap();
+        assert_eq!(removed, 0);
+        assert!(junk.exists(), "non-thumbnail files must be untouched");
     }
 
     fn tempdir() -> std::path::PathBuf {

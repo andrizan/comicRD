@@ -3,9 +3,9 @@ use std::path::Path;
 use rusqlite::{params, Connection};
 
 use crate::chapter::{
-    chapter_history_key, chapter_size_bytes, chapter_snapshot_by_source_path,
-    comic_history_key, comic_title_for_path, discover_chapter_entries_from_comic_dir, is_archive,
-    source_type_for_path, upsert_chapter, upsert_comic, ChapterUpsert,
+    chapter_size_bytes, chapter_snapshot_by_source_path, comic_title_for_path,
+    discover_chapter_entries_from_comic_dir, is_archive, source_type_for_path, upsert_chapter,
+    upsert_comic, ChapterUpsert,
 };
 use crate::database::{file_modified_ts, now_ts};
 use crate::{Library, LibrarySourceStatus, RawComic};
@@ -50,32 +50,30 @@ pub(crate) fn library_source_status_for(path: &str) -> LibrarySourceStatus {
 
 pub(crate) fn comics_from_fs_entries(
     conn: &Connection,
-    library_path: &str,
+    _library_path: &str,
     entries: &[std::path::PathBuf],
     comics: &mut Vec<RawComic>,
 ) -> Result<(), String> {
     comics.reserve(entries.len());
 
-    let mut folder_keys = Vec::new();
-    let mut archive_keys = Vec::new();
-    let mut all_comic_keys = Vec::new();
+    let mut folder_paths = Vec::new();
+    let mut archive_paths = Vec::new();
+    let mut all_comic_paths = Vec::new();
     for entry in entries {
         if entry.is_dir() {
             let source_path = entry.to_string_lossy().to_string();
-            let key = comic_history_key(library_path, &source_path);
-            folder_keys.push(key.clone());
-            all_comic_keys.push(key);
+            folder_paths.push(source_path.clone());
+            all_comic_paths.push(source_path);
         } else if entry.is_file() && is_archive(entry) {
             let source_path = entry.to_string_lossy().to_string();
-            archive_keys.push(chapter_history_key(library_path, &source_path, 1));
-            let key = comic_history_key(library_path, &source_path);
-            all_comic_keys.push(key);
+            archive_paths.push(source_path.clone());
+            all_comic_paths.push(source_path);
         }
     }
 
-    let folder_counts = batch_comic_counts_from_db(conn, &folder_keys)?;
-    let archive_progress = batch_progress_counts_for_chapter_keys(conn, &archive_keys)?;
-    let comic_size_by_key = batch_comic_size_from_db(conn, &all_comic_keys)?;
+    let folder_counts = batch_comic_counts_from_db(conn, &folder_paths)?;
+    let archive_progress = batch_progress_counts_for_chapter_paths(conn, &archive_paths)?;
+    let comic_size_by_path = batch_comic_size_from_db(conn, &all_comic_paths)?;
 
     let mut folder_idx = 0usize;
     let mut archive_idx = 0usize;
@@ -85,8 +83,7 @@ pub(crate) fn comics_from_fs_entries(
             let (chapter_count, read_chapter_count, in_progress_chapter_count) =
                 folder_counts.get(folder_idx).copied().unwrap_or((0, 0, 0));
             folder_idx += 1;
-            let key = comic_history_key(library_path, &source_path);
-            let size_bytes = comic_size_by_key.get(&key).copied().unwrap_or(0);
+            let size_bytes = comic_size_by_path.get(&source_path).copied().unwrap_or(0);
             comics.push(RawComic {
                 title: comic_title_for_path(entry),
                 source_path,
@@ -103,9 +100,8 @@ pub(crate) fn comics_from_fs_entries(
             let (read_chapter_count, in_progress_chapter_count) =
                 archive_progress.get(archive_idx).copied().unwrap_or((0, 0));
             archive_idx += 1;
-            let key = comic_history_key(library_path, &source_path);
-            let size_bytes = comic_size_by_key
-                .get(&key)
+            let size_bytes = comic_size_by_path
+                .get(&source_path)
                 .copied()
                 .unwrap_or_else(|| chapter_size_bytes(entry, &source_type));
             comics.push(RawComic {
@@ -125,13 +121,13 @@ pub(crate) fn comics_from_fs_entries(
 
 fn batch_comic_counts_from_db(
     conn: &Connection,
-    comic_keys: &[String],
+    comic_paths: &[String],
 ) -> Result<Vec<(i64, i64, i64)>, String> {
-    if comic_keys.is_empty() {
+    if comic_paths.is_empty() {
         return Ok(Vec::new());
     }
-    let mut result = vec![(0i64, 0i64, 0i64); comic_keys.len()];
-    let placeholders: String = comic_keys
+    let mut result = vec![(0i64, 0i64, 0i64); comic_paths.len()];
+    let placeholders: String = comic_paths
         .iter()
         .enumerate()
         .map(|(i, _)| format!("?{}", i + 1))
@@ -140,21 +136,21 @@ fn batch_comic_counts_from_db(
     let query = format!(
         r#"
         SELECT
-            c.history_key,
+            c.source_path,
             COUNT(ch.id),
             COALESCE(SUM(CASE WHEN COALESCE(r.is_read, 0) = 1 THEN 1 ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN COALESCE(r.last_page, 0) > 0 AND COALESCE(r.is_read, 0) = 0 THEN 1 ELSE 0 END), 0)
         FROM comics c
         LEFT JOIN chapters ch ON ch.comic_id = c.id
         LEFT JOIN reading_progress r ON r.chapter_id = ch.id
-        WHERE c.history_key IN ({placeholders})
-        GROUP BY c.history_key
+        WHERE c.source_path IN ({placeholders})
+        GROUP BY c.source_path
         "#
     );
     let mut stmt = conn
         .prepare(&query)
         .map_err(|e| format!("failed preparing batch comic counts query: {e}"))?;
-    let params: Vec<&dyn rusqlite::types::ToSql> = comic_keys
+    let params: Vec<&dyn rusqlite::types::ToSql> = comic_paths
         .iter()
         .map(|k| k as &dyn rusqlite::types::ToSql)
         .collect();
@@ -168,15 +164,15 @@ fn batch_comic_counts_from_db(
             ))
         })
         .map_err(|e| format!("failed querying batch comic counts: {e}"))?;
-    let key_to_idx: std::collections::HashMap<String, usize> = comic_keys
+    let path_to_idx: std::collections::HashMap<String, usize> = comic_paths
         .iter()
         .enumerate()
-        .map(|(i, k)| (k.clone(), i))
+        .map(|(i, p)| (p.clone(), i))
         .collect();
     for row in rows {
-        let (key, chapter_count, read_count, in_progress_count) =
+        let (path, chapter_count, read_count, in_progress_count) =
             row.map_err(|e| format!("failed reading batch comic count row: {e}"))?;
-        if let Some(&idx) = key_to_idx.get(&key) {
+        if let Some(&idx) = path_to_idx.get(&path) {
             result[idx] = (chapter_count, read_count, in_progress_count);
         }
     }
@@ -185,25 +181,25 @@ fn batch_comic_counts_from_db(
 
 fn batch_comic_size_from_db(
     conn: &Connection,
-    comic_keys: &[String],
+    comic_paths: &[String],
 ) -> Result<std::collections::HashMap<String, i64>, String> {
     let mut result = std::collections::HashMap::new();
-    if comic_keys.is_empty() {
+    if comic_paths.is_empty() {
         return Ok(result);
     }
-    let placeholders: String = comic_keys
+    let placeholders: String = comic_paths
         .iter()
         .enumerate()
         .map(|(i, _)| format!("?{}", i + 1))
         .collect::<Vec<_>>()
         .join(", ");
     let query = format!(
-        "SELECT history_key, size_bytes FROM comics WHERE history_key IN ({placeholders})"
+        "SELECT source_path, size_bytes FROM comics WHERE source_path IN ({placeholders})"
     );
     let mut stmt = conn
         .prepare(&query)
         .map_err(|e| format!("failed preparing batch comic size query: {e}"))?;
-    let params: Vec<&dyn rusqlite::types::ToSql> = comic_keys
+    let params: Vec<&dyn rusqlite::types::ToSql> = comic_paths
         .iter()
         .map(|k| k as &dyn rusqlite::types::ToSql)
         .collect();
@@ -213,21 +209,21 @@ fn batch_comic_size_from_db(
         })
         .map_err(|e| format!("failed querying batch comic size: {e}"))?;
     for row in rows {
-        let (key, size) = row.map_err(|e| format!("failed reading batch comic size row: {e}"))?;
-        result.insert(key, size);
+        let (path, size) = row.map_err(|e| format!("failed reading batch comic size row: {e}"))?;
+        result.insert(path, size);
     }
     Ok(result)
 }
 
-fn batch_progress_counts_for_chapter_keys(
+fn batch_progress_counts_for_chapter_paths(
     conn: &Connection,
-    chapter_keys: &[String],
+    chapter_paths: &[String],
 ) -> Result<Vec<(i64, i64)>, String> {
-    if chapter_keys.is_empty() {
+    if chapter_paths.is_empty() {
         return Ok(Vec::new());
     }
-    let mut result = vec![(0i64, 0i64); chapter_keys.len()];
-    let placeholders: String = chapter_keys
+    let mut result = vec![(0i64, 0i64); chapter_paths.len()];
+    let placeholders: String = chapter_paths
         .iter()
         .enumerate()
         .map(|(i, _)| format!("?{}", i + 1))
@@ -235,16 +231,16 @@ fn batch_progress_counts_for_chapter_keys(
         .join(", ");
     let query = format!(
         r#"
-        SELECT ch.history_key, COALESCE(r.is_read, 0), COALESCE(r.last_page, 0)
+        SELECT ch.source_path, COALESCE(r.is_read, 0), COALESCE(r.last_page, 0)
         FROM chapters ch
         LEFT JOIN reading_progress r ON r.chapter_id = ch.id
-        WHERE ch.history_key IN ({placeholders})
+        WHERE ch.source_path IN ({placeholders})
         "#
     );
     let mut stmt = conn
         .prepare(&query)
         .map_err(|e| format!("failed preparing batch progress query: {e}"))?;
-    let params: Vec<&dyn rusqlite::types::ToSql> = chapter_keys
+    let params: Vec<&dyn rusqlite::types::ToSql> = chapter_paths
         .iter()
         .map(|k| k as &dyn rusqlite::types::ToSql)
         .collect();
@@ -257,15 +253,15 @@ fn batch_progress_counts_for_chapter_keys(
             ))
         })
         .map_err(|e| format!("failed querying batch progress: {e}"))?;
-    let key_to_idx: std::collections::HashMap<String, usize> = chapter_keys
+    let path_to_idx: std::collections::HashMap<String, usize> = chapter_paths
         .iter()
         .enumerate()
-        .map(|(i, k)| (k.clone(), i))
+        .map(|(i, p)| (p.clone(), i))
         .collect();
     for row in rows {
-        let (key, is_read, last_page) =
+        let (path, is_read, last_page) =
             row.map_err(|e| format!("failed reading batch progress row: {e}"))?;
-        if let Some(&idx) = key_to_idx.get(&key) {
+        if let Some(&idx) = path_to_idx.get(&path) {
             if is_read {
                 result[idx] = (1, 0);
             } else if last_page > 0 {
@@ -316,17 +312,15 @@ pub(crate) fn list_libraries_conn(conn: &Connection) -> Result<Vec<Library>, Str
 pub(crate) fn scan_comic_dir(
     conn: &Connection,
     library_id: i64,
-    library_path: &str,
+    _library_path: &str,
     comic_dir: &Path,
 ) -> Result<(usize, usize), String> {
     let title = comic_title_for_path(comic_dir);
     let source_path = comic_dir.to_string_lossy().to_string();
-    let comic_key = comic_history_key(library_path, &source_path);
     let comic_id = upsert_comic(
         conn,
         library_id,
         &title,
-        &comic_key,
         &source_path,
         "folder",
         file_modified_ts(comic_dir),
@@ -336,7 +330,6 @@ pub(crate) fn scan_comic_dir(
     let mut chapter_count = 0usize;
     let mut total_size_bytes: i64 = 0;
     for (chapter_title, chapter_path, chapter_type, idx) in chapter_entries {
-        let chapter_key = chapter_history_key(library_path, &chapter_path, idx);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
 
         let mut cached_page_count = 0i64;
@@ -363,7 +356,6 @@ pub(crate) fn scan_comic_dir(
                 comic_id,
                 title: &chapter_title,
                 chapter_index: idx,
-                history_key: &chapter_key,
                 source_path: &chapter_path,
                 source_type: &chapter_type,
                 page_count: cached_page_count.max(0) as usize,
@@ -375,8 +367,8 @@ pub(crate) fn scan_comic_dir(
     }
 
     conn.execute(
-        "UPDATE comics SET size_bytes = ?1, updated_at = ?2 WHERE id = ?3",
-        params![total_size_bytes, now_ts(), comic_id],
+        "UPDATE comics SET size_bytes = ?1 WHERE id = ?2",
+        params![total_size_bytes, comic_id],
     )
     .map_err(|e| format!("failed updating comic size_bytes: {e}"))?;
 
@@ -412,18 +404,15 @@ where
             let title = comic_title_for_path(entry);
             let source_type = source_type_for_path(entry);
             let source_path = entry.to_string_lossy().to_string();
-            let comic_key = comic_history_key(library_path, &source_path);
             let modified_at = file_modified_ts(entry);
             let comic_id = upsert_comic(
                 &tx,
                 library_id,
                 &title,
-                &comic_key,
                 &source_path,
                 &source_type,
                 modified_at,
             )?;
-            let chapter_key = chapter_history_key(library_path, &source_path, 1);
             let mut should_upsert_chapter = true;
             let page_count =
                 if let Some((cached_page_count, cached_modified_at, _cached_size, cached_index)) =
@@ -446,7 +435,6 @@ where
                         comic_id,
                         title: "Chapter 1",
                         chapter_index: 1,
-                        history_key: &chapter_key,
                         source_path: &source_path,
                         source_type: &source_type,
                         page_count,
@@ -456,8 +444,8 @@ where
                 )?;
             }
             tx.execute(
-                "UPDATE comics SET size_bytes = ?1, updated_at = ?2 WHERE id = ?3",
-                params![archive_size, now_ts(), comic_id],
+                "UPDATE comics SET size_bytes = ?1 WHERE id = ?2",
+                params![archive_size, comic_id],
             )
             .map_err(|e| format!("failed updating archive comic size_bytes: {e}"))?;
             comic_count += 1;

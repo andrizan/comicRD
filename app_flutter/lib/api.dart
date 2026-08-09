@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `core`, `open_path`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<void> initApp({required String appDataDir}) =>
     RustLib.instance.api.crateApiInitApp(appDataDir: appDataDir);
@@ -66,6 +66,12 @@ Future<List<RawChapter>> listComicChaptersRaw({
 );
 
 Future<void> purgeCaches() => RustLib.instance.api.crateApiPurgeCaches();
+
+Future<PlatformInt64> databaseSizeBytes() =>
+    RustLib.instance.api.crateApiDatabaseSizeBytes();
+
+Future<OptimizeDatabaseResult> optimizeDatabase() =>
+    RustLib.instance.api.crateApiOptimizeDatabase();
 
 Future<PlatformInt64> openChapterForReading({
   required OpenChapterPayload payload,
@@ -405,6 +411,65 @@ class OpenChapterPayload {
           runtimeType == other.runtimeType &&
           comicSourcePath == other.comicSourcePath &&
           chapterSourcePath == other.chapterSourcePath;
+}
+
+class OptimizeDatabaseResult {
+  final PlatformInt64 databaseSizeBefore;
+  final PlatformInt64 databaseSizeAfter;
+  final PlatformInt64 removedComics;
+  final PlatformInt64 removedChapters;
+  final PlatformInt64 removedReadingProgress;
+  final PlatformInt64 removedPageBookmarks;
+  final PlatformInt64 removedChapterBookmarks;
+  final PlatformInt64 removedFavorites;
+  final PlatformInt64 removedThumbnails;
+  final PlatformInt64 removedThumbnailBytes;
+  final PlatformInt64 skippedLibraryCount;
+
+  const OptimizeDatabaseResult({
+    required this.databaseSizeBefore,
+    required this.databaseSizeAfter,
+    required this.removedComics,
+    required this.removedChapters,
+    required this.removedReadingProgress,
+    required this.removedPageBookmarks,
+    required this.removedChapterBookmarks,
+    required this.removedFavorites,
+    required this.removedThumbnails,
+    required this.removedThumbnailBytes,
+    required this.skippedLibraryCount,
+  });
+
+  @override
+  int get hashCode =>
+      databaseSizeBefore.hashCode ^
+      databaseSizeAfter.hashCode ^
+      removedComics.hashCode ^
+      removedChapters.hashCode ^
+      removedReadingProgress.hashCode ^
+      removedPageBookmarks.hashCode ^
+      removedChapterBookmarks.hashCode ^
+      removedFavorites.hashCode ^
+      removedThumbnails.hashCode ^
+      removedThumbnailBytes.hashCode ^
+      skippedLibraryCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OptimizeDatabaseResult &&
+          runtimeType == other.runtimeType &&
+          databaseSizeBefore == other.databaseSizeBefore &&
+          databaseSizeAfter == other.databaseSizeAfter &&
+          removedComics == other.removedComics &&
+          removedChapters == other.removedChapters &&
+          removedReadingProgress == other.removedReadingProgress &&
+          removedPageBookmarks == other.removedPageBookmarks &&
+          removedChapterBookmarks == other.removedChapterBookmarks &&
+          removedFavorites == other.removedFavorites &&
+          removedThumbnails == other.removedThumbnails &&
+          removedThumbnailBytes == other.removedThumbnailBytes &&
+          skippedLibraryCount == other.skippedLibraryCount;
 }
 
 class PageBookmark {

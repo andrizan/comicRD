@@ -208,12 +208,10 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         library_id INTEGER NOT NULL,
         title TEXT NOT NULL,
-        history_key TEXT NOT NULL,
         source_path TEXT NOT NULL UNIQUE,
         source_type TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
         date_modified INTEGER NOT NULL,
+        size_bytes INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY(library_id) REFERENCES libraries(id) ON DELETE CASCADE
       );
 
@@ -222,13 +220,11 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         comic_id INTEGER NOT NULL,
         title TEXT NOT NULL,
         chapter_index INTEGER NOT NULL,
-        history_key TEXT NOT NULL,
         source_path TEXT NOT NULL UNIQUE,
         source_type TEXT NOT NULL,
         page_count INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
         date_modified INTEGER NOT NULL,
+        size_bytes INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY(comic_id) REFERENCES comics(id) ON DELETE CASCADE
       );
 
@@ -296,11 +292,14 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
       CREATE INDEX IF NOT EXISTS idx_reading_progress_updated_at ON reading_progress(updated_at);
       CREATE INDEX IF NOT EXISTS idx_comics_date_modified ON comics(date_modified);
       CREATE INDEX IF NOT EXISTS idx_libraries_updated_at ON libraries(updated_at);
-      CREATE INDEX IF NOT EXISTS idx_comics_history_key ON comics(history_key);
-      CREATE INDEX IF NOT EXISTS idx_chapters_history_key ON chapters(history_key);
       "#,
     )
     .map_err(|e| format!("failed creating indexes: {e}"))?;
+
+    // Migration: history_key is no longer used. source_path is the source of
+    // truth for comics and chapters. The created_at/updated_at columns on
+    // comics and chapters were written but never read, so they are dropped.
+    drop_dead_columns(conn)?;
 
     let ts = now_ts();
     let defaults = [
@@ -364,6 +363,27 @@ fn add_column_if_missing(
         let sql = format!("ALTER TABLE {table} ADD COLUMN {column} {column_ddl}");
         conn.execute(&sql, [])
             .map_err(|e| format!("failed adding {table}.{column}: {e}"))?;
+    }
+    Ok(())
+}
+
+fn drop_dead_columns(conn: &Connection) -> Result<(), String> {
+    for index in ["idx_comics_history_key", "idx_chapters_history_key"] {
+        let _ = conn.execute(&format!("DROP INDEX IF EXISTS {index}"), []);
+    }
+    for table in ["comics", "chapters"] {
+        for column in ["history_key", "created_at", "updated_at"] {
+            let sql = format!("ALTER TABLE {table} DROP COLUMN {column}");
+            match conn.execute(&sql, []) {
+                Ok(_) => {}
+                Err(e) => {
+                    if e.to_string().contains("no such column") {
+                        continue;
+                    }
+                    return Err(format!("failed dropping {table}.{column}: {e}"));
+                }
+            }
+        }
     }
     Ok(())
 }

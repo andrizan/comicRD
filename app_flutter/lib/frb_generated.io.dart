@@ -146,6 +146,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
+  OptimizeDatabaseResult dco_decode_optimize_database_result(dynamic raw);
+
+  @protected
   PageBookmark dco_decode_page_bookmark(dynamic raw);
 
   @protected
@@ -362,6 +365,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  OptimizeDatabaseResult sse_decode_optimize_database_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PageBookmark sse_decode_page_bookmark(SseDeserializer deserializer);
@@ -633,6 +641,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_optimize_database_result(
+    OptimizeDatabaseResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_page_bookmark(PageBookmark self, SseSerializer serializer);

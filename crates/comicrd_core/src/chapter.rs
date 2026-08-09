@@ -43,67 +43,37 @@ pub(crate) fn normalize_slashes(value: &str) -> String {
     value.replace('\\', "/")
 }
 
-pub(crate) fn relative_history_path(library_path: &str, target_path: &str) -> String {
-    let base = Path::new(library_path);
-    let target = Path::new(target_path);
-    if let Ok(rel) = target.strip_prefix(base) {
-        return normalize_slashes(rel.to_string_lossy().as_ref());
-    }
-    normalize_slashes(target_path)
-}
-
-pub(crate) fn comic_history_key(library_path: &str, comic_source_path: &str) -> String {
-    format!(
-        "comic/{}",
-        relative_history_path(library_path, comic_source_path)
-    )
-}
-
-pub(crate) fn chapter_history_key(
-    library_path: &str,
-    chapter_source_path: &str,
-    chapter_index: i64,
-) -> String {
-    format!(
-        "chapter/{}#{}",
-        relative_history_path(library_path, chapter_source_path),
-        chapter_index
-    )
-}
-
 pub(crate) fn upsert_comic(
     conn: &Connection,
     library_id: i64,
     title: &str,
-    history_key: &str,
     source_path: &str,
     source_type: &str,
     date_modified: i64,
 ) -> Result<i64, String> {
-    let ts = now_ts();
     if let Ok(id) = conn.query_row(
-        "SELECT id FROM comics WHERE history_key = ?1 LIMIT 1",
-        params![history_key],
+        "SELECT id FROM comics WHERE source_path = ?1 LIMIT 1",
+        params![source_path],
         |row| row.get::<_, i64>(0),
     ) {
         conn.execute(
             r#"
         UPDATE comics
-        SET library_id = ?1, title = ?2, source_path = ?3, source_type = ?4, updated_at = ?5, date_modified = ?6
-        WHERE id = ?7
+        SET library_id = ?1, title = ?2, source_type = ?3, date_modified = ?4
+        WHERE id = ?5
         "#,
-            params![library_id, title, source_path, source_type, ts, date_modified, id],
+            params![library_id, title, source_type, date_modified, id],
         )
-        .map_err(|e| format!("failed updating comic by history key: {e}"))?;
+        .map_err(|e| format!("failed updating comic by source path: {e}"))?;
         return Ok(id);
     }
 
     conn.execute(
         r#"
-      INSERT INTO comics (library_id, title, history_key, source_path, source_type, created_at, updated_at, date_modified)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+      INSERT INTO comics (library_id, title, source_path, source_type, date_modified)
+      VALUES (?1, ?2, ?3, ?4, ?5)
       "#,
-        params![library_id, title, history_key, source_path, source_type, ts, ts, date_modified],
+        params![library_id, title, source_path, source_type, date_modified],
     )
     .map_err(|e| format!("failed inserting comic: {e}"))?;
     Ok(conn.last_insert_rowid())
@@ -113,7 +83,6 @@ pub(crate) struct ChapterUpsert<'a> {
     pub(crate) comic_id: i64,
     pub(crate) title: &'a str,
     pub(crate) chapter_index: i64,
-    pub(crate) history_key: &'a str,
     pub(crate) source_path: &'a str,
     pub(crate) source_type: &'a str,
     pub(crate) page_count: usize,
@@ -122,17 +91,16 @@ pub(crate) struct ChapterUpsert<'a> {
 }
 
 pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Result<i64, String> {
-    let ts = now_ts();
     if let Ok(id) = conn.query_row(
-        "SELECT id FROM chapters WHERE history_key = ?1 LIMIT 1",
-        params![params.history_key],
+        "SELECT id FROM chapters WHERE source_path = ?1 LIMIT 1",
+        params![params.source_path],
         |row| row.get::<_, i64>(0),
     ) {
         conn.execute(
             r#"
         UPDATE chapters
-        SET comic_id = ?1, title = ?2, chapter_index = ?3, source_path = ?4, source_type = ?5, page_count = ?6, updated_at = ?7, date_modified = ?8, size_bytes = ?9
-        WHERE id = ?10
+        SET comic_id = ?1, title = ?2, chapter_index = ?3, source_path = ?4, source_type = ?5, page_count = ?6, date_modified = ?7, size_bytes = ?8
+        WHERE id = ?9
         "#,
             params![
                 params.comic_id,
@@ -141,28 +109,25 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
                 params.source_path,
                 params.source_type,
                 params.page_count as i64,
-                ts,
                 params.date_modified,
                 params.size_bytes,
                 id
             ],
         )
-        .map_err(|e| format!("failed updating chapter by history key: {e}"))?;
+        .map_err(|e| format!("failed updating chapter by source path: {e}"))?;
         return Ok(id);
     }
 
     conn.execute(
         r#"
-      INSERT INTO chapters (comic_id, title, chapter_index, history_key, source_path, source_type, page_count, created_at, updated_at, date_modified, size_bytes)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+      INSERT INTO chapters (comic_id, title, chapter_index, source_path, source_type, page_count, date_modified, size_bytes)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
       ON CONFLICT(source_path) DO UPDATE SET
         comic_id = excluded.comic_id,
         title = excluded.title,
         chapter_index = excluded.chapter_index,
-        history_key = excluded.history_key,
         source_type = excluded.source_type,
         page_count = excluded.page_count,
-        updated_at = excluded.updated_at,
         date_modified = excluded.date_modified,
         size_bytes = excluded.size_bytes
       "#,
@@ -170,12 +135,9 @@ pub(crate) fn upsert_chapter(conn: &Connection, params: ChapterUpsert<'_>) -> Re
             params.comic_id,
             params.title,
             params.chapter_index,
-            params.history_key,
             params.source_path,
             params.source_type,
             params.page_count as i64,
-            ts,
-            ts,
             params.date_modified,
             params.size_bytes
         ],
@@ -396,6 +358,23 @@ fn image_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
         .ok()
 }
 
+/// Name used for natural sorting of chapter entries. Archives sort by their
+/// file stem so the `.cbz`/`.cbr` extension does not influence ordering
+/// (e.g. "Chapter 06.5.cbz" must come after "Chapter 06.cbz").
+fn sort_name(path: &Path) -> String {
+    if path.is_dir() {
+        return path
+            .file_name()
+            .and_then(|v| v.to_str())
+            .unwrap_or("")
+            .to_string();
+    }
+    path.file_stem()
+        .and_then(|v| v.to_str())
+        .unwrap_or("")
+        .to_string()
+}
+
 pub(crate) fn natural_compare(a: &str, b: &str) -> std::cmp::Ordering {
     let mut a_chars = a.chars().peekable();
     let mut b_chars = b.chars().peekable();
@@ -462,11 +441,7 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
         .filter_map(|e| e.ok())
         .map(|e| e.into_path())
         .collect::<Vec<_>>();
-    children.sort_by(|a, b| {
-        let a_name = a.file_name().and_then(|v| v.to_str()).unwrap_or("");
-        let b_name = b.file_name().and_then(|v| v.to_str()).unwrap_or("");
-        natural_compare(a_name, b_name)
-    });
+    children.sort_by(|a, b| natural_compare(&sort_name(a), &sort_name(b)));
 
     for child in children {
         if child.is_dir() {
@@ -480,7 +455,7 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
                 .filter_map(|e| e.ok())
                 .map(|e| e.into_path())
                 .collect::<Vec<_>>();
-            child_entries.sort();
+            child_entries.sort_by(|a, b| natural_compare(&sort_name(a), &sort_name(b)));
 
             for entry in child_entries {
                 if entry.is_file() && is_archive(&entry) {
@@ -558,18 +533,14 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
     _comic_source_path: &str,
     discovered: &[(String, String, String, i64)],
 ) -> Result<Vec<RawChapter>, String> {
-    let library_path = get_library_source_setting(conn)?;
-
-    let chapter_keys: Vec<String> = discovered
+    let chapter_paths: Vec<String> = discovered
         .iter()
-        .map(|(_, chapter_path, _, chapter_index)| {
-            chapter_history_key(&library_path, chapter_path, *chapter_index)
-        })
+        .map(|(_, chapter_path, _, _)| chapter_path.clone())
         .collect();
 
     let mut progress_map = std::collections::HashMap::new();
-    if !chapter_keys.is_empty() {
-        let placeholders: String = chapter_keys
+    if !chapter_paths.is_empty() {
+        let placeholders: String = chapter_paths
             .iter()
             .enumerate()
             .map(|(i, _)| format!("?{}", i + 1))
@@ -577,7 +548,7 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
             .join(", ");
         let query = format!(
             r#"
-            SELECT c.history_key,
+            SELECT c.source_path,
                    c.page_count,
                    COALESCE(r.is_read, 0),
                    COALESCE(r.last_page, 0),
@@ -587,13 +558,13 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
                    r.updated_at
             FROM chapters c
             LEFT JOIN reading_progress r ON r.chapter_id = c.id
-            WHERE c.history_key IN ({placeholders})
+            WHERE c.source_path IN ({placeholders})
             "#
         );
         let mut stmt = conn
             .prepare(&query)
             .map_err(|e| format!("failed preparing batch progress query: {e}"))?;
-        let params: Vec<&dyn rusqlite::types::ToSql> = chapter_keys
+        let params: Vec<&dyn rusqlite::types::ToSql> = chapter_paths
             .iter()
             .map(|k| k as &dyn rusqlite::types::ToSql)
             .collect();
@@ -612,23 +583,20 @@ pub(crate) fn list_comic_chapters_raw_conn_with_discovered(
             })
             .map_err(|e| format!("failed querying batch progress: {e}"))?;
         for row in rows {
-            let (key, page_count, is_read, last_page, total_pages, date_modified, size_bytes, progress_updated_at) =
+            let (path, page_count, is_read, last_page, total_pages, date_modified, size_bytes, progress_updated_at) =
                 row.map_err(|e| format!("failed reading progress row: {e}"))?;
             progress_map.insert(
-                key,
+                path,
                 (page_count, is_read, last_page, total_pages, date_modified, size_bytes, progress_updated_at),
             );
         }
     }
 
     let mut out = Vec::with_capacity(discovered.len());
-    for (i, (chapter_title, chapter_path, _chapter_type, chapter_index)) in
-        discovered.iter().enumerate()
-    {
-        let chapter_key = &chapter_keys[i];
+    for (chapter_title, chapter_path, _chapter_type, chapter_index) in discovered.iter() {
         let modified_at = file_modified_ts(Path::new(chapter_path));
         let (page_count, is_read, last_page, total_pages, date_modified, size_bytes, progress_updated_at) = progress_map
-            .get(chapter_key.as_str())
+            .get(chapter_path.as_str())
             .copied()
             .unwrap_or((0, false, 0, 0, modified_at, 0, None));
         out.push(RawChapter {
@@ -683,16 +651,14 @@ pub(crate) fn open_chapter_for_reading_conn(
     let tx = conn
         .transaction()
         .map_err(|e| format!("failed opening chapter transaction: {e}"))?;
-    let (library_id, library_path) = find_library_for_comic(&tx, &payload.comic_source_path)?;
+    let (library_id, _library_path) = find_library_for_comic(&tx, &payload.comic_source_path)?;
     let comic_source = Path::new(&payload.comic_source_path);
     let comic_source_type = source_type_for_path(comic_source);
     let comic_title = comic_title_for_path(comic_source);
-    let comic_key = comic_history_key(&library_path, &payload.comic_source_path);
     let comic_id = upsert_comic(
         &tx,
         library_id,
         &comic_title,
-        &comic_key,
         &payload.comic_source_path,
         &comic_source_type,
         file_modified_ts(comic_source),
@@ -702,7 +668,6 @@ pub(crate) fn open_chapter_for_reading_conn(
     let mut selected_chapter_id = None;
     let mut total_size_bytes: i64 = 0;
     for (chapter_title, chapter_path, chapter_type, chapter_index) in chapter_entries {
-        let chapter_key = chapter_history_key(&library_path, &chapter_path, chapter_index);
         let modified_at = file_modified_ts(Path::new(&chapter_path));
         let cached_page_count = chapter_snapshot_by_source_path(&tx, &chapter_path)?
             .map(|(page_count, _, _, _)| page_count.max(0) as usize)
@@ -715,7 +680,6 @@ pub(crate) fn open_chapter_for_reading_conn(
                 comic_id,
                 title: &chapter_title,
                 chapter_index,
-                history_key: &chapter_key,
                 source_path: &chapter_path,
                 source_type: &chapter_type,
                 page_count: cached_page_count,
@@ -728,8 +692,8 @@ pub(crate) fn open_chapter_for_reading_conn(
         }
     }
     tx.execute(
-        "UPDATE comics SET size_bytes = ?1, updated_at = ?2 WHERE id = ?3",
-        params![total_size_bytes, now_ts(), comic_id],
+        "UPDATE comics SET size_bytes = ?1 WHERE id = ?2",
+        params![total_size_bytes, comic_id],
     )
     .map_err(|e| format!("failed updating comic size_bytes: {e}"))?;
     tx.commit()
@@ -796,8 +760,8 @@ pub(crate) fn get_chapter_pages_conn(
     let page_count = pages.len() as i64;
     let modified_at = file_modified_ts(Path::new(&source_path));
     let _ = conn.execute(
-        "UPDATE chapters SET page_count = ?1, date_modified = ?2, updated_at = ?3 WHERE id = ?4",
-        params![page_count, modified_at, now_ts(), chapter_id],
+        "UPDATE chapters SET page_count = ?1, date_modified = ?2 WHERE id = ?3",
+        params![page_count, modified_at, chapter_id],
     );
     Ok(pages)
 }
@@ -1036,5 +1000,44 @@ mod tests {
             natural_compare("Chapter 1a", "Chapter 1b"),
             std::cmp::Ordering::Less
         );
+    }
+
+    #[test]
+    fn natural_compare_orders_decimal_chapters_after_whole_chapters() {
+        assert_eq!(
+            natural_compare("Chapter 06", "Chapter 06.5"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            natural_compare("Chapter 06.5", "Chapter 06"),
+            std::cmp::Ordering::Greater
+        );
+        assert_eq!(
+            natural_compare("Chapter 46", "Chapter 46.1"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            natural_compare("Chapter 46.1", "Chapter 46.2"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            natural_compare("Chapter 46.2", "Chapter 46.10"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            natural_compare("Chapter 06.5", "Chapter 07"),
+            std::cmp::Ordering::Less
+        );
+    }
+
+    #[test]
+    fn sort_name_uses_stem_for_archives_and_name_for_dirs() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let archive = temp.path().join("Chapter 06.5.cbz");
+        std::fs::write(&archive, b"").expect("archive");
+        let dir = temp.path().join("Chapter 07");
+        std::fs::create_dir_all(&dir).expect("dir");
+        assert_eq!(sort_name(&archive), "Chapter 06.5");
+        assert_eq!(sort_name(&dir), "Chapter 07");
     }
 }

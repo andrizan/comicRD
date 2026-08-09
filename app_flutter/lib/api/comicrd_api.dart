@@ -63,6 +63,11 @@ class ComicRdApi {
 
   Future<void> purgeCaches() => bridge.purgeCaches();
 
+  Future<int> databaseSizeBytes() => bridge.databaseSizeBytes();
+
+  Future<bridge.OptimizeDatabaseResult> optimizeDatabase() =>
+      bridge.optimizeDatabase();
+
   Future<int> openChapterForReading(bridge.OpenChapterPayload payload) =>
       bridge.openChapterForReading(payload: payload);
 

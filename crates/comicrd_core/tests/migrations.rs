@@ -125,3 +125,97 @@ fn reopen_is_idempotent_and_preserves_size_bytes_columns() {
     assert_eq!(stats.total_size_bytes, 1024);
     assert_eq!(stats.comic_count, 1);
 }
+
+#[test]
+fn open_drops_legacy_history_key_columns_from_existing_database() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    std::fs::create_dir_all(&app_data).expect("app data dir");
+    let db_path = app_data.join("comicrd.db");
+
+    let legacy_conn = rusqlite::Connection::open(&db_path).expect("legacy db");
+    legacy_conn
+        .execute_batch(
+            r#"
+        CREATE TABLE libraries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          path TEXT NOT NULL UNIQUE,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE comics (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          library_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          history_key TEXT NOT NULL,
+          source_path TEXT NOT NULL UNIQUE,
+          source_type TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          date_modified INTEGER NOT NULL,
+          size_bytes INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(library_id) REFERENCES libraries(id) ON DELETE CASCADE
+        );
+        CREATE TABLE chapters (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          comic_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          chapter_index INTEGER NOT NULL,
+          history_key TEXT NOT NULL,
+          source_path TEXT NOT NULL UNIQUE,
+          source_type TEXT NOT NULL,
+          page_count INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          date_modified INTEGER NOT NULL,
+          size_bytes INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY(comic_id) REFERENCES comics(id) ON DELETE CASCADE
+        );
+        CREATE INDEX idx_comics_history_key ON comics(history_key);
+        CREATE INDEX idx_chapters_history_key ON chapters(history_key);
+        INSERT INTO libraries (id, path, created_at, updated_at) VALUES (1, '/tmp/lib', 1, 1);
+        INSERT INTO comics (id, library_id, title, history_key, source_path, source_type, created_at, updated_at, date_modified)
+          VALUES (1, 1, 'Comic A', 'comic/Comic A', '/tmp/lib/Comic A', 'folder', 1, 1, 1);
+        INSERT INTO chapters (id, comic_id, title, chapter_index, history_key, source_path, source_type, page_count, created_at, updated_at, date_modified)
+          VALUES (1, 1, 'Chapter 1', 1, 'chapter/Comic A/Chapter 1#1', '/tmp/lib/Comic A/Chapter 1', 'folder', 0, 1, 1, 1);
+        "#,
+        )
+        .expect("create legacy schema");
+    drop(legacy_conn);
+
+    let core = ComicRdCore::open(&app_data).expect("open core with legacy db");
+    drop(core);
+
+    let migrated_conn = rusqlite::Connection::open(&db_path).expect("migrated db");
+    let columns: Vec<String> = migrated_conn
+        .prepare("PRAGMA table_info(comics)")
+        .expect("prepare comics info")
+        .query_map([], |row| row.get::<_, String>(1))
+        .expect("query comics info")
+        .collect::<Result<_, _>>()
+        .expect("collect comics columns");
+    assert!(!columns.contains(&"history_key".to_string()));
+    let columns: Vec<String> = migrated_conn
+        .prepare("PRAGMA table_info(chapters)")
+        .expect("prepare chapters info")
+        .query_map([], |row| row.get::<_, String>(1))
+        .expect("query chapters info")
+        .collect::<Result<_, _>>()
+        .expect("collect chapters columns");
+    assert!(!columns.contains(&"history_key".to_string()));
+
+    let comic_count: i64 = migrated_conn
+        .query_row("SELECT COUNT(*) FROM comics", [], |row| row.get(0))
+        .expect("count comics");
+    assert_eq!(comic_count, 1);
+    let chapter_count: i64 = migrated_conn
+        .query_row("SELECT COUNT(*) FROM chapters", [], |row| row.get(0))
+        .expect("count chapters");
+    assert_eq!(chapter_count, 1);
+    let source_path: String = migrated_conn
+        .query_row("SELECT source_path FROM comics WHERE id = 1", [], |row| {
+            row.get(0)
+        })
+        .expect("read comic source_path");
+    assert_eq!(source_path, "/tmp/lib/Comic A");
+}

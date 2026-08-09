@@ -2,6 +2,7 @@ mod chapter;
 mod database;
 mod image_pipeline;
 mod library;
+mod optimize;
 mod reader;
 mod thumbnail;
 
@@ -22,6 +23,7 @@ use crate::chapter::*;
 use crate::database::*;
 use crate::image_pipeline::*;
 use crate::library::*;
+use crate::optimize::*;
 use crate::reader::*;
 use crate::thumbnail::*;
 
@@ -55,6 +57,21 @@ pub struct Library {
     pub path: String,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OptimizeDatabaseResult {
+    pub database_size_before: i64,
+    pub database_size_after: i64,
+    pub removed_comics: i64,
+    pub removed_chapters: i64,
+    pub removed_reading_progress: i64,
+    pub removed_page_bookmarks: i64,
+    pub removed_chapter_bookmarks: i64,
+    pub removed_favorites: i64,
+    pub removed_thumbnails: i64,
+    pub removed_thumbnail_bytes: i64,
+    pub skipped_library_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -787,6 +804,27 @@ impl ComicRdCore {
     pub fn purge_caches(&self) {
         self.clear_library_list_cache();
         self.clear_chapter_discovery_cache();
+    }
+
+    pub fn database_size_bytes(&self) -> i64 {
+        database_size_bytes_on_disk(&self.db_path)
+    }
+
+    pub fn optimize_database(&self) -> Result<OptimizeDatabaseResult, String> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
+        let result = optimize_database_conn(
+            &mut conn,
+            &self.db_path,
+            &self.thumbnail_dir,
+        )?;
+        drop(conn);
+        // Deleting rows changes library counts and chapter availability.
+        self.clear_library_list_cache();
+        self.clear_chapter_discovery_cache();
+        Ok(result)
     }
 
     fn clear_library_list_cache(&self) {

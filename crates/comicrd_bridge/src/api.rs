@@ -201,6 +201,21 @@ pub struct SettingEntry {
     pub value_json: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptimizeDatabaseResult {
+    pub database_size_before: i64,
+    pub database_size_after: i64,
+    pub removed_comics: i64,
+    pub removed_chapters: i64,
+    pub removed_reading_progress: i64,
+    pub removed_page_bookmarks: i64,
+    pub removed_chapter_bookmarks: i64,
+    pub removed_favorites: i64,
+    pub removed_thumbnails: i64,
+    pub removed_thumbnail_bytes: i64,
+    pub skipped_library_count: i64,
+}
+
 impl From<SortBy> for core::SortBy {
     fn from(value: SortBy) -> Self {
         match value {
@@ -241,6 +256,24 @@ impl From<core::Library> for Library {
             path: value.path,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        }
+    }
+}
+
+impl From<core::OptimizeDatabaseResult> for OptimizeDatabaseResult {
+    fn from(value: core::OptimizeDatabaseResult) -> Self {
+        Self {
+            database_size_before: value.database_size_before,
+            database_size_after: value.database_size_after,
+            removed_comics: value.removed_comics,
+            removed_chapters: value.removed_chapters,
+            removed_reading_progress: value.removed_reading_progress,
+            removed_page_bookmarks: value.removed_page_bookmarks,
+            removed_chapter_bookmarks: value.removed_chapter_bookmarks,
+            removed_favorites: value.removed_favorites,
+            removed_thumbnails: value.removed_thumbnails,
+            removed_thumbnail_bytes: value.removed_thumbnail_bytes,
+            skipped_library_count: value.skipped_library_count,
         }
     }
 }
@@ -571,6 +604,14 @@ pub fn list_comic_chapters_raw(comic_source_path: String) -> Result<Vec<RawChapt
 pub fn purge_caches() -> Result<(), String> {
     core()?.purge_caches();
     Ok(())
+}
+
+pub fn database_size_bytes() -> Result<i64, String> {
+    Ok(core()?.database_size_bytes())
+}
+
+pub fn optimize_database() -> Result<OptimizeDatabaseResult, String> {
+    Ok(core()?.optimize_database()?.into())
 }
 
 pub fn open_chapter_for_reading(payload: OpenChapterPayload) -> Result<i64, String> {

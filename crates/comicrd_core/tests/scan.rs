@@ -157,11 +157,13 @@ fn scan_reindexes_chapters_when_new_chapter_inserted_in_middle() {
             chapter_source_path: chapter_5.to_string_lossy().to_string(),
         })
         .expect("open chapter 05");
-    let context = core
-        .get_chapter_context(chapter_5_id)
-        .expect("get context")
-        .expect("context exists");
-    assert_eq!(context.next_chapter_title.as_deref(), Some("Chapter 06"));
+    core.save_progress(SaveProgressPayload {
+        chapter_id: chapter_5_id,
+        last_page: 2,
+        total_pages: 10,
+        is_read: false,
+    })
+    .expect("save progress");
 
     let chapter_6_5_id = core
         .open_chapter_for_reading(OpenChapterPayload {
@@ -169,6 +171,36 @@ fn scan_reindexes_chapters_when_new_chapter_inserted_in_middle() {
             chapter_source_path: chapter_6_5.to_string_lossy().to_string(),
         })
         .expect("open chapter 06.5");
+    core.save_progress(SaveProgressPayload {
+        chapter_id: chapter_6_5_id,
+        last_page: 3,
+        total_pages: 10,
+        is_read: true,
+    })
+    .expect("save progress 06.5");
+
+    core.scan_libraries().expect("third scan libraries");
+
+    let chapters = core
+        .list_comic_chapters_raw(&comic.to_string_lossy())
+        .expect("list chapters after progress");
+    assert_eq!(chapters.len(), 4);
+    assert_eq!(chapters[0].title, "Chapter 05");
+    assert_eq!(chapters[0].last_page, 2);
+    assert!(!chapters[0].is_read);
+    assert_eq!(chapters[1].title, "Chapter 06");
+    assert_eq!(chapters[1].last_page, 0);
+    assert!(!chapters[1].is_read);
+    assert_eq!(chapters[2].title, "Chapter 06.5");
+    assert_eq!(chapters[2].last_page, 3);
+    assert!(chapters[2].is_read);
+
+    let context = core
+        .get_chapter_context(chapter_5_id)
+        .expect("get context")
+        .expect("context exists");
+    assert_eq!(context.next_chapter_title.as_deref(), Some("Chapter 06"));
+
     let context = core
         .get_chapter_context(chapter_6_5_id)
         .expect("get context")
