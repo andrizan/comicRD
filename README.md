@@ -95,6 +95,11 @@ sudo pacman -U dist/arch/comicrd-bin-2.5.0-1-x86_64.pkg.tar.zst
 - `cargo-expand`
 - Platform desktop build tools
 
+The app uses Flutter's default rendering engine. Since Flutter 3.47, Impeller is
+the default renderer on macOS, Windows, and Linux (Metal on macOS, Vulkan on
+Windows/Linux), so no explicit renderer configuration is needed. Do not force
+Skia or disable Impeller without a documented reason.
+
 Linux build dependencies on Arch/CachyOS:
 
 ```bash
