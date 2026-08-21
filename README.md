@@ -100,6 +100,12 @@ the default renderer on macOS, Windows, and Linux (Metal on macOS, Vulkan on
 Windows/Linux), so no explicit renderer configuration is needed. Do not force
 Skia or disable Impeller without a documented reason.
 
+The UI imports Material symbols from the standalone `material_ui` /
+`cupertino_ui` packages instead of the copies bundled in the Flutter SDK
+(deprecated in the November 2026 stable). While forui still consumes the
+bundled SDK Material internally, `MaterialUiCompatibilityBridge` bridges the
+standalone theme down to it; remove that bridge once forui migrates.
+
 Linux build dependencies on Arch/CachyOS:
 
 ```bash

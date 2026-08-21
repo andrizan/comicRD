@@ -8,7 +8,7 @@ import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
 import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -1,8 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
@@ -81,37 +80,48 @@ class ComicRdApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       locale: Locale(settings.localeCode),
       supportedLocales: const [Locale('en'), Locale('id')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       themeMode: settings.themeMode,
-      theme: ComicReaderFTheme.light.toApproximateMaterialTheme().copyWith(
-        extensions: [
-          ...ComicReaderFTheme.light
-              .toApproximateMaterialTheme()
-              .extensions
-              .values,
-          ComicReaderColors.light,
-        ],
-      ),
-      darkTheme: ComicReaderFTheme.dark.toApproximateMaterialTheme().copyWith(
-        extensions: [
-          ...ComicReaderFTheme.dark
-              .toApproximateMaterialTheme()
-              .extensions
-              .values,
-          ComicReaderColors.dark,
-        ],
-      ),
+      theme: _materialTheme(ComicReaderFTheme.light, ComicReaderColors.light),
+      darkTheme: _materialTheme(ComicReaderFTheme.dark, ComicReaderColors.dark),
       routerConfig: _router,
       builder: (context, child) => FTheme(
         data: fTheme,
-        child: FToaster(child: FTooltipGroup(child: child!)),
+        child: FToaster(
+          child: FTooltipGroup(
+            // Bridges the modern material_ui theme down to legacy SDK
+            // Material for dependencies (forui) that still import
+            // package:flutter/material.dart. Remove once they migrate.
+            // ignore: deprecated_member_use
+            child: MaterialUiCompatibilityBridge(child: child!),
+          ),
+        ),
       ),
     );
   }
+}
+
+/// Mirrors forui's `FThemeData.toApproximateMaterialTheme` with modern
+/// `material_ui` types so the root theme and the [ComicReaderColors]
+/// extension share one type universe.
+ThemeData _materialTheme(FThemeData f, ComicReaderColors readerColors) {
+  return ThemeData(
+    colorScheme: ColorScheme(
+      brightness: f.colors.brightness,
+      primary: f.colors.primary,
+      onPrimary: f.colors.primaryForeground,
+      secondary: f.colors.secondary,
+      onSecondary: f.colors.secondaryForeground,
+      error: f.colors.error,
+      onError: f.colors.errorForeground,
+      surface: f.colors.background,
+      onSurface: f.colors.foreground,
+      secondaryContainer: f.colors.secondary,
+      onSecondaryContainer: f.colors.secondaryForeground,
+    ),
+    fontFamily: appFontFamily,
+    extensions: [readerColors],
+  );
 }
 
 class ComicRdShell extends ConsumerStatefulWidget {
