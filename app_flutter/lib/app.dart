@@ -322,7 +322,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
   }
 }
 
-class _Sidebar extends StatelessWidget {
+class _Sidebar extends StatefulWidget {
   const _Sidebar({
     required this.collapsed,
     required this.onToggleCollapse,
@@ -342,44 +342,60 @@ class _Sidebar extends StatelessWidget {
   final ValueChanged<SidebarTab> onSelectTab;
 
   @override
+  State<_Sidebar> createState() => _SidebarState();
+}
+
+class _SidebarState extends State<_Sidebar> {
+  // Hover state lives at the sidebar level so it survives any rebuild of the
+  // shell (e.g. settings hydration, count updates) and is not coupled to
+  // individual nav item widgets that may be re-created during parent
+  // reconciliation. This prevents the cursor-above-but-hover-cleared bug.
+  int? _hoveredIndex;
+
+  void _setHovered(int? index) {
+    if (_hoveredIndex == index) return;
+    setState(() => _hoveredIndex = index);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOutCubic,
       clipBehavior: Clip.hardEdge,
-      width: collapsed ? 72.0 : 260.0,
+      width: widget.collapsed ? 72.0 : 260.0,
       decoration: BoxDecoration(
         color: colors.card,
         border: Border(right: BorderSide(color: colors.border)),
       ),
       padding: EdgeInsets.fromLTRB(
-        collapsed ? 8 : 16,
+        widget.collapsed ? 8 : 16,
         24,
-        collapsed ? 8 : 16,
+        widget.collapsed ? 8 : 16,
         24,
       ),
       child: Column(
-        crossAxisAlignment: collapsed
+        crossAxisAlignment: widget.collapsed
             ? CrossAxisAlignment.center
             : CrossAxisAlignment.start,
         children: [
           _SidebarBrand(
-            collapsed: collapsed,
-            onToggleCollapse: onToggleCollapse,
-            text: text,
+            collapsed: widget.collapsed,
+            onToggleCollapse: widget.onToggleCollapse,
+            text: widget.text,
           ),
           const SizedBox(height: 32),
           AnimatedSize(
             duration: const Duration(milliseconds: 200),
             alignment: Alignment.topLeft,
             curve: Curves.easeOutCubic,
-            child: collapsed
+            child: widget.collapsed
                 ? const SizedBox.shrink()
                 : Padding(
                     padding: const EdgeInsets.only(left: 12, bottom: 12),
                     child: Text(
-                      text.menu.toUpperCase(),
+                      widget.text.menu.toUpperCase(),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -391,29 +407,38 @@ class _Sidebar extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _SidebarNavItem(
-            collapsed: collapsed,
+            index: 0,
+            collapsed: widget.collapsed,
             icon: AppIcons.library,
-            label: text.library,
-            count: libraryCount,
-            selected: selectedTab == SidebarTab.library,
-            onTap: () => onSelectTab(SidebarTab.library),
+            label: widget.text.library,
+            count: widget.libraryCount,
+            selected: widget.selectedTab == SidebarTab.library,
+            hovered: _hoveredIndex == 0,
+            onHoverChanged: _setHovered,
+            onTap: () => widget.onSelectTab(SidebarTab.library),
           ),
           const SizedBox(height: 4),
           _SidebarNavItem(
-            collapsed: collapsed,
+            index: 1,
+            collapsed: widget.collapsed,
             icon: AppIcons.history,
-            label: text.history,
-            selected: selectedTab == SidebarTab.history,
-            onTap: () => onSelectTab(SidebarTab.history),
+            label: widget.text.history,
+            selected: widget.selectedTab == SidebarTab.history,
+            hovered: _hoveredIndex == 1,
+            onHoverChanged: _setHovered,
+            onTap: () => widget.onSelectTab(SidebarTab.history),
           ),
           const SizedBox(height: 4),
           _SidebarNavItem(
-            collapsed: collapsed,
+            index: 2,
+            collapsed: widget.collapsed,
             icon: AppIcons.star,
-            label: text.favorites,
-            count: favoriteCount,
-            selected: selectedTab == SidebarTab.favorites,
-            onTap: () => onSelectTab(SidebarTab.favorites),
+            label: widget.text.favorites,
+            count: widget.favoriteCount,
+            selected: widget.selectedTab == SidebarTab.favorites,
+            hovered: _hoveredIndex == 2,
+            onHoverChanged: _setHovered,
+            onTap: () => widget.onSelectTab(SidebarTab.favorites),
           ),
           const Spacer(),
           const SizedBox(height: 4),
@@ -421,12 +446,12 @@ class _Sidebar extends StatelessWidget {
             duration: const Duration(milliseconds: 200),
             alignment: Alignment.topLeft,
             curve: Curves.easeOutCubic,
-            child: collapsed
+            child: widget.collapsed
                 ? const SizedBox.shrink()
                 : Padding(
                     padding: const EdgeInsets.only(left: 12, bottom: 12),
                     child: Text(
-                      text.settings.toUpperCase(),
+                      widget.text.settings.toUpperCase(),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -437,11 +462,14 @@ class _Sidebar extends StatelessWidget {
                   ),
           ),
           _SidebarNavItem(
-            collapsed: collapsed,
+            index: 3,
+            collapsed: widget.collapsed,
             icon: AppIcons.settings,
-            label: text.settings,
-            selected: selectedTab == SidebarTab.settings,
-            onTap: () => onSelectTab(SidebarTab.settings),
+            label: widget.text.settings,
+            selected: widget.selectedTab == SidebarTab.settings,
+            hovered: _hoveredIndex == 3,
+            onHoverChanged: _setHovered,
+            onTap: () => widget.onSelectTab(SidebarTab.settings),
           ),
         ],
       ),
@@ -506,53 +534,57 @@ class _SidebarBrand extends StatelessWidget {
   }
 }
 
-class _SidebarNavItem extends StatefulWidget {
+class _SidebarNavItem extends StatelessWidget {
   const _SidebarNavItem({
+    required this.index,
     required this.collapsed,
     required this.icon,
     required this.label,
-    this.count,
     required this.selected,
+    required this.hovered,
+    required this.onHoverChanged,
     required this.onTap,
+    this.count,
   });
 
+  final int index;
   final bool collapsed;
   final IconData icon;
   final String label;
   final int? count;
   final bool selected;
+  final bool hovered;
+  final ValueChanged<int?> onHoverChanged;
   final VoidCallback onTap;
-
-  @override
-  State<_SidebarNavItem> createState() => _SidebarNavItemState();
-}
-
-class _SidebarNavItemState extends State<_SidebarNavItem> {
-  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
+    // MouseRegion lives around the whole row so the hover state is owned by
+    // the sidebar, not by this widget. This guarantees the hover highlight
+    // persists even when the shell rebuilds (settings hydration, count
+    // changes, etc.) which used to reset the cursor-on-but-not-hovered
+    // visual on the nav items.
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      opaque: true,
+      onEnter: (_) => onHoverChanged(index),
+      onExit: (_) {
+        if (hovered) onHoverChanged(null);
+      },
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
+        onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.collapsed ? 12 : 12,
-            vertical: 10,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           clipBehavior: Clip.hardEdge,
           decoration: BoxDecoration(
-            color: widget.selected
+            color: selected
                 ? colors.secondary
-                : _hovered
-                ? colors.muted.withValues(alpha: 0.5)
+                : hovered
+                ? colors.secondary.withValues(alpha: 0.55)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
@@ -564,7 +596,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                     ? MainAxisAlignment.center
                     : MainAxisAlignment.start,
                 children: [
-                  if (widget.selected && hasSpace)
+                  if (selected && hasSpace)
                     Container(
                       width: 3,
                       height: 18,
@@ -577,28 +609,24 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                   else if (hasSpace)
                     const SizedBox(width: 12),
                   Icon(
-                    widget.icon,
+                    icon,
                     size: 20,
-                    color: widget.selected
-                        ? colors.primary
-                        : colors.mutedForeground,
+                    color: selected ? colors.primary : colors.mutedForeground,
                   ),
                   if (hasSpace) ...[
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        widget.label,
+                        label,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: widget.selected
-                              ? colors.primary
-                              : colors.foreground,
+                          color: selected ? colors.primary : colors.foreground,
                         ),
                       ),
                     ),
-                    if (widget.count != null && widget.count! > 0)
+                    if (count != null && count! > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -609,7 +637,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          '${widget.count}',
+                          '$count',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
