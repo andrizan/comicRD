@@ -33,20 +33,30 @@ class _WindowListener extends WindowListener {
 
   @override
   void onWindowClose() async {
+    // Bounded cleanup so window close on Windows doesn't freeze
+    // for seconds (WAL TRUNCATE + FRB dispose are slow on NTFS/Defender).
     final chapterId = ReaderSaveGuard.chapterId;
     if (chapterId != null) {
       try {
-        await bridge.saveProgress(
-          payload: bridge.SaveProgressPayload(
-            chapterId: chapterId,
-            lastPage: ReaderSaveGuard.lastPage,
-            totalPages: ReaderSaveGuard.totalPages,
-            isRead: ReaderSaveGuard.lastPage >= ReaderSaveGuard.totalPages - 1,
-          ),
-        );
+        await bridge
+            .saveProgress(
+              payload: bridge.SaveProgressPayload(
+                chapterId: chapterId,
+                lastPage: ReaderSaveGuard.lastPage,
+                totalPages: ReaderSaveGuard.totalPages,
+                isRead:
+                    ReaderSaveGuard.lastPage >= ReaderSaveGuard.totalPages - 1,
+              ),
+            )
+            .timeout(const Duration(milliseconds: 400));
       } catch (_) {}
     }
-    await onClose();
+    try {
+      await onClose().timeout(const Duration(milliseconds: 800));
+    } catch (_) {
+      // Timeout or error: still destroy window. The original
+      // onClose future keeps running in background (timeout doesn't cancel it).
+    }
     await windowManager.destroy();
   }
 }

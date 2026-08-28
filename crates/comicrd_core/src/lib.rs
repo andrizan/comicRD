@@ -314,8 +314,12 @@ impl ComicRdCore {
 
     pub fn shutdown(&self) {
         self.cancel_token.store(true, Ordering::SeqCst);
-        if let Ok(conn) = self.conn.lock() {
-            let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        // Windows: TRUNCATE needs exclusive lock + fsync and can stall
+        // close for seconds on NTFS/Defender. Use non-blocking PASSIVE
+        // checkpoint so window destroy is not held hostage. WAL will be
+        // recovered on next open; TRUNCATE is not required for correctness.
+        if let Ok(conn) = self.conn.try_lock() {
+            let _ = conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);");
         }
     }
 
