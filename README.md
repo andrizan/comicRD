@@ -39,12 +39,14 @@ The main Flutter/Rust application flows are implemented, including library
 listing, scan, chapter discovery, reader flow, progress, bookmarks, history,
 settings, backup/import, comic thumbnails, and database maintenance
 (Optimize Data). Recent work has focused on UI polish (library/history/detail
-covers, selectable metadata, open-folder action), performance (persistent
-thumbnail cache, bounded reader memory), schema cleanup (dropping unused
-columns), and dependency updates. Linux packaging is available and the
-application has been smoke tested directly on Windows and Linux. The macOS
-build target is present, but still needs a native macOS smoke test before
-release claims for that platform.
+covers, selectable metadata, open-folder action, stable sidebar hover state),
+performance (persistent thumbnail cache, bounded reader memory), schema cleanup
+(dropping unused columns), framework migration to the standalone
+`material_ui` package ahead of the November 2026 SDK Material deprecation, and
+dependency updates (flutter_rust_bridge 2.13, forui 0.26, go_router 18). Linux
+packaging is available and the application has been smoke tested directly on
+Windows and Linux. The macOS build target is present, but still needs a native
+macOS smoke test before release claims for that platform.
 
 ## Install
 
@@ -72,8 +74,8 @@ Download the Linux tarball from GitHub Releases, extract it, and run the bundled
 executable:
 
 ```bash
-tar -xzf comicrd-2.5.0-linux-x86_64.tar.gz
-./comicrd-2.5.0-linux-x86_64/opt/comicrd/ComicRD
+tar -xzf comicrd-2.7.0-linux-x86_64.tar.gz
+./comicrd-2.7.0-linux-x86_64/opt/comicrd/ComicRD
 ```
 
 ### Local Pacman Package
@@ -81,8 +83,8 @@ tar -xzf comicrd-2.5.0-linux-x86_64.tar.gz
 On Arch-based systems, a local install package can be created from source:
 
 ```bash
-./scripts/package-arch-local.sh 2.5.0
-sudo pacman -U dist/arch/comicrd-bin-2.5.0-1-x86_64.pkg.tar.zst
+./scripts/package-arch-local.sh 2.7.0
+sudo pacman -U dist/arch/comicrd-bin-2.7.0-1-x86_64.pkg.tar.zst
 ```
 
 ## Build From Source
@@ -90,8 +92,8 @@ sudo pacman -U dist/arch/comicrd-bin-2.5.0-1-x86_64.pkg.tar.zst
 ### Requirements
 
 - Flutter desktop SDK (3.47 or newer, Dart SDK ^3.12.1)
-- Rust toolchain, currently `rustc 1.97`
-- `flutter_rust_bridge_codegen` 2.12.0
+- Rust toolchain, currently `rustc 1.98`
+- `flutter_rust_bridge_codegen` 2.13.0
 - `cargo-expand`
 - Platform desktop build tools
 
@@ -143,7 +145,7 @@ Di GitHub Actions, vcpkg sudah tersedia otomatis via `$env:VCPKG_INSTALLATION_RO
 
 ```powershell
 scoop install meson nasm
-git clone --depth 1 --branch 1.5.0 https://code.videolan.org/videolan/dav1d.git C:\Users\<you>\dav1d-build
+git clone --depth 1 --branch 1.5.4 https://code.videolan.org/videolan/dav1d.git C:\Users\<you>\dav1d-build
 meson setup build --prefix=C:/Users/<you>/dav1d-install --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
 meson compile -C build
 meson install -C build
@@ -152,6 +154,10 @@ setx PKG_CONFIG_PATH "C:\Users\<you>\dav1d-install\lib\pkgconfig"
 
 After `setx`, open a **new terminal** so the variable takes effect. In the
 current terminal, run `$env:PKG_CONFIG_PATH = "C:\Users\<you>\dav1d-install\lib\pkgconfig"` instead.
+
+A scripted equivalent of the above is available at
+`scripts/setup-dav1d.ps1`; it builds and installs dav1d 1.5.4 to
+`%LOCALAPPDATA%\dav1d` and sets `PKG_CONFIG_PATH` to the user environment.
 
 **Persistent `PKG_CONFIG_PATH` via `.cargo/config.toml` (alternative to `setx`, Windows only)**
 
@@ -182,7 +188,7 @@ developers, each Windows developer should create the file locally.
 Install the bridge generator and helper tooling:
 
 ```bash
-cargo install flutter_rust_bridge_codegen --version 2.12.0
+cargo install flutter_rust_bridge_codegen --version 2.13.0
 cargo install cargo-expand
 ```
 
@@ -292,7 +298,7 @@ To build the Inno Setup installer (requires
 [Inno Setup](https://jrsoftware.org/isinfo.php) installed):
 
 ```bash
-ISCC.exe /D"AppVersion=2.5.0" app_flutter\windows\installer\comicrd-setup.iss
+ISCC.exe /D"AppVersion=2.7.0" app_flutter\windows\installer\comicrd-setup.iss
 ```
 
 The output is written to `dist/comicrd-{version}-windows-x86_64-setup.exe`.
@@ -311,13 +317,13 @@ flutter build macos --release
 Create the Linux release tarball used by GitHub Releases and AUR:
 
 ```bash
-./scripts/package-linux.sh 2.5.0
+./scripts/package-linux.sh 2.7.0
 ```
 
 The output is written to:
 
 ```text
-dist/comicrd-2.5.0-linux-x86_64.tar.gz
+dist/comicrd-2.7.0-linux-x86_64.tar.gz
 ```
 
 ## Repository Layout
