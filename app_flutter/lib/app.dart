@@ -87,11 +87,7 @@ class ComicRdApp extends ConsumerWidget {
       routerConfig: _router,
       builder: (context, child) => FTheme(
         data: fTheme,
-        child: FToaster(
-          child: FTooltipGroup(
-            child: child!,
-          ),
-        ),
+        child: FToaster(child: FTooltipGroup(child: child!)),
       ),
     );
   }
