@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
@@ -33,6 +35,11 @@ class _WindowListener extends WindowListener {
 
   @override
   void onWindowClose() async {
+    // Hide the window FIRST so the close feels instant to the user. All
+    // cleanup below then happens while an invisible window is being torn
+    // down, instead of the user staring at a frozen window.
+    unawaited(windowManager.hide());
+
     // Bounded cleanup so window close on Windows doesn't freeze
     // for seconds (WAL TRUNCATE + FRB dispose are slow on NTFS/Defender).
     final chapterId = ReaderSaveGuard.chapterId;
@@ -57,6 +64,6 @@ class _WindowListener extends WindowListener {
       // Timeout or error: still destroy window. The original
       // onClose future keeps running in background (timeout doesn't cancel it).
     }
-    await windowManager.destroy();
+    unawaited(windowManager.destroy());
   }
 }

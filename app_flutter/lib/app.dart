@@ -89,11 +89,7 @@ class ComicRdApp extends ConsumerWidget {
         data: fTheme,
         child: FToaster(
           child: FTooltipGroup(
-            // Bridges the modern material_ui theme down to legacy SDK
-            // Material for dependencies (forui) that still import
-            // package:flutter/material.dart. Remove once they migrate.
-            // ignore: deprecated_member_use
-            child: MaterialUiCompatibilityBridge(child: child!),
+            child: child!,
           ),
         ),
       ),
