@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -14352141;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 768190577;
 
 // Section: executor
 
@@ -1102,7 +1102,7 @@ fn wire__crate__api__optimize_database_impl(
         },
     )
 }
-fn wire__crate__api__prefetch_pages_impl(
+fn wire__crate__api__prefetch_tiles_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1110,7 +1110,7 @@ fn wire__crate__api__prefetch_pages_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "prefetch_pages",
+            debug_name: "prefetch_tiles",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -1124,11 +1124,11 @@ fn wire__crate__api__prefetch_pages_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_payload = <crate::api::PrefetchPagesPayload>::sse_decode(&mut deserializer);
+            let api_payload = <crate::api::PrefetchTilesPayload>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::prefetch_pages(api_payload)?;
+                    let output_ok = crate::api::prefetch_tiles(api_payload)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1266,7 +1266,7 @@ fn wire__crate__api__remove_page_bookmark_impl(
         },
     )
 }
-fn wire__crate__api__render_page_variant_impl(
+fn wire__crate__api__render_page_tile_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1274,7 +1274,7 @@ fn wire__crate__api__render_page_variant_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "render_page_variant",
+            debug_name: "render_page_tile",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -1288,11 +1288,11 @@ fn wire__crate__api__render_page_variant_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_payload = <crate::api::RenderPagePayload>::sse_decode(&mut deserializer);
+            let api_payload = <crate::api::RenderPageTilePayload>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::render_page_variant(api_payload)?;
+                    let output_ok = crate::api::render_page_tile(api_payload)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1640,6 +1640,18 @@ impl SseDecode for Vec<crate::api::PageInfo> {
     }
 }
 
+impl SseDecode for Vec<crate::api::PageTile> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::PageTile>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1856,23 +1868,37 @@ impl SseDecode for crate::api::PageInfo {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_width = <Option<u32>>::sse_decode(deserializer);
         let mut var_height = <Option<u32>>::sse_decode(deserializer);
+        let mut var_tileHeights = <Vec<u32>>::sse_decode(deserializer);
         return crate::api::PageInfo {
             index: var_index,
             name: var_name,
             width: var_width,
             height: var_height,
+            tile_heights: var_tileHeights,
         };
     }
 }
 
-impl SseDecode for crate::api::PrefetchPagesPayload {
+impl SseDecode for crate::api::PageTile {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_pageIndex = <u32>::sse_decode(deserializer);
+        let mut var_tileIndex = <u32>::sse_decode(deserializer);
+        return crate::api::PageTile {
+            page_index: var_pageIndex,
+            tile_index: var_tileIndex,
+        };
+    }
+}
+
+impl SseDecode for crate::api::PrefetchTilesPayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_chapterId = <i64>::sse_decode(deserializer);
-        let mut var_pageIndices = <Vec<u32>>::sse_decode(deserializer);
-        return crate::api::PrefetchPagesPayload {
+        let mut var_tiles = <Vec<crate::api::PageTile>>::sse_decode(deserializer);
+        return crate::api::PrefetchTilesPayload {
             chapter_id: var_chapterId,
-            page_indices: var_pageIndices,
+            tiles: var_tiles,
         };
     }
 }
@@ -1973,14 +1999,16 @@ impl SseDecode for crate::api::ReadingProgress {
     }
 }
 
-impl SseDecode for crate::api::RenderPagePayload {
+impl SseDecode for crate::api::RenderPageTilePayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_chapterId = <i64>::sse_decode(deserializer);
         let mut var_pageIndex = <u32>::sse_decode(deserializer);
-        return crate::api::RenderPagePayload {
+        let mut var_tileIndex = <u32>::sse_decode(deserializer);
+        return crate::api::RenderPageTilePayload {
             chapter_id: var_chapterId,
             page_index: var_pageIndex,
+            tile_index: var_tileIndex,
         };
     }
 }
@@ -2155,12 +2183,12 @@ fn pde_ffi_dispatcher_primary_impl(
         30 => wire__crate__api__open_chapter_for_reading_impl(port, ptr, rust_vec_len, data_len),
         31 => wire__crate__api__open_containing_folder_impl(port, ptr, rust_vec_len, data_len),
         32 => wire__crate__api__optimize_database_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__prefetch_pages_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__prefetch_tiles_impl(port, ptr, rust_vec_len, data_len),
         34 => wire__crate__api__purge_caches_impl(port, ptr, rust_vec_len, data_len),
         35 => wire__crate__api__remove_bookmark_impl(port, ptr, rust_vec_len, data_len),
         36 => wire__crate__api__remove_favorite_impl(port, ptr, rust_vec_len, data_len),
         37 => wire__crate__api__remove_page_bookmark_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__render_page_variant_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__render_page_tile_impl(port, ptr, rust_vec_len, data_len),
         39 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
         40 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
         41 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
@@ -2392,6 +2420,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::PageInfo {
             self.name.into_into_dart().into_dart(),
             self.width.into_into_dart().into_dart(),
             self.height.into_into_dart().into_dart(),
+            self.tile_heights.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2403,23 +2432,39 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::PageInfo> for crate::api::Pag
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PrefetchPagesPayload {
+impl flutter_rust_bridge::IntoDart for crate::api::PageTile {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.page_index.into_into_dart().into_dart(),
+            self.tile_index.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PageTile {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::PageTile> for crate::api::PageTile {
+    fn into_into_dart(self) -> crate::api::PageTile {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::PrefetchTilesPayload {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.chapter_id.into_into_dart().into_dart(),
-            self.page_indices.into_into_dart().into_dart(),
+            self.tiles.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::PrefetchPagesPayload
+    for crate::api::PrefetchTilesPayload
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PrefetchPagesPayload>
-    for crate::api::PrefetchPagesPayload
+impl flutter_rust_bridge::IntoIntoDart<crate::api::PrefetchTilesPayload>
+    for crate::api::PrefetchTilesPayload
 {
-    fn into_into_dart(self) -> crate::api::PrefetchPagesPayload {
+    fn into_into_dart(self) -> crate::api::PrefetchTilesPayload {
         self
     }
 }
@@ -2519,20 +2564,24 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ReadingProgress>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::RenderPagePayload {
+impl flutter_rust_bridge::IntoDart for crate::api::RenderPageTilePayload {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.chapter_id.into_into_dart().into_dart(),
             self.page_index.into_into_dart().into_dart(),
+            self.tile_index.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::RenderPagePayload {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::RenderPagePayload>
-    for crate::api::RenderPagePayload
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::RenderPageTilePayload
 {
-    fn into_into_dart(self) -> crate::api::RenderPagePayload {
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::RenderPageTilePayload>
+    for crate::api::RenderPageTilePayload
+{
+    fn into_into_dart(self) -> crate::api::RenderPageTilePayload {
         self
     }
 }
@@ -2830,6 +2879,16 @@ impl SseEncode for Vec<crate::api::PageInfo> {
     }
 }
 
+impl SseEncode for Vec<crate::api::PageTile> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::PageTile>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -3003,14 +3062,23 @@ impl SseEncode for crate::api::PageInfo {
         <String>::sse_encode(self.name, serializer);
         <Option<u32>>::sse_encode(self.width, serializer);
         <Option<u32>>::sse_encode(self.height, serializer);
+        <Vec<u32>>::sse_encode(self.tile_heights, serializer);
     }
 }
 
-impl SseEncode for crate::api::PrefetchPagesPayload {
+impl SseEncode for crate::api::PageTile {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.page_index, serializer);
+        <u32>::sse_encode(self.tile_index, serializer);
+    }
+}
+
+impl SseEncode for crate::api::PrefetchTilesPayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.chapter_id, serializer);
-        <Vec<u32>>::sse_encode(self.page_indices, serializer);
+        <Vec<crate::api::PageTile>>::sse_encode(self.tiles, serializer);
     }
 }
 
@@ -3070,11 +3138,12 @@ impl SseEncode for crate::api::ReadingProgress {
     }
 }
 
-impl SseEncode for crate::api::RenderPagePayload {
+impl SseEncode for crate::api::RenderPageTilePayload {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.chapter_id, serializer);
         <u32>::sse_encode(self.page_index, serializer);
+        <u32>::sse_encode(self.tile_index, serializer);
     }
 }
 

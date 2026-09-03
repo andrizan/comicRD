@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -388,16 +387,15 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     final maxPage = chapter.totalPages > 0
         ? chapter.totalPages
         : chapter.pageCount;
-    final pages = [
+    // Warm tile 0 of the first pages: covers the visible start without an
+    // extra tile-layout roundtrip; the reader window prefetches the rest.
+    final tiles = [
       for (var index = start; index < maxPage && index < start + 4; index++)
-        index,
+        bridge.PageTile(pageIndex: index, tileIndex: 0),
     ];
-    if (pages.isNotEmpty) {
-      await api.prefetchPages(
-        bridge.PrefetchPagesPayload(
-          chapterId: chapterId,
-          pageIndices: Uint32List.fromList(pages.cast<int>()),
-        ),
+    if (tiles.isNotEmpty) {
+      await api.prefetchTiles(
+        bridge.PrefetchTilesPayload(chapterId: chapterId, tiles: tiles),
       );
     }
 

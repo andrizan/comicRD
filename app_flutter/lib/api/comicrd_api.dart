@@ -77,12 +77,12 @@ class ComicRdApi {
   Future<List<bridge.PageInfo>> getChapterPages(int chapterId) =>
       bridge.getChapterPages(chapterId: chapterId);
 
-  Future<bridge.RenderedPage> renderPageVariant(
-    bridge.RenderPagePayload payload,
-  ) => bridge.renderPageVariant(payload: payload);
+  Future<bridge.RenderedPage> renderPageTile(
+    bridge.RenderPageTilePayload payload,
+  ) => bridge.renderPageTile(payload: payload);
 
-  Future<void> prefetchPages(bridge.PrefetchPagesPayload payload) =>
-      bridge.prefetchPages(payload: payload);
+  Future<void> prefetchTiles(bridge.PrefetchTilesPayload payload) =>
+      bridge.prefetchTiles(payload: payload);
 
   Future<void> evictChapterPages({
     required int chapterId,

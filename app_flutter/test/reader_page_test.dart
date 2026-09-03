@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:comicrd_flutter/api/comicrd_api.dart';
@@ -22,9 +23,7 @@ void main() {
         : MaterialApp.router(routerConfig: router);
     return FTheme(
       data: ComicReaderFTheme.light,
-      child: FToaster(
-        child: FTooltipGroup(child: core),
-      ),
+      child: FToaster(child: FTooltipGroup(child: core)),
     );
   }
 
@@ -336,7 +335,7 @@ void main() {
     expect(api.loadedChapterIds, contains(8));
     expect(api.loadedChapterIds, isNot(contains(7)));
 
-    final scrollableCenter = tester.getCenter(find.byType(ListView));
+    final scrollableCenter = tester.getCenter(find.byType(CustomScrollView));
     tester.binding.handlePointerEvent(
       PointerScrollEvent(
         position: scrollableCenter,
@@ -481,6 +480,83 @@ void main() {
       )),
     );
   });
+
+  testWidgets('multi-tile strip renders tiles but saves page-based progress', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(
+      lastPage: 0,
+      pageCount: 2,
+      pageHeight: 5000,
+      tileHeightsList: {
+        0: [2048, 2048, 904],
+      },
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: wrap(const ReaderPage(chapterId: 7)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // First tile of the strip renders on open.
+    expect(api.renderedTiles, contains((0, 0)));
+
+    await tester.tap(find.byTooltip('Next Page'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Jump lands on the first tile of page 1, and progress saves the
+    // page index (1), not a tile index (which would be 3).
+    expect(api.renderedTiles, contains((1, 0)));
+    expect(api.savedProgress, isNotEmpty);
+    expect(api.savedProgress.last.lastPage, 1);
+  });
+
+  testWidgets('scroll extent stays stable while scrolling', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(lastPage: 0, pageCount: 9);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: wrap(const ReaderPage(chapterId: 7)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    double maxExtent() {
+      final scrollable = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      return scrollable.position.maxScrollExtent;
+    }
+
+    // The delegate reports the exact total, so maxScrollExtent must not
+    // wobble (estimated totals made the scrollbar thumb jump).
+    final before = maxExtent();
+    for (var i = 0; i < 4; i++) {
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(maxExtent(), moreOrLessEquals(before, epsilon: 1.0));
+    }
+  });
 }
 
 class _ReaderFakeComicRdApi extends ComicRdApi {
@@ -488,6 +564,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     required this.lastPage,
     required this.pageCount,
     this.pageHeight = 1300,
+    this.tileHeightsList = const {},
     this.nextChapterIds = const {},
     this.prevChapterIds = const {},
     this.unlimitedScroll = false,
@@ -498,12 +575,14 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   final int lastPage;
   final int pageCount;
   final int pageHeight;
+  final Map<int, List<int>> tileHeightsList;
   final Map<int, int> nextChapterIds;
   final Map<int, int> prevChapterIds;
   final bool unlimitedScroll;
   final bool unlimitedScrollUp;
   final Completer<void>? prefetchGate;
   final renderedPageIndices = <int>[];
+  final renderedTiles = <(int, int)>[];
   final prefetchedWindows = <List<int>>[];
   final evictedWindows = <List<int>>[];
   final savedProgress = <bridge.SaveProgressPayload>[];
@@ -562,6 +641,9 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
           name: '${index + 1}.png',
           width: 900,
           height: pageHeight,
+          tileHeights: Uint32List.fromList(
+            tileHeightsList[index] ?? [pageHeight],
+          ),
         ),
     ];
     loadedPageEntries = pages.length;
@@ -579,20 +661,25 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   }
 
   @override
-  Future<bridge.RenderedPage> renderPageVariant(
-    bridge.RenderPagePayload payload,
+  Future<bridge.RenderedPage> renderPageTile(
+    bridge.RenderPageTilePayload payload,
   ) async {
     renderedPageIndices.add(payload.pageIndex);
+    renderedTiles.add((payload.pageIndex, payload.tileIndex));
+    final heights = tileHeightsList[payload.pageIndex];
+    final height = heights != null && payload.tileIndex < heights.length
+        ? heights[payload.tileIndex]
+        : pageHeight;
     return bridge.RenderedPage(
       bytes: Uint8List.fromList(_onePixelPng),
       mime: 'image/png',
       width: 900,
-      height: pageHeight,
+      height: height,
     );
   }
 
   @override
-  Future<void> prefetchPages(bridge.PrefetchPagesPayload payload) async {
+  Future<void> prefetchTiles(bridge.PrefetchTilesPayload payload) async {
     events.add('prefetch-start-${payload.chapterId}');
     final gate = prefetchGate;
     if (gate != null && !_prefetchGateUsed && payload.chapterId == 7) {
@@ -600,7 +687,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       await gate.future;
     }
     events.add('prefetch-complete-${payload.chapterId}');
-    prefetchedWindows.add(payload.pageIndices.toList());
+    prefetchedWindows.add([for (final tile in payload.tiles) tile.pageIndex]);
   }
 
   @override

@@ -34,7 +34,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OpenChapterPayload dco_decode_box_autoadd_open_chapter_payload(dynamic raw);
 
   @protected
-  PrefetchPagesPayload dco_decode_box_autoadd_prefetch_pages_payload(
+  PrefetchTilesPayload dco_decode_box_autoadd_prefetch_tiles_payload(
     dynamic raw,
   );
 
@@ -42,7 +42,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress dco_decode_box_autoadd_reading_progress(dynamic raw);
 
   @protected
-  RenderPagePayload dco_decode_box_autoadd_render_page_payload(dynamic raw);
+  RenderPageTilePayload dco_decode_box_autoadd_render_page_tile_payload(
+    dynamic raw,
+  );
 
   @protected
   SavePageBookmarkPayload dco_decode_box_autoadd_save_page_bookmark_payload(
@@ -101,6 +103,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PageInfo> dco_decode_list_page_info(dynamic raw);
 
   @protected
+  List<PageTile> dco_decode_list_page_tile(dynamic raw);
+
+  @protected
   List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
   @protected
@@ -155,7 +160,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageInfo dco_decode_page_info(dynamic raw);
 
   @protected
-  PrefetchPagesPayload dco_decode_prefetch_pages_payload(dynamic raw);
+  PageTile dco_decode_page_tile(dynamic raw);
+
+  @protected
+  PrefetchTilesPayload dco_decode_prefetch_tiles_payload(dynamic raw);
 
   @protected
   RawChapter dco_decode_raw_chapter(dynamic raw);
@@ -170,7 +178,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress dco_decode_reading_progress(dynamic raw);
 
   @protected
-  RenderPagePayload dco_decode_render_page_payload(dynamic raw);
+  RenderPageTilePayload dco_decode_render_page_tile_payload(dynamic raw);
 
   @protected
   RenderedPage dco_decode_rendered_page(dynamic raw);
@@ -225,7 +233,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  PrefetchPagesPayload sse_decode_box_autoadd_prefetch_pages_payload(
+  PrefetchTilesPayload sse_decode_box_autoadd_prefetch_tiles_payload(
     SseDeserializer deserializer,
   );
 
@@ -235,7 +243,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RenderPagePayload sse_decode_box_autoadd_render_page_payload(
+  RenderPageTilePayload sse_decode_box_autoadd_render_page_tile_payload(
     SseDeserializer deserializer,
   );
 
@@ -308,6 +316,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PageInfo> sse_decode_list_page_info(SseDeserializer deserializer);
 
   @protected
+  List<PageTile> sse_decode_list_page_tile(SseDeserializer deserializer);
+
+  @protected
   List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
   @protected
@@ -378,7 +389,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageInfo sse_decode_page_info(SseDeserializer deserializer);
 
   @protected
-  PrefetchPagesPayload sse_decode_prefetch_pages_payload(
+  PageTile sse_decode_page_tile(SseDeserializer deserializer);
+
+  @protected
+  PrefetchTilesPayload sse_decode_prefetch_tiles_payload(
     SseDeserializer deserializer,
   );
 
@@ -397,7 +411,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress sse_decode_reading_progress(SseDeserializer deserializer);
 
   @protected
-  RenderPagePayload sse_decode_render_page_payload(
+  RenderPageTilePayload sse_decode_render_page_tile_payload(
     SseDeserializer deserializer,
   );
 
@@ -463,8 +477,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_box_autoadd_prefetch_pages_payload(
-    PrefetchPagesPayload self,
+  void sse_encode_box_autoadd_prefetch_tiles_payload(
+    PrefetchTilesPayload self,
     SseSerializer serializer,
   );
 
@@ -475,8 +489,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_box_autoadd_render_page_payload(
-    RenderPagePayload self,
+  void sse_encode_box_autoadd_render_page_tile_payload(
+    RenderPageTilePayload self,
     SseSerializer serializer,
   );
 
@@ -560,6 +574,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_page_info(List<PageInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_page_tile(List<PageTile> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_32_loose(
@@ -655,8 +672,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_page_info(PageInfo self, SseSerializer serializer);
 
   @protected
-  void sse_encode_prefetch_pages_payload(
-    PrefetchPagesPayload self,
+  void sse_encode_page_tile(PageTile self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_prefetch_tiles_payload(
+    PrefetchTilesPayload self,
     SseSerializer serializer,
   );
 
@@ -679,8 +699,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_render_page_payload(
-    RenderPagePayload self,
+  void sse_encode_render_page_tile_payload(
+    RenderPageTilePayload self,
     SseSerializer serializer,
   );
 

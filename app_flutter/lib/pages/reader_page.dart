@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/rendering.dart'
+    show ItemExtentBuilder, RenderSliverVariedExtentList, ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' as widgets;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -127,6 +127,70 @@ class _ReaderPageLayout {
   }
 }
 
+/// Child delegate that reports the exact total scroll extent instead of
+/// letting the framework extrapolate it from laid-out children.
+///
+/// `RenderSliverVariedExtentList` only lays out children near the viewport
+/// and estimates the rest from their average, so `maxScrollExtent` wobbles
+/// every frame while scrolling (visible as a jumping scrollbar thumb).
+/// Our extents are pure math over Rust-provided tile heights, so the exact
+/// total is cheap to precompute and always wins the `min()` in layout.
+class _ExactTotalChildDelegate extends SliverChildBuilderDelegate {
+  _ExactTotalChildDelegate(
+    super.builder, {
+    required this.exactTotal,
+    super.childCount,
+  });
+
+  final double exactTotal;
+
+  @override
+  double? estimateMaxScrollOffset(
+    int firstIndex,
+    int lastIndex,
+    double leadingScrollOffset,
+    double trailingScrollOffset,
+  ) => exactTotal;
+}
+
+/// `SliverVariedExtentList` twin that accepts a custom child delegate.
+/// Behavior (laziness, keep-alives, repaint boundaries, semantics) matches
+/// `ListView.builder` defaults; only the extent estimation differs.
+class _ExactTotalSliverList extends SliverMultiBoxAdaptorWidget {
+  _ExactTotalSliverList({
+    required NullableIndexedWidgetBuilder itemBuilder,
+    required this.itemExtentBuilder,
+    required this.exactTotal,
+    required int itemCount,
+  }) : super(
+         delegate: _ExactTotalChildDelegate(
+           itemBuilder,
+           childCount: itemCount,
+           exactTotal: exactTotal,
+         ),
+       );
+
+  final ItemExtentBuilder itemExtentBuilder;
+  final double exactTotal;
+
+  @override
+  RenderSliverVariedExtentList createRenderObject(BuildContext context) {
+    final element = context as SliverMultiBoxAdaptorElement;
+    return RenderSliverVariedExtentList(
+      childManager: element,
+      itemExtentBuilder: itemExtentBuilder,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderSliverVariedExtentList renderObject,
+  ) {
+    renderObject.itemExtentBuilder = itemExtentBuilder;
+  }
+}
+
 class ReaderPage extends ConsumerStatefulWidget {
   const ReaderPage({super.key, required this.chapterId});
 
@@ -189,7 +253,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       unawaited(
         _releaseChapterMemory(
           chapterId: chapterId,
-          pageCount: data.pages.length,
+          pages: data.pages,
           invalidateRenderedPages: false,
         ),
       );
@@ -234,21 +298,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _lastReaderChapterId = null;
     }
     final oldChapterId = oldWidget.chapterId;
-    final oldPageCount = oldData?.pages.length;
+    final oldPages = oldData?.pages;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
       ref.invalidate(readerDataProvider(oldChapterId));
-      if (oldPageCount != null) {
-        _invalidateRenderedPages(oldChapterId, oldPageCount);
+      if (oldPages != null) {
+        _invalidateRenderedTiles(oldChapterId, oldPages);
       }
     });
     if (oldData != null) {
       unawaited(
         _releaseChapterMemory(
           chapterId: oldChapterId,
-          pageCount: oldData.pages.length,
+          pages: oldData.pages,
           invalidateRenderedPages: false,
         ),
       );
@@ -500,6 +564,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
     final readerSettings = ref.watch(readerSettingsProvider);
+    // Flattened tile list: one sliver item per tile. The grid depends
+    // only on Rust-provided tile_heights, never on zoom or display size.
+    final tiles = flattenTiles(data.pages);
+    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
+    // Exact total scroll extent (single source of truth with the per-item
+    // builder below). Reported to the framework via _ExactTotalChildDelegate
+    // so maxScrollExtent never wobbles from average-based estimation.
+    final totalExtent = _totalTilesExtent(
+      tiles,
+      data.pages,
+      readerSettings,
+      maxWidth,
+    );
     return widgets.RawScrollbar(
       controller: _scroll,
       thumbVisibility: true,
@@ -510,56 +587,140 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       thumbColor: const Color(0xff747474),
       trackColor: const Color(0xff050505),
       trackBorderColor: const Color(0xff050505),
-      child: ListView.builder(
+      child: CustomScrollView(
         controller: _scroll,
         scrollCacheExtent: const ScrollCacheExtent.pixels(1500),
-        itemExtentBuilder: (index, _) {
-          if (index < 0 || index >= data.pages.length) {
-            return null;
-          }
-          final pageGap = index == data.pages.length - 1
-              ? 0
-              : readerSettings.pageGap;
-          final prevPage = index > 0 ? data.pages[index - 1] : null;
-          return _pageDisplayHeight(
-                data.pages[index],
-                readerSettings.zoom,
-                prevPage: prevPage,
-                forcePortrait: readerSettings.forcePortrait,
-              ) +
-              pageGap;
-        },
-        padding: EdgeInsets.only(
-          top: _topPadding,
-          bottom: _bottomChromeHeight + readerSettings.pageGap,
-        ),
-        itemCount: data.pages.length,
-        itemBuilder: (context, index) =>
-            _readerPageListItem(data, readerSettings, index),
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.only(
+              top: _topPadding,
+              bottom: _bottomChromeHeight + readerSettings.pageGap,
+            ),
+            sliver: _ExactTotalSliverList(
+              itemBuilder: (context, index) =>
+                  _readerTileListItem(data, tiles, readerSettings, index),
+              itemExtentBuilder: (index, _) => _tileExtentAt(
+                tiles,
+                data.pages,
+                readerSettings,
+                maxWidth,
+                index,
+              ),
+              itemCount: tiles.length,
+              exactTotal: totalExtent,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _readerPageListItem(
+  /// Display extent of one tile item, or null beyond the list.
+  /// Single source of truth shared by the item builder and the exact total.
+  double? _tileExtentAt(
+    List<TileItem> tiles,
+    List<bridge.PageInfo> pages,
+    ReaderSettings readerSettings,
+    double maxWidth,
+    int index,
+  ) {
+    if (index < 0 || index >= tiles.length) {
+      return null;
+    }
+    final tile = tiles[index];
+    final layout = _tilePages(pages, tile);
+    return _tileDisplayHeight(
+          tile: tile,
+          page: layout.page,
+          zoom: readerSettings.zoom,
+          maxWidth: maxWidth,
+          prevPage: layout.prevPage,
+          forcePortrait: readerSettings.forcePortrait,
+        ) +
+        _tileGap(tiles, index, readerSettings.pageGap);
+  }
+
+  double _totalTilesExtent(
+    List<TileItem> tiles,
+    List<bridge.PageInfo> pages,
+    ReaderSettings readerSettings,
+    double maxWidth,
+  ) {
+    var total = _topPadding + _bottomChromeHeight + readerSettings.pageGap;
+    for (var i = 0; i < tiles.length; i++) {
+      total += _tileExtentAt(tiles, pages, readerSettings, maxWidth, i)!;
+    }
+    return total;
+  }
+
+  Widget _readerTileListItem(
     ReaderData data,
+    List<TileItem> tiles,
     ReaderSettings readerSettings,
     int index,
   ) {
-    final page = data.pages[index];
-    final prevPage = index > 0 ? data.pages[index - 1] : null;
+    final tile = tiles[index];
+    final layout = _tilePages(data.pages, tile);
     return Padding(
-      key: ValueKey(page.index),
+      key: ValueKey('p${tile.pageIndex}t${tile.tileIndex}'),
+      // Gap only between pages, never between tiles of one page (seams).
       padding: EdgeInsets.only(
-        bottom: index == data.pages.length - 1 ? 0 : readerSettings.pageGap,
+        bottom: _tileGap(tiles, index, readerSettings.pageGap),
       ),
       child: _ReaderPageItem(
         chapterId: widget.chapterId,
-        page: page,
+        page: layout.page,
+        tileIndex: tile.tileIndex,
+        tilePixelHeight: tile.pixelHeight,
         zoom: readerSettings.zoom,
-        prevPage: prevPage,
+        prevPage: layout.prevPage,
         forcePortrait: readerSettings.forcePortrait,
       ),
     );
+  }
+
+  /// Page (+ previous page for landscape rules) owning a tile.
+  /// `pageIndex` equals the page position (Rust enumerates in order).
+  ({bridge.PageInfo page, bridge.PageInfo? prevPage}) _tilePages(
+    List<bridge.PageInfo> pages,
+    TileItem tile,
+  ) {
+    final pos = tile.pageIndex.clamp(0, pages.length - 1);
+    return (page: pages[pos], prevPage: pos > 0 ? pages[pos - 1] : null);
+  }
+
+  /// Display gap after a tile: pageGap after the last tile of a page,
+  /// zero between tiles of one page and after the final tile.
+  double _tileGap(List<TileItem> tiles, int tilePos, double pageGap) {
+    return tileGapAfter(tiles, tilePos, pageGap);
+  }
+
+  double _tileDisplayHeight({
+    required TileItem tile,
+    required bridge.PageInfo page,
+    required double zoom,
+    required double maxWidth,
+    bridge.PageInfo? prevPage,
+    bool forcePortrait = false,
+  }) {
+    final displayWidth = _ReaderPageLayout.displayWidth(
+      page,
+      zoom,
+      maxWidth,
+      prevPage: prevPage,
+      forcePortrait: forcePortrait,
+    );
+    if (tile.pixelHeight <= 0) {
+      // Unknown dimensions: fall back to whole-page aspect (old behavior).
+      return _ReaderPageLayout.displayHeight(
+        page,
+        zoom,
+        maxWidth,
+        prevPage: prevPage,
+        forcePortrait: forcePortrait,
+      );
+    }
+    return tile.pixelHeight * displayWidth / fittedPageWidth(page);
   }
 
   ScrollController _createScrollController([double initialOffset = 0]) {
@@ -579,7 +740,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final page = scrollToBottom ? data.pages.length - 1 : data.initialPage;
     _currentPage = page;
     _lastSavedPage = page;
-    _setRenderWindowAround(page, data.pages.length);
+    final tiles = flattenTiles(data.pages);
+    _setRenderWindowAroundTile(_firstTileOfPage(tiles, page), tiles.length);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isReaderCurrent(chapterId, generation)) {
         return;
@@ -657,7 +819,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final maxExtent = _scroll.position.maxScrollExtent;
     final currentOffset = _scroll.position.pixels;
     final viewportDimension = _scroll.position.viewportDimension;
-    final visibleRange = _visiblePageRange(
+    final tiles = flattenTiles(data.pages);
+    final visibleRange = _visibleTileRange(
+      tiles: tiles,
       pages: data.pages,
       zoom: settings.zoom,
       pageGap: settings.pageGap,
@@ -668,7 +832,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final nextChapterId = data.context?.nextChapterId;
     if (nextChapterId != null) {
       final isAtEnd = currentOffset >= maxExtent - viewportDimension * 0.1;
-      if (isAtEnd && visibleRange.last >= data.pages.length - 1) {
+      if (isAtEnd &&
+          tiles[visibleRange.last].pageIndex >= data.pages.length - 1) {
         _switchChapter(nextChapterId);
         return;
       }
@@ -678,7 +843,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final prevChapterId = data.context?.prevChapterId;
     if (prevChapterId != null && settings.unlimitedScrollUp) {
       final isAtStart = currentOffset <= viewportDimension * 0.1;
-      if (isAtStart && visibleRange.first <= 0) {
+      if (isAtStart && tiles[visibleRange.first].pageIndex <= 0) {
         _switchChapter(prevChapterId, scrollToBottom: true);
         return;
       }
@@ -691,20 +856,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     final settings = ref.read(readerSettingsProvider);
-    final range = _visiblePageRange(
+    final tiles = flattenTiles(data.pages);
+    if (tiles.isEmpty) {
+      return;
+    }
+    final range = _visibleTileRange(
+      tiles: tiles,
       pages: data.pages,
       zoom: settings.zoom,
       pageGap: settings.pageGap,
       forcePortrait: settings.forcePortrait,
     );
-    final page = _pageAtViewportCenter(
+    final centerTile = _tileAtViewportCenter(
+      tiles: tiles,
       pages: data.pages,
       zoom: settings.zoom,
       pageGap: settings.pageGap,
       forcePortrait: settings.forcePortrait,
     );
+    final page = tiles[centerTile].pageIndex;
     final start = math.max(0, range.first - 2);
-    final end = math.min(data.pages.length - 1, range.last + 2);
+    final end = math.min(tiles.length - 1, range.last + 2);
     final pageChanged = page != _currentPage;
     final windowChanged = start != _renderStart || end != _renderEnd;
     if (!pageChanged && !windowChanged) {
@@ -722,18 +894,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     unawaited(_prefetchWindow(start, end));
   }
 
-  int _pageAtViewportCenter({
+  int _tileAtViewportCenter({
+    required List<TileItem> tiles,
     required List<bridge.PageInfo> pages,
     required double zoom,
     required double pageGap,
     bool forcePortrait = false,
   }) {
-    if (!_scroll.hasClients || pages.isEmpty) {
-      return _currentPage;
+    if (!_scroll.hasClients || tiles.isEmpty) {
+      return _firstTileOfPage(tiles, _currentPage);
     }
     final viewportCenter =
         _scroll.offset + _scroll.position.viewportDimension / 2;
-    return _pageForOffset(
+    return _tileForOffset(
+      tiles: tiles,
       pages: pages,
       zoom: zoom,
       pageGap: pageGap,
@@ -742,28 +916,33 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  ({int first, int last}) _visiblePageRange({
+  ({int first, int last}) _visibleTileRange({
+    required List<TileItem> tiles,
     required List<bridge.PageInfo> pages,
     required double zoom,
     required double pageGap,
     bool forcePortrait = false,
   }) {
-    if (!_scroll.hasClients || pages.isEmpty) {
-      return (first: _currentPage, last: _currentPage);
+    if (!_scroll.hasClients || tiles.isEmpty) {
+      final tile = _firstTileOfPage(tiles, _currentPage);
+      return (first: tile, last: tile);
     }
+    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
     final visibleTop = _scroll.offset;
     final visibleBottom = visibleTop + _scroll.position.viewportDimension;
     var first = -1;
     var last = -1;
     var top = _topPadding;
-    for (var i = 0; i < pages.length; i++) {
-      final prevPage = i > 0 ? pages[i - 1] : null;
+    for (var i = 0; i < tiles.length; i++) {
+      final layout = _tilePages(pages, tiles[i]);
       final bottom =
           top +
-          _pageDisplayHeight(
-            pages[i],
-            zoom,
-            prevPage: prevPage,
+          _tileDisplayHeight(
+            tile: tiles[i],
+            page: layout.page,
+            zoom: zoom,
+            maxWidth: maxWidth,
+            prevPage: layout.prevPage,
             forcePortrait: forcePortrait,
           );
       if (bottom >= visibleTop && top <= visibleBottom) {
@@ -772,55 +951,76 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       } else if (top > visibleBottom) {
         break;
       }
-      top = bottom + pageGap;
+      top = bottom + _tileGap(tiles, i, pageGap);
     }
     if (first == -1) {
-      final page = _pageForOffset(
+      final tile = _tileForOffset(
+        tiles: tiles,
         pages: pages,
         zoom: zoom,
         pageGap: pageGap,
         offset: visibleTop,
         forcePortrait: forcePortrait,
       );
-      return (first: page, last: page);
+      return (first: tile, last: tile);
     }
     return (first: first, last: last);
   }
 
-  int _pageForOffset({
+  int _tileForOffset({
+    required List<TileItem> tiles,
     required List<bridge.PageInfo> pages,
     required double zoom,
     required double pageGap,
     required double offset,
     bool forcePortrait = false,
   }) {
+    if (tiles.isEmpty) {
+      return 0;
+    }
+    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
     var top = _topPadding;
-    for (var i = 0; i < pages.length; i++) {
-      final prevPage = i > 0 ? pages[i - 1] : null;
+    for (var i = 0; i < tiles.length; i++) {
+      final layout = _tilePages(pages, tiles[i]);
       final bottom =
           top +
-          _pageDisplayHeight(
-            pages[i],
-            zoom,
-            prevPage: prevPage,
+          _tileDisplayHeight(
+            tile: tiles[i],
+            page: layout.page,
+            zoom: zoom,
+            maxWidth: maxWidth,
+            prevPage: layout.prevPage,
             forcePortrait: forcePortrait,
           );
-      if (offset <= bottom || i == pages.length - 1) {
+      if (offset <= bottom || i == tiles.length - 1) {
         return i;
       }
-      top = bottom + pageGap;
+      top = bottom + _tileGap(tiles, i, pageGap);
     }
-    return pages.length - 1;
+    return tiles.length - 1;
   }
 
-  void _setRenderWindowAround(int page, int pageCount) {
-    if (pageCount <= 0) {
+  /// First tile position of a page (pages are ordered, so linear scan).
+  int _firstTileOfPage(List<TileItem> tiles, int page) {
+    if (tiles.isEmpty) {
+      return 0;
+    }
+    for (var i = 0; i < tiles.length; i++) {
+      if (tiles[i].pageIndex >= page) {
+        return i;
+      }
+    }
+    return tiles.length - 1;
+  }
+
+  void _setRenderWindowAroundTile(int tilePos, int tileCount) {
+    if (tileCount <= 0) {
       _renderStart = 0;
       _renderEnd = -1;
       return;
     }
-    _renderStart = math.max(0, page - 2);
-    _renderEnd = math.min(pageCount - 1, page + 2);
+    _renderStart = math.max(0, tilePos - 2);
+    _renderEnd = math.min(tileCount - 1, tilePos + 2);
   }
 
   void _scheduleProgressSave() {
@@ -917,19 +1117,35 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         if (data == null || data.pages.isEmpty || nextEnd < nextStart) {
           return;
         }
+        final tiles = flattenTiles(data.pages);
+        if (tiles.isEmpty) {
+          return;
+        }
         final clampedStart = math.max(0, nextStart);
-        final clampedEnd = math.min(data.pages.length - 1, nextEnd);
-        final keepPages = Uint32List.fromList([
-          for (var index = clampedStart; index <= clampedEnd; index++) index,
-        ]);
+        final clampedEnd = math.min(tiles.length - 1, nextEnd);
+        final windowTiles = [
+          for (var index = clampedStart; index <= clampedEnd; index++)
+            tiles[index],
+        ];
+        // evictChapterPages stays page-based; Rust drops all tiles of
+        // pages outside the window.
+        final keepPages = <int>{
+          for (final tile in windowTiles) tile.pageIndex,
+        }.toList()..sort();
         await api.evictChapterPages(chapterId: chapterId, keepPages: keepPages);
         if (!_isReaderCurrent(chapterId, generation)) {
           return;
         }
-        await api.prefetchPages(
-          bridge.PrefetchPagesPayload(
+        await api.prefetchTiles(
+          bridge.PrefetchTilesPayload(
             chapterId: chapterId,
-            pageIndices: keepPages,
+            tiles: [
+              for (final tile in windowTiles)
+                bridge.PageTile(
+                  pageIndex: tile.pageIndex,
+                  tileIndex: tile.tileIndex,
+                ),
+            ],
           ),
         );
         if (!_isReaderCurrent(chapterId, generation)) {
@@ -990,10 +1206,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     await _saveProgressDirect(chapterId: chapterId, data: data);
     _invalidateProgressProviders(data, onClose: true);
     ref.invalidate(readerDataProvider(chapterId));
-    await _releaseChapterMemory(
-      chapterId: chapterId,
-      pageCount: data.pages.length,
-    );
+    await _releaseChapterMemory(chapterId: chapterId, pages: data.pages);
     if (!mounted) {
       return;
     }
@@ -1052,7 +1265,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.invalidate(readerDataProvider(currentChapterId));
     await _releaseChapterMemory(
       chapterId: currentChapterId,
-      pageCount: data?.pages.length,
+      pages: data?.pages,
     );
     if (mounted) {
       context.go('/reader/$chapterId');
@@ -1061,7 +1274,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   Future<void> _releaseChapterMemory({
     required int chapterId,
-    required int? pageCount,
+    required List<bridge.PageInfo>? pages,
     bool invalidateRenderedPages = true,
   }) async {
     _readerGeneration++;
@@ -1070,8 +1283,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _prefetchQueuedStart = null;
     _prefetchQueuedEnd = null;
     final pendingPrefetch = _prefetchQueue;
-    if (invalidateRenderedPages && pageCount != null) {
-      _invalidateRenderedPages(chapterId, pageCount);
+    if (invalidateRenderedPages && pages != null) {
+      _invalidateRenderedTiles(chapterId, pages);
     }
     if (_lastReaderChapterId == chapterId) {
       _lastReaderData = null;
@@ -1091,12 +1304,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _readerGeneration == generation;
   }
 
-  void _invalidateRenderedPages(int chapterId, int pageCount) {
-    for (var i = 0; i < pageCount; i++) {
-      final provider = renderedPageProvider(
-        RenderedPageRequest(chapterId: chapterId, pageIndex: i),
+  void _invalidateRenderedTiles(int chapterId, List<bridge.PageInfo> pages) {
+    for (final tile in flattenTiles(pages)) {
+      ref.invalidate(
+        renderedTileProvider(
+          TileRequest(
+            chapterId: chapterId,
+            pageIndex: tile.pageIndex,
+            tileIndex: tile.tileIndex,
+          ),
+        ),
       );
-      ref.invalidate(provider);
     }
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
@@ -1113,11 +1331,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _jumpToPage(int page, {bool persist = true}) {
     final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    final count = data?.pages.length ?? 0;
-    if (count == 0) {
+    final pages = data?.pages ?? const [];
+    if (pages.isEmpty) {
       return;
     }
-    _setRenderWindowAround(page, count);
+    final tiles = flattenTiles(pages);
+    _setRenderWindowAroundTile(_firstTileOfPage(tiles, page), tiles.length);
     if (page != _currentPage) {
       _currentPage = page;
       _refreshOverlay();
@@ -1129,7 +1348,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     unawaited(_prefetchWindow(_renderStart, _renderEnd));
     if (_scroll.hasClients) {
-      final estimatedOffset = _scrollOffsetForPageIndex(page, data!.pages);
+      final estimatedOffset = _scrollOffsetForPageIndex(page, pages);
       final targetOffset = estimatedOffset
           .clamp(0, _scroll.position.maxScrollExtent)
           .toDouble();
@@ -1165,34 +1384,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return 0;
     }
     final settings = ref.read(readerSettingsProvider);
-    final target = page.clamp(0, pages.length - 1);
+    final tiles = flattenTiles(pages);
+    final target = _firstTileOfPage(tiles, page.clamp(0, pages.length - 1));
+    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
     var offset = _topPadding;
     for (var i = 0; i < target; i++) {
-      final prevPage = i > 0 ? pages[i - 1] : null;
-      offset += _pageDisplayHeight(
-        pages[i],
-        settings.zoom,
-        prevPage: prevPage,
+      final layout = _tilePages(pages, tiles[i]);
+      offset += _tileDisplayHeight(
+        tile: tiles[i],
+        page: layout.page,
+        zoom: settings.zoom,
+        maxWidth: maxWidth,
+        prevPage: layout.prevPage,
         forcePortrait: settings.forcePortrait,
       );
-      offset += settings.pageGap;
+      offset += _tileGap(tiles, i, settings.pageGap);
     }
     return offset.clamp(0, _scroll.position.maxScrollExtent).toDouble();
-  }
-
-  double _pageDisplayHeight(
-    bridge.PageInfo page,
-    double zoom, {
-    bridge.PageInfo? prevPage,
-    bool forcePortrait = false,
-  }) {
-    return _ReaderPageLayout.displayHeight(
-      page,
-      zoom,
-      _ReaderPageLayout.maxDisplayWidth(context),
-      prevPage: prevPage,
-      forcePortrait: forcePortrait,
-    );
   }
 
   void _refreshOverlay() {
@@ -1321,6 +1529,8 @@ class _ReaderPageItem extends ConsumerWidget {
   const _ReaderPageItem({
     required this.chapterId,
     required this.page,
+    required this.tileIndex,
+    required this.tilePixelHeight,
     required this.zoom,
     this.prevPage,
     this.forcePortrait = false,
@@ -1328,6 +1538,8 @@ class _ReaderPageItem extends ConsumerWidget {
 
   final int chapterId;
   final bridge.PageInfo page;
+  final int tileIndex;
+  final int tilePixelHeight;
   final double zoom;
   final bridge.PageInfo? prevPage;
   final bool forcePortrait;
@@ -1342,10 +1554,16 @@ class _ReaderPageItem extends ConsumerWidget {
       prevPage: prevPage,
       forcePortrait: forcePortrait,
     );
-    final aspectRatio = _ReaderPageLayout.aspectRatio(page);
+    final aspectRatio = tilePixelHeight > 0
+        ? fittedPageWidth(page) / tilePixelHeight
+        : _ReaderPageLayout.aspectRatio(page);
     final rendered = ref.watch(
-      renderedPageProvider(
-        RenderedPageRequest(chapterId: chapterId, pageIndex: page.index),
+      renderedTileProvider(
+        TileRequest(
+          chapterId: chapterId,
+          pageIndex: page.index,
+          tileIndex: tileIndex,
+        ),
       ),
     );
     return RepaintBoundary(

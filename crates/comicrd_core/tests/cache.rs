@@ -1,4 +1,4 @@
-use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPagePayload};
+use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPageTilePayload};
 use image::{ImageBuffer, ImageFormat, Rgba};
 use std::fs;
 use std::sync::{Arc, Barrier};
@@ -6,7 +6,7 @@ use std::thread;
 use tempfile::tempdir;
 
 #[test]
-fn render_page_variant_reuses_page_source_and_page_bytes_cache() {
+fn render_page_tile_reuses_page_source_and_page_bytes_cache() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -28,16 +28,17 @@ fn render_page_variant_reuses_page_source_and_page_bytes_cache() {
         })
         .expect("open chapter");
 
-    let payload = RenderPagePayload {
+    let payload = RenderPageTilePayload {
         chapter_id,
         page_index: 0,
+        tile_index: 0,
     };
 
     let first = core
-        .render_page_variant(payload.clone())
+        .render_page_tile(payload.clone())
         .expect("first render");
     let first_stats = core.cache_stats_for_test();
-    let second = core.render_page_variant(payload).expect("second render");
+    let second = core.render_page_tile(payload).expect("second render");
     let second_stats = core.cache_stats_for_test();
 
     assert_eq!(first.bytes, second.bytes);
@@ -53,7 +54,7 @@ fn render_page_variant_reuses_page_source_and_page_bytes_cache() {
 }
 
 #[test]
-fn concurrent_render_page_variant_shares_cached_bytes() {
+fn concurrent_render_page_tile_shares_cached_bytes() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -75,9 +76,10 @@ fn concurrent_render_page_variant_shares_cached_bytes() {
         })
         .expect("open chapter");
 
-    let payload = RenderPagePayload {
+    let payload = RenderPageTilePayload {
         chapter_id,
         page_index: 0,
+        tile_index: 0,
     };
     let worker_count = 8;
     let barrier = Arc::new(Barrier::new(worker_count));
@@ -89,7 +91,7 @@ fn concurrent_render_page_variant_shares_cached_bytes() {
         let barrier = Arc::clone(&barrier);
         workers.push(thread::spawn(move || {
             barrier.wait();
-            core.render_page_variant(payload)
+            core.render_page_tile(payload)
                 .expect("render page variant")
         }));
     }
@@ -111,7 +113,7 @@ fn concurrent_render_page_variant_shares_cached_bytes() {
 }
 
 #[test]
-fn render_page_variant_reads_avif_dimensions_and_mime() {
+fn render_page_tile_reads_avif_dimensions_and_mime() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -134,9 +136,10 @@ fn render_page_variant_reads_avif_dimensions_and_mime() {
         .expect("open chapter");
 
     let page = core
-        .render_page_variant(RenderPagePayload {
+        .render_page_tile(RenderPageTilePayload {
             chapter_id,
             page_index: 0,
+            tile_index: 0,
         })
         .expect("render avif page");
 
@@ -168,19 +171,65 @@ fn evict_chapter_pages_without_keep_pages_drops_source_and_bytes_cache() {
         })
         .expect("open chapter");
 
-    let payload = RenderPagePayload {
+    let payload = RenderPageTilePayload {
         chapter_id,
         page_index: 0,
+        tile_index: 0,
     };
 
-    core.render_page_variant(payload.clone())
+    core.render_page_tile(payload.clone())
         .expect("first render");
     core.evict_chapter_pages(chapter_id, Vec::new());
-    core.render_page_variant(payload).expect("second render");
+    core.render_page_tile(payload).expect("second render");
 
     let stats = core.cache_stats_for_test();
     assert_eq!(stats.page_source_loads, 2);
     assert_eq!(stats.page_bytes_loads, 2);
+}
+
+#[test]
+fn evict_chapter_pages_drops_sibling_tiles_but_keeps_window() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter = comic.join("Chapter 1");
+    fs::create_dir_all(&chapter).expect("chapter");
+    // Page 0 is a strip (tiles [2048, 952]); page 1 is short (1 tile).
+    create_png(chapter.join("001-strip.png"), 1600, 3000);
+    create_png(chapter.join("002.png"), 800, 400);
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let chapter_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter.to_string_lossy().to_string(),
+        })
+        .expect("open chapter");
+
+    let tile = |page_index: usize, tile_index: usize| RenderPageTilePayload {
+        chapter_id,
+        page_index,
+        tile_index,
+    };
+    core.render_page_tile(tile(0, 0)).expect("strip tile 0");
+    core.render_page_tile(tile(0, 1)).expect("strip tile 1");
+    core.render_page_tile(tile(1, 0)).expect("page 1");
+    assert_eq!(core.cache_stats_for_test().page_bytes_loads, 3);
+
+    // Keep only page 1: both sibling tiles of page 0 must go.
+    core.evict_chapter_pages(chapter_id, vec![1]);
+    core.render_page_tile(tile(0, 0)).expect("strip tile 0 again");
+    assert_eq!(core.cache_stats_for_test().page_bytes_loads, 4);
+    core.render_page_tile(tile(1, 0)).expect("page 1 again");
+    let stats = core.cache_stats_for_test();
+    assert_eq!(stats.page_bytes_loads, 4);
+    assert_eq!(stats.page_bytes_cache_hits, 1);
 }
 
 fn create_png(path: impl AsRef<std::path::Path>, width: u32, height: u32) {

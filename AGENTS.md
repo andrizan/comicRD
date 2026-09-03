@@ -2,24 +2,7 @@
 
 This repository is the Flutter + Rust rewrite of ComicRD. Follow these project-specific instructions in addition to the system and developer instructions.
 
-## Command Wrapper
-
-All shell commands in this workspace must be prefixed with `rtk`.
-
-Examples:
-
-```bash
-rtk cargo test
-rtk flutter analyze
-rtk flutter test
-rtk git status --short
-```
-
-The local wrapper policy comes from:
-
-```text
-@/home/andrizan/.codex/RTK.md
-```
+Run shell commands directly (no wrapper). Examples: `cargo test`, `flutter analyze`, `git status --short`.
 
 ## Architecture
 
@@ -97,7 +80,7 @@ Invalidate cache on:
 When public bridge structs or bridge functions change, regenerate FRB output from the repository root:
 
 ```bash
-rtk flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
+flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
 ```
 
 Generated files are expected to be committed:
@@ -134,11 +117,22 @@ The vertical/webtoon reader must use a metadata-first, bytes-on-demand pipeline.
 - Rust must natural-sort page entries (`2.png` before `10.png`).
 - Folder chapter page discovery may recurse to max depth 3, but library listing must remain depth 1.
 - Ignore hidden/system entries such as dotfiles, `__MACOSX`, `thumbs.db`, and `desktop.ini`.
-- Flutter must build the reader with `ListView.builder`, not `Column`, `ListView(children: [...])`, or any eager all-page widget tree.
+- Flutter must build the reader with `_ExactTotalSliverList` inside a `CustomScrollView` (same laziness as `ListView.builder`), not `Column`, `ListView(children: [...])`, or any eager all-page widget tree. Do NOT revert to plain `ListView.builder`/`SliverVariedExtentList` with the default delegate: variable-height slivers estimate `maxScrollExtent` from laid-out children, so the scrollbar thumb jumps every frame. The custom delegate reports the precomputed exact total instead.
 - Flutter must use Rust-provided width/height for stable placeholders and item extents (`itemExtentBuilder`) so scrollbar, resume, progress, and current-page tracking do not depend on image decode timing.
 - Flutter must request image bytes only when a page item is built or prefetched. Do not load all image bytes for a chapter into Dart memory.
-- `renderPageVariant(chapterId, pageIndex)` is the current on-demand page-byte API. It should read only the requested page bytes and return dimensions/mime/bytes for that page.
-- Keep `renderedPageProvider` auto-disposed so Dart page bytes are released when page widgets leave the builder/cache extent.
+- `renderPageTile(chapterId, pageIndex, tileIndex)` is the on-demand page-byte API. It must read only the requested page bytes and return dimensions/mime/bytes for that tile.
+- Keep `renderedTileProvider` auto-disposed so Dart tile bytes are released when tile widgets leave the builder/cache extent.
+
+### Tile Rules
+
+Tall pages are split into stacked tiles so no single GPU texture exceeds 2048x2048 decoded (16MB):
+
+- Rust is the sole source of truth for tile layout. `PageInfo.tile_heights` carries fitted pixel heights per tile, top-to-bottom; Flutter must never recompute splits (Rust `f32` rounding could disagree with Dart `double` by a row).
+- Tile cap is `TILE_MAX_HEIGHT = 2048`. Fitted width is `min(original, 2048)` (integer-only, exact parity on both sides). GIFs and unknown-size pages always yield a single tile (animation preserved).
+- One tile = one `ListView` item (flattened via `flattenTiles`), never a `Column` of tiles. The tile grid is fixed at list time; zoom only scales display and must never re-tile.
+- `pageGap` applies only after the last tile of a page. Zero gap/padding between tiles of one page, or seams appear.
+- Progress, bookmarks, and the page indicator stay page-based (`tile → page` maps by stored index). The DB schema does not know tiles.
+- Prefetch/evict operate on tile windows (`current - 2` through `current + 2` tiles); eviction stays page-based (`evictChapterPages` drops all tiles of pages outside the window).
 
 ### Format Rules
 
@@ -151,9 +145,9 @@ The vertical/webtoon reader must use a metadata-first, bytes-on-demand pipeline.
 
 The reader image pipeline must keep raw image/page data bounded around the current viewport:
 
-- Prefetch/keep only a small range around the current page. The current policy is `current - 2` through `current + 2`.
+- Prefetch/keep only a small range around the current viewport. The current policy is `current - 2` through `current + 2` tiles.
 - Flutter must ask Rust to evict other raw pages for the chapter as the active range changes and on reader close/chapter switch.
-- Rust caches up to 2 page sources and 6 raw page byte entries.
+- Rust caches up to 2 page sources and 16 raw tile byte entries.
 - Use `Arc<Vec<u8>>` for cached image bytes to avoid deep copies on Rust cache hits.
 
 Do not expand reader raw-image cache, Flutter provider retention, or prefetch windows beyond this policy unless the user explicitly changes the memory policy.
@@ -241,9 +235,9 @@ Use the smallest reliable verification for the change, but do not claim success 
 Common checks:
 
 ```bash
-rtk cargo test
-rtk flutter analyze
-rtk flutter test
+cargo test
+flutter analyze
+flutter test
 ```
 
 Run Rust tests for core/bridge changes. Run Flutter analyzer and tests for Dart, Flutter UI, pubspec, generated bridge, or routing/state changes.
@@ -255,8 +249,8 @@ Do not commit automatically. Commit only when the user explicitly asks for it.
 Before committing:
 
 ```bash
-rtk git status --short
-rtk cargo test
+git status --short
+cargo test
 ```
 
 Also run Flutter checks when sandbox permissions allow them and the change touches Flutter/Dart.

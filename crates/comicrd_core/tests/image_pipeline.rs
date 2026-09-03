@@ -1,4 +1,4 @@
-use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPagePayload};
+use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPageTilePayload};
 use image::{ImageBuffer, Rgba};
 use std::fs;
 use std::io::Write;
@@ -111,7 +111,7 @@ fn get_chapter_pages_lists_nested_folder_images_to_depth_three() {
 }
 
 #[test]
-fn render_page_variant_returns_raw_image_bytes() {
+fn render_page_tile_returns_raw_image_bytes() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -134,9 +134,10 @@ fn render_page_variant_returns_raw_image_bytes() {
         .expect("open chapter");
 
     let rendered = core
-        .render_page_variant(RenderPagePayload {
+        .render_page_tile(RenderPageTilePayload {
             chapter_id,
             page_index: 0,
+            tile_index: 0,
         })
         .expect("render page");
 
@@ -144,10 +145,13 @@ fn render_page_variant_returns_raw_image_bytes() {
     assert_eq!(rendered.width, 800);
     assert_eq!(rendered.height, 400);
     assert!(!rendered.bytes.is_empty());
+    // Single-tile passthrough stays byte-identical to the source file.
+    let source = fs::read(chapter.join("001.png")).expect("read source");
+    assert_eq!(&*rendered.bytes, &source);
 }
 
 #[test]
-fn render_page_variant_downscales_oversized_pages() {
+fn render_page_tile_downscales_oversized_pages() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -170,21 +174,91 @@ fn render_page_variant_downscales_oversized_pages() {
         .expect("open chapter");
 
     let rendered = core
-        .render_page_variant(RenderPagePayload {
+        .render_page_tile(RenderPageTilePayload {
             chapter_id,
             page_index: 0,
+            tile_index: 0,
         })
         .expect("render page");
 
     assert_eq!(rendered.mime, "image/jpeg");
     assert_eq!(rendered.width, 2048);
-    assert_eq!(rendered.height, 2731);
+    // Tile 0 covers the first 2048 rows of the 2048x2731 fitted page.
+    assert_eq!(rendered.height, 2048);
     assert!(!rendered.bytes.is_empty());
 }
 
 fn create_png(path: impl AsRef<std::path::Path>, width: u32, height: u32) {
     let image = ImageBuffer::from_pixel(width, height, Rgba([10u8, 20, 30, 255]));
     image.save(path).expect("save png");
+}
+
+/// Deterministic y-varying pattern: any shifted/missing/duplicated row
+/// fails pixel-exact reassembly (flat colors would hide such bugs).
+fn create_strip(path: impl AsRef<std::path::Path>, width: u32, height: u32) {
+    let image = ImageBuffer::from_fn(width, height, |x, y| {
+        Rgba([(x % 256) as u8, (y % 256) as u8, ((x + y) % 256) as u8, 255])
+    });
+    image.save(path).expect("save strip");
+}
+
+fn open_chapter(core: &ComicRdCore, comic: &std::path::Path, chapter: &std::path::Path) -> i64 {
+    core.open_chapter_for_reading(OpenChapterPayload {
+        comic_source_path: comic.to_string_lossy().to_string(),
+        chapter_source_path: chapter.to_string_lossy().to_string(),
+    })
+    .expect("open chapter")
+}
+
+#[test]
+fn render_page_tiles_reassemble_pixel_exact() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter = comic.join("Chapter 1");
+    fs::create_dir_all(&chapter).expect("chapter");
+    create_strip(chapter.join("strip.png"), 1600, 5000);
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let chapter_id = open_chapter(&core, &comic, &chapter);
+
+    let pages = core.get_chapter_pages(chapter_id).expect("pages");
+    assert_eq!(pages.len(), 1);
+    assert_eq!(pages[0].tile_heights, vec![2048, 2048, 904]);
+
+    let mut stacked = Vec::new();
+    for (tile_index, expected_height) in [2048u32, 2048, 904].into_iter().enumerate() {
+        let rendered = core
+            .render_page_tile(RenderPageTilePayload {
+                chapter_id,
+                page_index: 0,
+                tile_index,
+            })
+            .expect("render tile");
+        assert_eq!(rendered.mime, "image/png");
+        assert_eq!(rendered.width, 1600);
+        assert_eq!(rendered.height, expected_height);
+        // Tile texture bound: 2048x2048x4 = 16MB max decoded.
+        assert!(rendered.width * rendered.height * 4 <= 16 * 1024 * 1024);
+        let tile = image::load_from_memory(&rendered.bytes)
+            .expect("decode tile")
+            .to_rgb8();
+        assert_eq!(tile.width(), 1600);
+        assert_eq!(tile.height(), expected_height);
+        stacked.extend_from_slice(tile.as_raw());
+    }
+
+    let original = image::open(chapter.join("strip.png"))
+        .expect("open strip")
+        .to_rgb8();
+    assert_eq!(stacked.len(), original.as_raw().len());
+    assert_eq!(stacked, original.as_raw().to_vec());
 }
 
 fn create_jpeg(path: impl AsRef<std::path::Path>, width: u32, height: u32) {

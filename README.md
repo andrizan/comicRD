@@ -38,12 +38,12 @@ history, backup/import, and the reader image pipeline.
 The main Flutter/Rust application flows are implemented, including library
 listing, scan, chapter discovery, reader flow, progress, bookmarks, history,
 settings, backup/import, comic thumbnails, and database maintenance
-(Optimize Data). Recent work has focused on UI polish (library/history/detail
+(Optimize Data). Recent work focused on reader performance and quality: blur-free toolbar overlays, per-page `RepaintBoundary` isolation, overlay state decoupled from the page list, width-capped page variants (2048px, CatmullRom, lossless PNG for PNG inputs) so tall webtoon strips pass through untouched, strip tiling (2048px tiles, pixel-exact reassembly, page-based progress preserved), and an exact-total scrollbar delegate so the thumb never jumps on variable-height lists. Also UI polish (library/history/detail
 covers, selectable metadata, open-folder action, stable sidebar hover state),
 performance (persistent thumbnail cache, bounded reader memory), schema cleanup
 (dropping unused columns), framework migration to the standalone
 `material_ui` package ahead of the November 2026 SDK Material deprecation, and
-dependency updates (flutter_rust_bridge 2.13, forui 0.26, go_router 18). Linux
+dependency updates (flutter_rust_bridge 2.13, forui 0.26, go_router 18.0.1, material_ui 1.1.1). Linux
 packaging is available and the application has been smoke tested directly on
 Windows and Linux. The macOS build target is present, but still needs a native
 macOS smoke test before release claims for that platform.
@@ -74,8 +74,8 @@ Download the Linux tarball from GitHub Releases, extract it, and run the bundled
 executable:
 
 ```bash
-tar -xzf comicrd-2.7.0-linux-x86_64.tar.gz
-./comicrd-2.7.0-linux-x86_64/opt/comicrd/ComicRD
+tar -xzf comicrd-2.8.0-linux-x86_64.tar.gz
+./comicrd-2.8.0-linux-x86_64/opt/comicrd/ComicRD
 ```
 
 ### Local Pacman Package
@@ -83,8 +83,8 @@ tar -xzf comicrd-2.7.0-linux-x86_64.tar.gz
 On Arch-based systems, a local install package can be created from source:
 
 ```bash
-./scripts/package-arch-local.sh 2.7.0
-sudo pacman -U dist/arch/comicrd-bin-2.7.0-1-x86_64.pkg.tar.zst
+./scripts/package-arch-local.sh 2.8.0
+sudo pacman -U dist/arch/comicrd-bin-2.8.0-1-x86_64.pkg.tar.zst
 ```
 
 ## Build From Source
@@ -298,7 +298,7 @@ To build the Inno Setup installer (requires
 [Inno Setup](https://jrsoftware.org/isinfo.php) installed):
 
 ```bash
-ISCC.exe /D"AppVersion=2.7.0" app_flutter\windows\installer\comicrd-setup.iss
+ISCC.exe /D"AppVersion=2.8.0" app_flutter\windows\installer\comicrd-setup.iss
 ```
 
 The output is written to `dist/comicrd-{version}-windows-x86_64-setup.exe`.
@@ -317,13 +317,13 @@ flutter build macos --release
 Create the Linux release tarball used by GitHub Releases and AUR:
 
 ```bash
-./scripts/package-linux.sh 2.7.0
+./scripts/package-linux.sh 2.8.0
 ```
 
 The output is written to:
 
 ```text
-dist/comicrd-2.7.0-linux-x86_64.tar.gz
+dist/comicrd-2.8.0-linux-x86_64.tar.gz
 ```
 
 ## Repository Layout
@@ -470,21 +470,25 @@ The vertical reader uses a metadata-first, bytes-on-demand pipeline:
 ```text
 Open chapter
 ↓
-Rust lists every page entry and probes width/height metadata
+Rust lists every page entry, probes width/height metadata, and computes tile
+layout (tile_heights per page; tall pages split into ≤2048px tiles)
 ↓
-Flutter builds a ListView.builder from the full page count
+Flutter builds a CustomScrollView from the flattened tile list
 ↓
-Each page reserves stable space using the Rust width/height metadata
+Each tile reserves stable space using the Rust width/height metadata
 ↓
-When Flutter builds a page item, it requests only that page's bytes from Rust
+When Flutter builds a tile item, it requests only that tile's bytes from Rust
 ↓
-Rust reads folder/ZIP/RAR page bytes on demand and returns them through the bridge
+Rust width-caps (2048px), slices, encodes, and returns the tile on demand
 ```
 
 The reader does not load every image byte in a chapter into Dart memory. Flutter
-uses `ListView.builder` with `scrollCacheExtent` and `itemExtentBuilder`; Rust
-provides page dimensions so scrollbar, resume, current-page tracking, and
-progress remain stable even before the image bytes finish loading.
+uses a custom sliver with an exact-total child delegate (so `maxScrollExtent`
+never wobbles and the scrollbar thumb stays put), `scrollCacheExtent`, and
+per-tile extents; Rust provides page dimensions so scrollbar, resume,
+current-page tracking, and progress remain stable even before the image bytes
+finish loading. Progress, bookmarks, and the page indicator stay page-based;
+tiles are a rendering detail the database never sees.
 
 Format handling:
 
@@ -498,13 +502,14 @@ Format handling:
 
 Memory is bounded around the current viewport:
 
-- Flutter/Riverpod only keeps rendered page providers alive while page widgets
+- Flutter/Riverpod only keeps rendered tile providers alive while tile widgets
   are built or inside the scroll cache extent
-- Flutter prefetches a small window around the visible pages, from
+- Flutter prefetches a small window around the visible tiles, from
   `visibleFirst - 2` through `visibleLast + 2`
-- Flutter asks Rust to evict other raw pages for that chapter
+- Flutter asks Rust to evict tiles of pages outside that window
 - Rust caches up to 2 page sources
-- Rust caches up to 6 raw page byte entries
+- Rust caches up to 16 raw tile byte entries (each tile decodes to at most
+  2048x2048x4 = 16MB; GIFs and fitting pages pass through byte-identical)
 - cached page bytes use `Arc<Vec<u8>>` to avoid deep copies on cache hits inside
   Rust
 

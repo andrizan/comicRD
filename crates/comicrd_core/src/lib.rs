@@ -141,6 +141,10 @@ pub struct PageInfo {
     pub name: String,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    /// Fitted pixel heights per tile, top-to-bottom. Single tile when the
+    /// page needs no tiling (short pages, GIFs, unknown dimensions).
+    /// Sole source of truth for tile layout; Flutter must not recompute it.
+    pub tile_heights: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -220,15 +224,22 @@ pub struct SavePageBookmarkPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RenderPagePayload {
-    pub chapter_id: i64,
+pub struct PageTile {
     pub page_index: usize,
+    pub tile_index: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PrefetchPagesPayload {
+pub struct PrefetchTilesPayload {
     pub chapter_id: i64,
-    pub page_indices: Vec<usize>,
+    pub tiles: Vec<PageTile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RenderPageTilePayload {
+    pub chapter_id: i64,
+    pub page_index: usize,
+    pub tile_index: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -770,26 +781,30 @@ impl ComicRdCore {
         get_progress_conn(&conn, chapter_id)
     }
 
-    pub fn render_page_variant(&self, payload: RenderPagePayload) -> Result<RenderedPage, String> {
+    pub fn render_page_tile(
+        &self,
+        payload: RenderPageTilePayload,
+    ) -> Result<RenderedPage, String> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| "db lock poisoned".to_string())?;
-        render_page_variant_conn(&conn, &self.page_cache, payload)
+        render_page_tile_conn(&conn, &self.page_cache, payload)
     }
 
-    pub fn prefetch_pages(&self, payload: PrefetchPagesPayload) -> Result<(), String> {
-        for page_index in payload.page_indices {
+    pub fn prefetch_tiles(&self, payload: PrefetchTilesPayload) -> Result<(), String> {
+        for tile in payload.tiles {
             let conn = self
                 .conn
                 .lock()
                 .map_err(|_| "db lock poisoned".to_string())?;
-            render_page_variant_conn(
+            render_page_tile_conn(
                 &conn,
                 &self.page_cache,
-                RenderPagePayload {
+                RenderPageTilePayload {
                     chapter_id: payload.chapter_id,
-                    page_index,
+                    page_index: tile.page_index,
+                    tile_index: tile.tile_index,
                 },
             )?;
         }

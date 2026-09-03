@@ -81,6 +81,7 @@ pub struct PageInfo {
     pub name: String,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    pub tile_heights: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,15 +161,22 @@ pub struct SavePageBookmarkPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderPagePayload {
-    pub chapter_id: i64,
+pub struct PageTile {
     pub page_index: u32,
+    pub tile_index: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PrefetchPagesPayload {
+pub struct PrefetchTilesPayload {
     pub chapter_id: i64,
-    pub page_indices: Vec<u32>,
+    pub tiles: Vec<PageTile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderPageTilePayload {
+    pub chapter_id: i64,
+    pub page_index: u32,
+    pub tile_index: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -335,6 +343,7 @@ impl From<core::PageInfo> for PageInfo {
             name: value.name,
             width: value.width,
             height: value.height,
+            tile_heights: value.tile_heights,
         }
     }
 }
@@ -439,24 +448,30 @@ impl From<SavePageBookmarkPayload> for core::SavePageBookmarkPayload {
     }
 }
 
-impl From<RenderPagePayload> for core::RenderPagePayload {
-    fn from(value: RenderPagePayload) -> Self {
+impl From<PageTile> for core::PageTile {
+    fn from(value: PageTile) -> Self {
         Self {
-            chapter_id: value.chapter_id,
             page_index: value.page_index as usize,
+            tile_index: value.tile_index as usize,
         }
     }
 }
 
-impl From<PrefetchPagesPayload> for core::PrefetchPagesPayload {
-    fn from(value: PrefetchPagesPayload) -> Self {
+impl From<PrefetchTilesPayload> for core::PrefetchTilesPayload {
+    fn from(value: PrefetchTilesPayload) -> Self {
         Self {
             chapter_id: value.chapter_id,
-            page_indices: value
-                .page_indices
-                .into_iter()
-                .map(|index| index as usize)
-                .collect(),
+            tiles: value.tiles.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<RenderPageTilePayload> for core::RenderPageTilePayload {
+    fn from(value: RenderPageTilePayload) -> Self {
+        Self {
+            chapter_id: value.chapter_id,
+            page_index: value.page_index as usize,
+            tile_index: value.tile_index as usize,
         }
     }
 }
@@ -630,12 +645,12 @@ pub fn get_chapter_pages(chapter_id: i64) -> Result<Vec<PageInfo>, String> {
         .collect())
 }
 
-pub fn render_page_variant(payload: RenderPagePayload) -> Result<RenderedPage, String> {
-    core()?.render_page_variant(payload.into()).map(Into::into)
+pub fn render_page_tile(payload: RenderPageTilePayload) -> Result<RenderedPage, String> {
+    core()?.render_page_tile(payload.into()).map(Into::into)
 }
 
-pub fn prefetch_pages(payload: PrefetchPagesPayload) -> Result<(), String> {
-    core()?.prefetch_pages(payload.into())
+pub fn prefetch_tiles(payload: PrefetchTilesPayload) -> Result<(), String> {
+    core()?.prefetch_tiles(payload.into())
 }
 
 pub fn evict_chapter_pages(chapter_id: i64, keep_pages: Vec<u32>) -> Result<(), String> {

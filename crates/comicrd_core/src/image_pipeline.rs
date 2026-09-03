@@ -11,10 +11,13 @@ use rusqlite::Connection;
 use crate::chapter::{
     archive_image_bytes, archive_image_entries, chapter_source, image_entries_in_dir,
 };
-use crate::{RenderPagePayload, RenderedPage};
+use crate::{RenderPageTilePayload, RenderedPage};
 
 const PAGE_SOURCE_CACHE_CAP: usize = 2;
-const PAGE_BYTES_CACHE_CAP: usize = 6;
+// Tiles are small (<=2048x2048 decoded); the cap counts tile entries.
+const PAGE_BYTES_CACHE_CAP: usize = 16;
+/// Maximum tile height in pixels. Safe on 8192-limited GPUs
+/// (2048x2048x4 = 16MB decoded per tile max).
 
 #[derive(Clone)]
 pub(crate) enum PageSource {
@@ -48,8 +51,8 @@ pub(crate) struct PageCache {
 struct PageCacheState {
     sources: HashMap<i64, PageSource>,
     source_order: VecDeque<i64>,
-    bytes: HashMap<(i64, usize), CachedPageBytes>,
-    bytes_order: VecDeque<(i64, usize)>,
+    bytes: HashMap<(i64, usize, usize), CachedPageBytes>,
+    bytes_order: VecDeque<(i64, usize, usize)>,
     pub(crate) stats: CacheStats,
 }
 
@@ -59,7 +62,7 @@ impl PageCacheState {
         self.source_order.push_back(chapter_id);
     }
 
-    fn touch_bytes(&mut self, key: (i64, usize)) {
+    fn touch_bytes(&mut self, key: (i64, usize, usize)) {
         self.bytes_order.retain(|existing| *existing != key);
         self.bytes_order.push_back(key);
     }
@@ -75,7 +78,7 @@ impl PageCacheState {
         }
     }
 
-    fn remember_bytes(&mut self, key: (i64, usize), bytes: CachedPageBytes) {
+    fn remember_bytes(&mut self, key: (i64, usize, usize), bytes: CachedPageBytes) {
         self.bytes.insert(key, bytes);
         self.touch_bytes(key);
         while self.bytes_order.len() > PAGE_BYTES_CACHE_CAP {
@@ -101,12 +104,14 @@ impl PageCache {
             .unwrap_or_default()
     }
 
+    /// Drop cached raw bytes for all pages except `keep_pages`.
+    /// The key is (chapter, page, tile); every tile of an evicted page goes.
     pub(crate) fn evict_except(&self, chapter_id: i64, keep_pages: &[usize]) {
         if let Ok(mut state) = self.state.lock() {
-            let keys_to_remove: Vec<(i64, usize)> = state
+            let keys_to_remove: Vec<(i64, usize, usize)> = state
                 .bytes
                 .keys()
-                .filter(|(cid, idx)| *cid == chapter_id && !keep_pages.contains(idx))
+                .filter(|(cid, idx, _)| *cid == chapter_id && !keep_pages.contains(idx))
                 .copied()
                 .collect();
             for key in keys_to_remove {
@@ -205,45 +210,6 @@ pub(crate) fn read_page_bytes(
     }
 }
 
-fn get_or_load_page_bytes(
-    conn: &Connection,
-    cache: &PageCache,
-    chapter_id: i64,
-    page_index: usize,
-) -> Result<(Arc<Vec<u8>>, &'static str), String> {
-    let key = (chapter_id, page_index);
-    {
-        let mut state = cache.lock_state()?;
-        if let Some(cached) = state.bytes.get(&key) {
-            let result = (Arc::clone(&cached.bytes), cached.mime);
-            state.stats.page_bytes_cache_hits += 1;
-            state.touch_bytes(key);
-            return Ok(result);
-        }
-    }
-    let source = get_or_load_page_source(conn, cache, chapter_id)?;
-    let (bytes, mime) = read_page_bytes(&source, page_index)?;
-    // Cache the fitted variant so oversized pages are decoded/resized once.
-    let (bytes, mime, _, _) = fit_page_variant(bytes, mime);
-    let shared = Arc::new(bytes);
-    let mut state = cache.lock_state()?;
-    if let Some(cached) = state.bytes.get(&key) {
-        let result = (Arc::clone(&cached.bytes), cached.mime);
-        state.stats.page_bytes_cache_hits += 1;
-        state.touch_bytes(key);
-        return Ok(result);
-    }
-    state.stats.page_bytes_loads += 1;
-    state.remember_bytes(
-        key,
-        CachedPageBytes {
-            bytes: Arc::clone(&shared),
-            mime,
-        },
-    );
-    Ok((shared, mime))
-}
-
 pub(crate) fn page_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
     image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
@@ -264,6 +230,74 @@ pub(crate) fn page_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
 /// (decoded RGBA costs width x height x 4 bytes per page).
 const MAX_VARIANT_WIDTH: u32 = 2048;
 const VARIANT_JPEG_QUALITY: u8 = 92;
+const TILE_MAX_HEIGHT: u32 = 2048;
+
+/// Tile layout for a page: (fitted width, fitted tile heights top-to-bottom).
+///
+/// Sole source of truth for tiling; the layout is shipped to Flutter in
+/// `PageInfo.tile_heights` so Dart never recomputes splits (Rust uses `f32`
+/// rounding that Dart `double` math could disagree on by a row).
+/// GIFs and zero-size inputs always yield a single tile.
+pub(crate) fn tile_layout_for_dimensions(
+    width: u32,
+    height: u32,
+    is_gif: bool,
+) -> (u32, Vec<u32>) {
+    let fitted_width = width.min(MAX_VARIANT_WIDTH);
+    let fitted_height = if width > MAX_VARIANT_WIDTH {
+        let scale = MAX_VARIANT_WIDTH as f32 / width as f32;
+        ((height as f32 * scale).round() as u32).max(1)
+    } else {
+        height
+    };
+    if is_gif || fitted_height == 0 {
+        return (fitted_width, vec![fitted_height]);
+    }
+    let mut tiles = Vec::new();
+    let mut remaining = fitted_height;
+    while remaining > 0 {
+        let tile = remaining.min(TILE_MAX_HEIGHT);
+        tiles.push(tile);
+        remaining -= tile;
+    }
+    (fitted_width, tiles)
+}
+
+/// Width-fit; None when already within cap (caller passes bytes through).
+fn resize_to_width(img: &image::DynamicImage) -> Option<image::DynamicImage> {
+    let (width, height) = (img.width(), img.height());
+    if width <= MAX_VARIANT_WIDTH || width == 0 {
+        return None;
+    }
+    let scale = MAX_VARIANT_WIDTH as f32 / width as f32;
+    let new_height = ((height as f32 * scale).round() as u32).max(1);
+    Some(img.resize(MAX_VARIANT_WIDTH, new_height, FilterType::CatmullRom))
+}
+
+/// Encode with the variant rule shared by whole-page and tile paths:
+/// lossless PNG for PNG inputs, JPEG q92 otherwise.
+fn encode_variant_image(
+    img: &image::DynamicImage,
+    mime: &'static str,
+) -> Option<(Vec<u8>, &'static str)> {
+    if mime == "image/png" {
+        let mut output = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(&mut output);
+        img.write_with_encoder(encoder).ok()?;
+        return Some((output, "image/png"));
+    }
+    let rgb = img.to_rgb8();
+    let mut output = Vec::new();
+    JpegEncoder::new_with_quality(&mut output, VARIANT_JPEG_QUALITY)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            image::ColorType::Rgb8.into(),
+        )
+        .ok()?;
+    Some((output, "image/jpeg"))
+}
 
 /// Downscale an over-wide page to the variant cap, returning
 /// (bytes, mime, width, height).
@@ -283,44 +317,103 @@ fn fit_page_variant(bytes: Vec<u8>, mime: &'static str) -> (Vec<u8>, &'static st
         return (bytes, mime, width, height);
     };
     let (width, height) = (img.width(), img.height());
-    if width <= MAX_VARIANT_WIDTH {
+    let Some(resized) = resize_to_width(&img) else {
         return (bytes, mime, width, height);
+    };
+    let (new_width, new_height) = (resized.width(), resized.height());
+    match encode_variant_image(&resized, mime) {
+        Some((output, out_mime)) => (output, out_mime, new_width, new_height),
+        None => (bytes, mime, width, height),
     }
-    let scale = MAX_VARIANT_WIDTH as f32 / width as f32;
-    let new_width = MAX_VARIANT_WIDTH;
-    let new_height = ((height as f32 * scale).round() as u32).max(1);
-    let resized = img.resize(new_width, new_height, FilterType::CatmullRom);
-    if mime == "image/png" {
-        let mut output = Vec::new();
-        let encoder = image::codecs::png::PngEncoder::new(&mut output);
-        if resized.write_with_encoder(encoder).is_err() {
-            return (bytes, mime, width, height);
-        }
-        return (output, "image/png", new_width, new_height);
-    }
-    let rgb = resized.to_rgb8();
-    let mut output = Vec::new();
-    if JpegEncoder::new_with_quality(&mut output, VARIANT_JPEG_QUALITY)
-        .encode(
-            rgb.as_raw(),
-            rgb.width(),
-            rgb.height(),
-            image::ColorType::Rgb8.into(),
-        )
-        .is_err()
-    {
-        return (bytes, mime, width, height);
-    }
-    (output, "image/jpeg", new_width, new_height)
 }
 
-pub(crate) fn render_page_variant_conn(
+fn get_or_load_tile_bytes(
     conn: &Connection,
     cache: &PageCache,
-    payload: RenderPagePayload,
+    chapter_id: i64,
+    page_index: usize,
+    tile_index: usize,
+) -> Result<(Arc<Vec<u8>>, &'static str), String> {
+    let key = (chapter_id, page_index, tile_index);
+    {
+        let mut state = cache.lock_state()?;
+        if let Some(cached) = state.bytes.get(&key) {
+            let result = (Arc::clone(&cached.bytes), cached.mime);
+            state.stats.page_bytes_cache_hits += 1;
+            state.touch_bytes(key);
+            return Ok(result);
+        }
+    }
+    let source = get_or_load_page_source(conn, cache, chapter_id)?;
+    let (bytes, mime) = read_page_bytes(&source, page_index)?;
+    // Width-fit first (passthrough for fitting pages/GIFs/corrupt files).
+    // `fit_page_variant` is the same function the old whole-page path used,
+    // so single tiles stay byte-identical to it by construction.
+    let (fitted_bytes, fitted_mime, fitted_width, fitted_height) =
+        fit_page_variant(bytes, mime);
+    let (_, tiles) =
+        tile_layout_for_dimensions(fitted_width, fitted_height, fitted_mime == "image/gif");
+    let tile_height = *tiles
+        .get(tile_index)
+        .ok_or_else(|| "tile index out of range".to_string())?;
+    if tiles.len() == 1 {
+        let shared = Arc::new(fitted_bytes);
+        let mut state = cache.lock_state()?;
+        if let Some(cached) = state.bytes.get(&key) {
+            let result = (Arc::clone(&cached.bytes), cached.mime);
+            state.stats.page_bytes_cache_hits += 1;
+            state.touch_bytes(key);
+            return Ok(result);
+        }
+        state.stats.page_bytes_loads += 1;
+        state.remember_bytes(
+            key,
+            CachedPageBytes {
+                bytes: Arc::clone(&shared),
+                mime: fitted_mime,
+            },
+        );
+        return Ok((shared, fitted_mime));
+    }
+    // Multi-tile: crop from the fitted image. Fitted dims are always within
+    // the width cap, so only the height is ever split here.
+    let fitted_img = image::load_from_memory(&fitted_bytes)
+        .map_err(|e| format!("failed decoding fitted page image: {e}"))?;
+    let y = tile_index as u32 * TILE_MAX_HEIGHT;
+    let tile_image = fitted_img.crop_imm(0, y, fitted_img.width(), tile_height);
+    let (out, out_mime) = encode_variant_image(&tile_image, fitted_mime)
+        .ok_or_else(|| "failed encoding page tile".to_string())?;
+    let shared = Arc::new(out);
+    let mut state = cache.lock_state()?;
+    if let Some(cached) = state.bytes.get(&key) {
+        let result = (Arc::clone(&cached.bytes), cached.mime);
+        state.stats.page_bytes_cache_hits += 1;
+        state.touch_bytes(key);
+        return Ok(result);
+    }
+    state.stats.page_bytes_loads += 1;
+    state.remember_bytes(
+        key,
+        CachedPageBytes {
+            bytes: Arc::clone(&shared),
+            mime: out_mime,
+        },
+    );
+    Ok((shared, out_mime))
+}
+
+pub(crate) fn render_page_tile_conn(
+    conn: &Connection,
+    cache: &PageCache,
+    payload: RenderPageTilePayload,
 ) -> Result<RenderedPage, String> {
-    let (bytes, mime) =
-        get_or_load_page_bytes(conn, cache, payload.chapter_id, payload.page_index)?;
+    let (bytes, mime) = get_or_load_tile_bytes(
+        conn,
+        cache,
+        payload.chapter_id,
+        payload.page_index,
+        payload.tile_index,
+    )?;
     let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
     Ok(RenderedPage {
         bytes: Arc::clone(&bytes),
@@ -400,6 +493,50 @@ mod tests {
         assert_eq!(out, bytes);
         assert_eq!(mime, "image/png");
         assert_eq!((width, height), (1600, 8000));
+    }
+
+    #[test]
+    fn tile_layout_keeps_short_pages_whole() {
+        assert_eq!(tile_layout_for_dimensions(800, 400, false), (800, vec![400]));
+        assert_eq!(
+            tile_layout_for_dimensions(1600, 2048, false),
+            (1600, vec![2048])
+        );
+        assert_eq!(
+            tile_layout_for_dimensions(3000, 4000, false),
+            (2048, vec![2048, 683])
+        );
+    }
+
+    #[test]
+    fn tile_layout_splits_tall_strips_on_exact_boundaries() {
+        let (w, tiles) = tile_layout_for_dimensions(1600, 20000, false);
+        assert_eq!(w, 1600);
+        assert_eq!(tiles.len(), 10);
+        assert!(tiles[..9].iter().all(|&t| t == 2048));
+        assert_eq!(tiles[9], 20000 - 9 * 2048);
+        assert_eq!(tiles.iter().sum::<u32>(), 20000);
+    }
+
+    #[test]
+    fn tile_layout_splits_exact_multiples_without_empty_trailing_tile() {
+        assert_eq!(
+            tile_layout_for_dimensions(100, 4096, false),
+            (100, vec![2048, 2048])
+        );
+        assert_eq!(
+            tile_layout_for_dimensions(100, 2049, false),
+            (100, vec![2048, 1])
+        );
+    }
+
+    #[test]
+    fn tile_layout_never_tiles_gifs_or_empty_pages() {
+        assert_eq!(
+            tile_layout_for_dimensions(1600, 20000, true),
+            (1600, vec![20000])
+        );
+        assert_eq!(tile_layout_for_dimensions(0, 0, false), (0, vec![0]));
     }
 
     #[test]

@@ -23,14 +23,15 @@ final readerDataProvider = FutureProvider.autoDispose.family<ReaderData, int>((
   );
 });
 
-final renderedPageProvider = FutureProvider.autoDispose
-    .family<bridge.RenderedPage, RenderedPageRequest>((ref, request) {
+final renderedTileProvider = FutureProvider.autoDispose
+    .family<bridge.RenderedPage, TileRequest>((ref, request) {
       return ref
           .watch(comicRdApiProvider)
-          .renderPageVariant(
-            bridge.RenderPagePayload(
+          .renderPageTile(
+            bridge.RenderPageTilePayload(
               chapterId: request.chapterId,
               pageIndex: request.pageIndex,
+              tileIndex: request.tileIndex,
             ),
           );
     });
@@ -49,22 +50,87 @@ class ReaderData {
   final int initialPage;
 }
 
-class RenderedPageRequest {
-  const RenderedPageRequest({required this.chapterId, required this.pageIndex});
+/// One render unit: a tile of a page. Single-tile pages have exactly one
+/// entry with tileIndex 0.
+class TileItem {
+  const TileItem({
+    required this.pageIndex,
+    required this.tileIndex,
+    required this.isLastTileOfPage,
+    required this.pixelHeight,
+  });
+
+  final int pageIndex;
+  final int tileIndex;
+  final bool isLastTileOfPage;
+
+  /// Fitted pixel height of this tile, from Rust. Never recomputed in Dart.
+  final int pixelHeight;
+}
+
+class TileRequest {
+  const TileRequest({
+    required this.chapterId,
+    required this.pageIndex,
+    required this.tileIndex,
+  });
 
   final int chapterId;
   final int pageIndex;
+  final int tileIndex;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RenderedPageRequest &&
+      other is TileRequest &&
           runtimeType == other.runtimeType &&
           chapterId == other.chapterId &&
-          pageIndex == other.pageIndex;
+          pageIndex == other.pageIndex &&
+          tileIndex == other.tileIndex;
 
   @override
-  int get hashCode => Object.hash(chapterId, pageIndex);
+  int get hashCode => Object.hash(chapterId, pageIndex, tileIndex);
+}
+
+/// Display gap after a tile: `pageGap` after the last tile of a page,
+/// zero between tiles of one page and after the final tile (seams). Pure.
+double tileGapAfter(List<TileItem> tiles, int tilePos, double pageGap) {
+  if (tilePos < 0 || tilePos >= tiles.length - 1) {
+    return 0;
+  }
+  return tiles[tilePos].isLastTileOfPage ? pageGap : 0;
+}
+
+/// Fitted pixel width mirror of Rust `tile_layout_for_dimensions`.
+/// Integer-only (`min(original, 2048)`) so parity with Rust is exact.
+int fittedPageWidth(bridge.PageInfo page) {
+  final width = page.width ?? 900;
+  if (width <= 0) {
+    return 900;
+  }
+  return width > 2048 ? 2048 : width;
+}
+
+/// Flatten pages into render tiles from Rust-provided `tileHeights`.
+/// Pure; the tile grid never depends on zoom or display size.
+List<TileItem> flattenTiles(List<bridge.PageInfo> pages) {
+  final tiles = <TileItem>[];
+  for (final page in pages) {
+    final heights = page.tileHeights.isEmpty
+        ? [page.height ?? 0]
+        : page.tileHeights;
+    for (var t = 0; t < heights.length; t++) {
+      tiles.add(
+        TileItem(
+          pageIndex: page.index,
+          tileIndex: t,
+          isLastTileOfPage: t == heights.length - 1,
+          pixelHeight: heights[t],
+        ),
+      );
+    }
+  }
+  return tiles;
 }
 
 int initialReaderPageForProgress({

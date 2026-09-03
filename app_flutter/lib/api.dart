@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `core`, `open_path`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<void> initApp({required String appDataDir}) =>
     RustLib.instance.api.crateApiInitApp(appDataDir: appDataDir);
@@ -83,11 +83,11 @@ Future<ChapterContext?> getChapterContext({required PlatformInt64 chapterId}) =>
 Future<List<PageInfo>> getChapterPages({required PlatformInt64 chapterId}) =>
     RustLib.instance.api.crateApiGetChapterPages(chapterId: chapterId);
 
-Future<RenderedPage> renderPageVariant({required RenderPagePayload payload}) =>
-    RustLib.instance.api.crateApiRenderPageVariant(payload: payload);
+Future<RenderedPage> renderPageTile({required RenderPageTilePayload payload}) =>
+    RustLib.instance.api.crateApiRenderPageTile(payload: payload);
 
-Future<void> prefetchPages({required PrefetchPagesPayload payload}) =>
-    RustLib.instance.api.crateApiPrefetchPages(payload: payload);
+Future<void> prefetchTiles({required PrefetchTilesPayload payload}) =>
+    RustLib.instance.api.crateApiPrefetchTiles(payload: payload);
 
 Future<void> evictChapterPages({
   required PlatformInt64 chapterId,
@@ -512,17 +512,23 @@ class PageInfo {
   final String name;
   final int? width;
   final int? height;
+  final Uint32List tileHeights;
 
   const PageInfo({
     required this.index,
     required this.name,
     this.width,
     this.height,
+    required this.tileHeights,
   });
 
   @override
   int get hashCode =>
-      index.hashCode ^ name.hashCode ^ width.hashCode ^ height.hashCode;
+      index.hashCode ^
+      name.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      tileHeights.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -532,28 +538,44 @@ class PageInfo {
           index == other.index &&
           name == other.name &&
           width == other.width &&
-          height == other.height;
+          height == other.height &&
+          tileHeights == other.tileHeights;
 }
 
-class PrefetchPagesPayload {
-  final PlatformInt64 chapterId;
-  final Uint32List pageIndices;
+class PageTile {
+  final int pageIndex;
+  final int tileIndex;
 
-  const PrefetchPagesPayload({
-    required this.chapterId,
-    required this.pageIndices,
-  });
+  const PageTile({required this.pageIndex, required this.tileIndex});
 
   @override
-  int get hashCode => chapterId.hashCode ^ pageIndices.hashCode;
+  int get hashCode => pageIndex.hashCode ^ tileIndex.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PrefetchPagesPayload &&
+      other is PageTile &&
+          runtimeType == other.runtimeType &&
+          pageIndex == other.pageIndex &&
+          tileIndex == other.tileIndex;
+}
+
+class PrefetchTilesPayload {
+  final PlatformInt64 chapterId;
+  final List<PageTile> tiles;
+
+  const PrefetchTilesPayload({required this.chapterId, required this.tiles});
+
+  @override
+  int get hashCode => chapterId.hashCode ^ tiles.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PrefetchTilesPayload &&
           runtimeType == other.runtimeType &&
           chapterId == other.chapterId &&
-          pageIndices == other.pageIndices;
+          tiles == other.tiles;
 }
 
 class RawChapter {
@@ -744,22 +766,29 @@ class ReadingProgress {
           isRead == other.isRead;
 }
 
-class RenderPagePayload {
+class RenderPageTilePayload {
   final PlatformInt64 chapterId;
   final int pageIndex;
+  final int tileIndex;
 
-  const RenderPagePayload({required this.chapterId, required this.pageIndex});
+  const RenderPageTilePayload({
+    required this.chapterId,
+    required this.pageIndex,
+    required this.tileIndex,
+  });
 
   @override
-  int get hashCode => chapterId.hashCode ^ pageIndex.hashCode;
+  int get hashCode =>
+      chapterId.hashCode ^ pageIndex.hashCode ^ tileIndex.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RenderPagePayload &&
+      other is RenderPageTilePayload &&
           runtimeType == other.runtimeType &&
           chapterId == other.chapterId &&
-          pageIndex == other.pageIndex;
+          pageIndex == other.pageIndex &&
+          tileIndex == other.tileIndex;
 }
 
 class RenderedPage {

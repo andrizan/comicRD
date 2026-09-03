@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -14352141;
+  int get rustContentHash => 768190577;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -167,7 +167,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<OptimizeDatabaseResult> crateApiOptimizeDatabase();
 
-  Future<void> crateApiPrefetchPages({required PrefetchPagesPayload payload});
+  Future<void> crateApiPrefetchTiles({required PrefetchTilesPayload payload});
 
   Future<void> crateApiPurgeCaches();
 
@@ -177,8 +177,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiRemovePageBookmark({required PlatformInt64 bookmarkId});
 
-  Future<RenderedPage> crateApiRenderPageVariant({
-    required RenderPagePayload payload,
+  Future<RenderedPage> crateApiRenderPageTile({
+    required RenderPageTilePayload payload,
   });
 
   Future<void> crateApiSaveProgress({required SaveProgressPayload payload});
@@ -1164,12 +1164,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "optimize_database", argNames: []);
 
   @override
-  Future<void> crateApiPrefetchPages({required PrefetchPagesPayload payload}) {
+  Future<void> crateApiPrefetchTiles({required PrefetchTilesPayload payload}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_prefetch_pages_payload(payload, serializer);
+          sse_encode_box_autoadd_prefetch_tiles_payload(payload, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1181,15 +1181,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiPrefetchPagesConstMeta,
+        constMeta: kCrateApiPrefetchTilesConstMeta,
         argValues: [payload],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPrefetchPagesConstMeta =>
-      const TaskConstMeta(debugName: "prefetch_pages", argNames: ["payload"]);
+  TaskConstMeta get kCrateApiPrefetchTilesConstMeta =>
+      const TaskConstMeta(debugName: "prefetch_tiles", argNames: ["payload"]);
 
   @override
   Future<void> crateApiPurgeCaches() {
@@ -1309,14 +1309,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<RenderedPage> crateApiRenderPageVariant({
-    required RenderPagePayload payload,
+  Future<RenderedPage> crateApiRenderPageTile({
+    required RenderPageTilePayload payload,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_box_autoadd_render_page_payload(payload, serializer);
+          sse_encode_box_autoadd_render_page_tile_payload(payload, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1328,17 +1328,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_rendered_page,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiRenderPageVariantConstMeta,
+        constMeta: kCrateApiRenderPageTileConstMeta,
         argValues: [payload],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRenderPageVariantConstMeta => const TaskConstMeta(
-    debugName: "render_page_variant",
-    argNames: ["payload"],
-  );
+  TaskConstMeta get kCrateApiRenderPageTileConstMeta =>
+      const TaskConstMeta(debugName: "render_page_tile", argNames: ["payload"]);
 
   @override
   Future<void> crateApiSaveProgress({required SaveProgressPayload payload}) {
@@ -1487,11 +1485,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PrefetchPagesPayload dco_decode_box_autoadd_prefetch_pages_payload(
+  PrefetchTilesPayload dco_decode_box_autoadd_prefetch_tiles_payload(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_prefetch_pages_payload(raw);
+    return dco_decode_prefetch_tiles_payload(raw);
   }
 
   @protected
@@ -1501,9 +1499,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RenderPagePayload dco_decode_box_autoadd_render_page_payload(dynamic raw) {
+  RenderPageTilePayload dco_decode_box_autoadd_render_page_tile_payload(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_render_page_payload(raw);
+    return dco_decode_render_page_tile_payload(raw);
   }
 
   @protected
@@ -1678,6 +1678,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<PageTile> dco_decode_list_page_tile(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_page_tile).toList();
+  }
+
+  @protected
   List<int> dco_decode_list_prim_u_32_loose(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as List<int>;
@@ -1815,25 +1821,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PageInfo dco_decode_page_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return PageInfo(
       index: dco_decode_u_32(arr[0]),
       name: dco_decode_String(arr[1]),
       width: dco_decode_opt_box_autoadd_u_32(arr[2]),
       height: dco_decode_opt_box_autoadd_u_32(arr[3]),
+      tileHeights: dco_decode_list_prim_u_32_strict(arr[4]),
     );
   }
 
   @protected
-  PrefetchPagesPayload dco_decode_prefetch_pages_payload(dynamic raw) {
+  PageTile dco_decode_page_tile(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return PrefetchPagesPayload(
+    return PageTile(
+      pageIndex: dco_decode_u_32(arr[0]),
+      tileIndex: dco_decode_u_32(arr[1]),
+    );
+  }
+
+  @protected
+  PrefetchTilesPayload dco_decode_prefetch_tiles_payload(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return PrefetchTilesPayload(
       chapterId: dco_decode_i_64(arr[0]),
-      pageIndices: dco_decode_list_prim_u_32_strict(arr[1]),
+      tiles: dco_decode_list_page_tile(arr[1]),
     );
   }
 
@@ -1910,14 +1929,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RenderPagePayload dco_decode_render_page_payload(dynamic raw) {
+  RenderPageTilePayload dco_decode_render_page_tile_payload(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return RenderPagePayload(
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RenderPageTilePayload(
       chapterId: dco_decode_i_64(arr[0]),
       pageIndex: dco_decode_u_32(arr[1]),
+      tileIndex: dco_decode_u_32(arr[2]),
     );
   }
 
@@ -2065,11 +2085,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PrefetchPagesPayload sse_decode_box_autoadd_prefetch_pages_payload(
+  PrefetchTilesPayload sse_decode_box_autoadd_prefetch_tiles_payload(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_prefetch_pages_payload(deserializer));
+    return (sse_decode_prefetch_tiles_payload(deserializer));
   }
 
   @protected
@@ -2081,11 +2101,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RenderPagePayload sse_decode_box_autoadd_render_page_payload(
+  RenderPageTilePayload sse_decode_box_autoadd_render_page_tile_payload(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_render_page_payload(deserializer));
+    return (sse_decode_render_page_tile_payload(deserializer));
   }
 
   @protected
@@ -2319,6 +2339,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<PageTile> sse_decode_list_page_tile(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <PageTile>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_page_tile(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -2544,25 +2576,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_width = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_height = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_tileHeights = sse_decode_list_prim_u_32_strict(deserializer);
     return PageInfo(
       index: var_index,
       name: var_name,
       width: var_width,
       height: var_height,
+      tileHeights: var_tileHeights,
     );
   }
 
   @protected
-  PrefetchPagesPayload sse_decode_prefetch_pages_payload(
+  PageTile sse_decode_page_tile(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pageIndex = sse_decode_u_32(deserializer);
+    var var_tileIndex = sse_decode_u_32(deserializer);
+    return PageTile(pageIndex: var_pageIndex, tileIndex: var_tileIndex);
+  }
+
+  @protected
+  PrefetchTilesPayload sse_decode_prefetch_tiles_payload(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_chapterId = sse_decode_i_64(deserializer);
-    var var_pageIndices = sse_decode_list_prim_u_32_strict(deserializer);
-    return PrefetchPagesPayload(
-      chapterId: var_chapterId,
-      pageIndices: var_pageIndices,
-    );
+    var var_tiles = sse_decode_list_page_tile(deserializer);
+    return PrefetchTilesPayload(chapterId: var_chapterId, tiles: var_tiles);
   }
 
   @protected
@@ -2660,15 +2699,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RenderPagePayload sse_decode_render_page_payload(
+  RenderPageTilePayload sse_decode_render_page_tile_payload(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_chapterId = sse_decode_i_64(deserializer);
     var var_pageIndex = sse_decode_u_32(deserializer);
-    return RenderPagePayload(
+    var var_tileIndex = sse_decode_u_32(deserializer);
+    return RenderPageTilePayload(
       chapterId: var_chapterId,
       pageIndex: var_pageIndex,
+      tileIndex: var_tileIndex,
     );
   }
 
@@ -2819,12 +2860,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_prefetch_pages_payload(
-    PrefetchPagesPayload self,
+  void sse_encode_box_autoadd_prefetch_tiles_payload(
+    PrefetchTilesPayload self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_prefetch_pages_payload(self, serializer);
+    sse_encode_prefetch_tiles_payload(self, serializer);
   }
 
   @protected
@@ -2837,12 +2878,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_render_page_payload(
-    RenderPagePayload self,
+  void sse_encode_box_autoadd_render_page_tile_payload(
+    RenderPageTilePayload self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_render_page_payload(self, serializer);
+    sse_encode_render_page_tile_payload(self, serializer);
   }
 
   @protected
@@ -3024,6 +3065,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_page_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_page_tile(
+    List<PageTile> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_page_tile(item, serializer);
     }
   }
 
@@ -3238,16 +3291,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_opt_box_autoadd_u_32(self.width, serializer);
     sse_encode_opt_box_autoadd_u_32(self.height, serializer);
+    sse_encode_list_prim_u_32_strict(self.tileHeights, serializer);
   }
 
   @protected
-  void sse_encode_prefetch_pages_payload(
-    PrefetchPagesPayload self,
+  void sse_encode_page_tile(PageTile self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.pageIndex, serializer);
+    sse_encode_u_32(self.tileIndex, serializer);
+  }
+
+  @protected
+  void sse_encode_prefetch_tiles_payload(
+    PrefetchTilesPayload self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.chapterId, serializer);
-    sse_encode_list_prim_u_32_strict(self.pageIndices, serializer);
+    sse_encode_list_page_tile(self.tiles, serializer);
   }
 
   @protected
@@ -3309,13 +3370,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_render_page_payload(
-    RenderPagePayload self,
+  void sse_encode_render_page_tile_payload(
+    RenderPageTilePayload self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self.chapterId, serializer);
     sse_encode_u_32(self.pageIndex, serializer);
+    sse_encode_u_32(self.tileIndex, serializer);
   }
 
   @protected

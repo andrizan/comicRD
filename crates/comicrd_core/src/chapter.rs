@@ -9,6 +9,7 @@ use zip::ZipArchive;
 
 use crate::database::{file_modified_ts, get_library_source_setting, now_ts};
 use crate::{ChapterContext, OpenChapterPayload, PageInfo, RawChapter};
+use crate::image_pipeline::tile_layout_for_dimensions;
 
 pub(crate) fn ext_eq(path: &Path, target: &str) -> bool {
     path.extension()
@@ -756,9 +757,16 @@ pub(crate) fn get_chapter_pages_conn(
             .into_iter()
             .enumerate()
             .map(|(index, path)| {
-                let (width, height) = image_dimensions_from_path(&path)
+                let dims = image_dimensions_from_path(&path);
+                let (width, height) = dims
                     .map(|(width, height)| (Some(width), Some(height)))
                     .unwrap_or((None, None));
+                let tile_heights = match dims {
+                    Some((w, h)) => {
+                        tile_layout_for_dimensions(w, h, ext_eq(&path, "gif")).1
+                    }
+                    None => vec![0],
+                };
                 PageInfo {
                     index,
                     name: path
@@ -768,6 +776,7 @@ pub(crate) fn get_chapter_pages_conn(
                         .to_string(),
                     width,
                     height,
+                    tile_heights,
                 }
             })
             .collect::<Vec<_>>(),
@@ -775,14 +784,22 @@ pub(crate) fn get_chapter_pages_conn(
             .into_iter()
             .enumerate()
             .map(|(index, name)| {
-                let (width, height) = archive_image_dimensions(Path::new(&source_path), &name)
+                let dims = archive_image_dimensions(Path::new(&source_path), &name);
+                let (width, height) = dims
                     .map(|(width, height)| (Some(width), Some(height)))
                     .unwrap_or((None, None));
+                let tile_heights = match dims {
+                    Some((w, h)) => {
+                        tile_layout_for_dimensions(w, h, ext_eq(Path::new(&name), "gif")).1
+                    }
+                    None => vec![0],
+                };
                 PageInfo {
                     index,
                     name,
                     width,
                     height,
+                    tile_heights,
                 }
             })
             .collect::<Vec<_>>(),
@@ -935,6 +952,17 @@ mod tests {
         assert!(ext_eq(Path::new("image.png"), "png"));
         assert!(!ext_eq(Path::new("image.png"), "jpg"));
         assert!(!ext_eq(Path::new("noext"), "jpg"));
+    }
+
+    #[test]
+    fn tile_layout_matches_branch_rules_for_gif_and_unknown_dims() {
+        // Mirrors get_chapter_pages_conn: a gif extension forces a single
+        // tile (animation), unknown dimensions yield a single empty tile.
+        let (_, gif_tiles) =
+            tile_layout_for_dimensions(1600, 20000, ext_eq(Path::new("p.GIF"), "gif"));
+        assert_eq!(gif_tiles, vec![20000]);
+        let (_, unknown) = tile_layout_for_dimensions(0, 0, false);
+        assert_eq!(unknown, vec![0]);
     }
 
     #[test]
