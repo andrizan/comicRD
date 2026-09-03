@@ -748,11 +748,24 @@ impl ComicRdCore {
     }
 
     pub fn get_chapter_pages(&self, chapter_id: i64) -> Result<Vec<PageInfo>, String> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| "db lock poisoned".to_string())?;
-        get_chapter_pages_conn(&conn, chapter_id)
+        // Short scoped lock for the DB row; the slow listing (archive scans,
+        // dimension probes) runs lock-free. Never hold the DB mutex across IO.
+        let (source_path, source_type) = {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            chapter_source(&conn, chapter_id)?
+        };
+        let pages = build_page_list(&source_path, &source_type)?;
+        {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            update_chapter_page_count(&conn, chapter_id, &source_path, pages.len() as i64);
+        }
+        Ok(pages)
     }
 
     pub fn get_chapter_context(&self, chapter_id: i64) -> Result<Option<ChapterContext>, String> {
@@ -785,22 +798,31 @@ impl ComicRdCore {
         &self,
         payload: RenderPageTilePayload,
     ) -> Result<RenderedPage, String> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| "db lock poisoned".to_string())?;
-        render_page_tile_conn(&conn, &self.page_cache, payload)
-    }
-
-    pub fn prefetch_tiles(&self, payload: PrefetchTilesPayload) -> Result<(), String> {
-        for tile in payload.tiles {
+        // Short scoped lock for the DB row; IO + decode + encode run lock-free.
+        let (source_path, source_type) = {
             let conn = self
                 .conn
                 .lock()
                 .map_err(|_| "db lock poisoned".to_string())?;
+            chapter_source(&conn, payload.chapter_id)?
+        };
+        render_page_tile_conn(&self.page_cache, &source_path, &source_type, payload)
+    }
+
+    pub fn prefetch_tiles(&self, payload: PrefetchTilesPayload) -> Result<(), String> {
+        // Resolve once: all tiles in a payload belong to one chapter.
+        let (source_path, source_type) = {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|_| "db lock poisoned".to_string())?;
+            chapter_source(&conn, payload.chapter_id)?
+        };
+        for tile in payload.tiles {
             render_page_tile_conn(
-                &conn,
                 &self.page_cache,
+                &source_path,
+                &source_type,
                 RenderPageTilePayload {
                     chapter_id: payload.chapter_id,
                     page_index: tile.page_index,

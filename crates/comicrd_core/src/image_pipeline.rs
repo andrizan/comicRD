@@ -6,10 +6,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
-use rusqlite::Connection;
 
 use crate::chapter::{
-    archive_image_bytes, archive_image_entries, chapter_source, image_entries_in_dir,
+    archive_image_bytes, archive_image_entries, image_entries_in_dir,
 };
 use crate::{RenderPageTilePayload, RenderedPage};
 
@@ -160,10 +159,14 @@ fn compute_page_source(source_path: &str, source_type: &str) -> Result<PageSourc
     }
 }
 
+/// Resolve a page source without holding the DB mutex: the caller reads
+/// `(source_path, source_type)` under a short scoped lock first. Archive
+/// listing and directory walks must never run under the DB lock.
 fn get_or_load_page_source(
-    conn: &Connection,
     cache: &PageCache,
     chapter_id: i64,
+    source_path: &str,
+    source_type: &str,
 ) -> Result<PageSource, String> {
     {
         let mut state = cache.lock_state()?;
@@ -173,8 +176,7 @@ fn get_or_load_page_source(
             return Ok(source);
         }
     }
-    let (source_path, source_type) = chapter_source(conn, chapter_id)?;
-    let source = compute_page_source(&source_path, &source_type)?;
+    let source = compute_page_source(source_path, source_type)?;
     let mut state = cache.lock_state()?;
     if let Some(source) = state.sources.get(&chapter_id).cloned() {
         state.stats.page_source_cache_hits += 1;
@@ -307,29 +309,38 @@ fn encode_variant_image(
 /// art and text gain no encoding artifacts beyond the resolution change.
 /// Other formats are re-encoded as JPEG q92. Images that already fit and
 /// GIFs (animation) are returned untouched.
-fn fit_page_variant(bytes: Vec<u8>, mime: &'static str) -> (Vec<u8>, &'static str, u32, u32) {
+/// Decoded page with width-fit applied at most once. Decoded once per
+/// page-miss no matter how many tiles are served from it.
+struct DecodedPage {
+    /// Pixels after width-fit (original pixels when already fitting).
+    image: image::DynamicImage,
+    /// Whether the width cap was applied.
+    resized: bool,
+}
+
+/// Decode + width-fit in one step. `Err` for GIFs (animation) and
+/// undecodable bytes; callers pass those through untouched.
+fn decode_and_fit(bytes: &[u8], mime: &'static str) -> Result<DecodedPage, ()> {
     if mime == "image/gif" {
-        let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
-        return (bytes, mime, width, height);
+        return Err(());
     }
-    let Ok(img) = image::load_from_memory(&bytes) else {
-        let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
-        return (bytes, mime, width, height);
-    };
-    let (width, height) = (img.width(), img.height());
-    let Some(resized) = resize_to_width(&img) else {
-        return (bytes, mime, width, height);
-    };
-    let (new_width, new_height) = (resized.width(), resized.height());
-    match encode_variant_image(&resized, mime) {
-        Some((output, out_mime)) => (output, out_mime, new_width, new_height),
-        None => (bytes, mime, width, height),
+    let img = image::load_from_memory(bytes).map_err(|_| ())?;
+    match resize_to_width(&img) {
+        Some(resized) => Ok(DecodedPage {
+            image: resized,
+            resized: true,
+        }),
+        None => Ok(DecodedPage {
+            image: img,
+            resized: false,
+        }),
     }
 }
 
 fn get_or_load_tile_bytes(
-    conn: &Connection,
     cache: &PageCache,
+    source_path: &str,
+    source_type: &str,
     chapter_id: i64,
     page_index: usize,
     tile_index: usize,
@@ -344,20 +355,15 @@ fn get_or_load_tile_bytes(
             return Ok(result);
         }
     }
-    let source = get_or_load_page_source(conn, cache, chapter_id)?;
+    let source = get_or_load_page_source(cache, chapter_id, source_path, source_type)?;
     let (bytes, mime) = read_page_bytes(&source, page_index)?;
-    // Width-fit first (passthrough for fitting pages/GIFs/corrupt files).
-    // `fit_page_variant` is the same function the old whole-page path used,
-    // so single tiles stay byte-identical to it by construction.
-    let (fitted_bytes, fitted_mime, fitted_width, fitted_height) =
-        fit_page_variant(bytes, mime);
-    let (_, tiles) =
-        tile_layout_for_dimensions(fitted_width, fitted_height, fitted_mime == "image/gif");
-    let tile_height = *tiles
-        .get(tile_index)
-        .ok_or_else(|| "tile index out of range".to_string())?;
-    if tiles.len() == 1 {
-        let shared = Arc::new(fitted_bytes);
+    // Single decode per page-miss: GIFs and corrupt files fall through to
+    // the whole-file single tile (matching list-time layout).
+    let Ok(page) = decode_and_fit(&bytes, mime) else {
+        if tile_index != 0 {
+            return Err("tile index out of range".to_string());
+        }
+        let shared = Arc::new(bytes);
         let mut state = cache.lock_state()?;
         if let Some(cached) = state.bytes.get(&key) {
             let result = (Arc::clone(&cached.bytes), cached.mime);
@@ -370,20 +376,75 @@ fn get_or_load_tile_bytes(
             key,
             CachedPageBytes {
                 bytes: Arc::clone(&shared),
-                mime: fitted_mime,
+                mime,
             },
         );
-        return Ok((shared, fitted_mime));
+        return Ok((shared, mime));
+    };
+    let (fitted_width, fitted_height) = (page.image.width(), page.image.height());
+    let (_, tiles) = tile_layout_for_dimensions(fitted_width, fitted_height, false);
+    if tile_index >= tiles.len() {
+        return Err("tile index out of range".to_string());
     }
-    // Multi-tile: crop from the fitted image. Fitted dims are always within
-    // the width cap, so only the height is ever split here.
-    let fitted_img = image::load_from_memory(&fitted_bytes)
-        .map_err(|e| format!("failed decoding fitted page image: {e}"))?;
-    let y = tile_index as u32 * TILE_MAX_HEIGHT;
-    let tile_image = fitted_img.crop_imm(0, y, fitted_img.width(), tile_height);
-    let (out, out_mime) = encode_variant_image(&tile_image, fitted_mime)
-        .ok_or_else(|| "failed encoding page tile".to_string())?;
-    let shared = Arc::new(out);
+    if tiles.len() == 1 {
+        // Byte-identical to `fit_page_variant` output without decoding
+        // twice: untouched originals pass through, resized pages encode the
+        // one decoded image.
+        if !page.resized {
+            let shared = Arc::new(bytes);
+            let mut state = cache.lock_state()?;
+            if let Some(cached) = state.bytes.get(&key) {
+                let result = (Arc::clone(&cached.bytes), cached.mime);
+                state.stats.page_bytes_cache_hits += 1;
+                state.touch_bytes(key);
+                return Ok(result);
+            }
+            state.stats.page_bytes_loads += 1;
+            state.remember_bytes(
+                key,
+                CachedPageBytes {
+                    bytes: Arc::clone(&shared),
+                    mime,
+                },
+            );
+            return Ok((shared, mime));
+        }
+        let (new_width, new_height) = (page.image.width(), page.image.height());
+        let (out, out_mime) = encode_variant_image(&page.image, mime)
+            .ok_or_else(|| "failed encoding page tile".to_string())?;
+        debug_assert_eq!(
+            (new_width, new_height),
+            (fitted_width, fitted_height)
+        );
+        let shared = Arc::new(out);
+        let mut state = cache.lock_state()?;
+        if let Some(cached) = state.bytes.get(&key) {
+            let result = (Arc::clone(&cached.bytes), cached.mime);
+            state.stats.page_bytes_cache_hits += 1;
+            state.touch_bytes(key);
+            return Ok(result);
+        }
+        state.stats.page_bytes_loads += 1;
+        state.remember_bytes(
+            key,
+            CachedPageBytes {
+                bytes: Arc::clone(&shared),
+                mime: out_mime,
+            },
+        );
+        return Ok((shared, out_mime));
+    }
+    // Multi-tile: crop every tile from the one decoded image and cache
+    // them all, so sibling tiles never pay another full decode. Counts as
+    // ONE page-miss in stats regardless of tile count.
+    let mut encoded: Vec<(Vec<u8>, &'static str)> = Vec::with_capacity(tiles.len());
+    for (t, tile_height) in tiles.iter().enumerate() {
+        let y = t as u32 * TILE_MAX_HEIGHT;
+        let crop = page.image.crop_imm(0, y, fitted_width, *tile_height);
+        let (out, out_mime) = encode_variant_image(&crop, mime)
+            .ok_or_else(|| "failed encoding page tile".to_string())?;
+        encoded.push((out, out_mime));
+    }
     let mut state = cache.lock_state()?;
     if let Some(cached) = state.bytes.get(&key) {
         let result = (Arc::clone(&cached.bytes), cached.mime);
@@ -392,24 +453,33 @@ fn get_or_load_tile_bytes(
         return Ok(result);
     }
     state.stats.page_bytes_loads += 1;
-    state.remember_bytes(
-        key,
-        CachedPageBytes {
-            bytes: Arc::clone(&shared),
-            mime: out_mime,
-        },
-    );
-    Ok((shared, out_mime))
+    let mut requested: Option<(Arc<Vec<u8>>, &'static str)> = None;
+    for (t, (out, out_mime)) in encoded.into_iter().enumerate() {
+        let shared = Arc::new(out);
+        if t == tile_index {
+            requested = Some((Arc::clone(&shared), out_mime));
+        }
+        state.remember_bytes(
+            (chapter_id, page_index, t),
+            CachedPageBytes {
+                bytes: Arc::clone(&shared),
+                mime: out_mime,
+            },
+        );
+    }
+    Ok(requested.expect("requested tile was just encoded"))
 }
 
 pub(crate) fn render_page_tile_conn(
-    conn: &Connection,
     cache: &PageCache,
+    source_path: &str,
+    source_type: &str,
     payload: RenderPageTilePayload,
 ) -> Result<RenderedPage, String> {
     let (bytes, mime) = get_or_load_tile_bytes(
-        conn,
         cache,
+        source_path,
+        source_type,
         payload.chapter_id,
         payload.page_index,
         payload.tile_index,
@@ -456,43 +526,33 @@ mod tests {
     }
 
     #[test]
-    fn fit_page_variant_passes_through_small_images_untouched() {
+    fn decode_and_fit_passes_through_small_images() {
         let bytes = png_bytes(800, 400);
-        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/png");
-        assert_eq!(out, bytes);
-        assert_eq!(mime, "image/png");
-        assert_eq!((width, height), (800, 400));
+        let page = decode_and_fit(&bytes, "image/png").expect("decode");
+        assert!(!page.resized);
+        assert_eq!((page.image.width(), page.image.height()), (800, 400));
     }
 
     #[test]
-    fn fit_page_variant_downscales_oversized_pages_to_jpeg() {
+    fn decode_and_fit_downscales_oversized_pages() {
         let bytes = jpeg_bytes(3000, 4000);
-        let (out, mime, width, height) = fit_page_variant(bytes, "image/jpeg");
-        assert_eq!(mime, "image/jpeg");
-        assert_eq!((width, height), (2048, 2731));
-        let (probe_w, probe_h) = page_dimensions_from_bytes(&out).expect("dims");
-        assert_eq!((probe_w, probe_h), (2048, 2731));
+        let page = decode_and_fit(&bytes, "image/jpeg").expect("decode");
+        assert!(page.resized);
+        assert_eq!((page.image.width(), page.image.height()), (2048, 2731));
+        let png = png_bytes(3000, 4000);
+        let page = decode_and_fit(&png, "image/png").expect("decode");
+        assert!(page.resized);
+        assert_eq!((page.image.width(), page.image.height()), (2048, 2731));
     }
 
     #[test]
-    fn fit_page_variant_downscales_oversized_png_losslessly() {
-        let bytes = png_bytes(3000, 4000);
-        let (out, mime, width, height) = fit_page_variant(bytes, "image/png");
-        assert_eq!(mime, "image/png");
-        assert_eq!((width, height), (2048, 2731));
-        let (probe_w, probe_h) = page_dimensions_from_bytes(&out).expect("dims");
-        assert_eq!((probe_w, probe_h), (2048, 2731));
-    }
-
-    #[test]
-    fn fit_page_variant_leaves_tall_strips_untouched() {
+    fn decode_and_fit_keeps_tall_strips_at_full_width() {
         // A webtoon strip whose width already fits the display must not be
         // shrunk: capping the long side would crush it into a sliver.
         let bytes = png_bytes(1600, 8000);
-        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/png");
-        assert_eq!(out, bytes);
-        assert_eq!(mime, "image/png");
-        assert_eq!((width, height), (1600, 8000));
+        let page = decode_and_fit(&bytes, "image/png").expect("decode");
+        assert!(!page.resized);
+        assert_eq!((page.image.width(), page.image.height()), (1600, 8000));
     }
 
     #[test]
@@ -519,6 +579,17 @@ mod tests {
     }
 
     #[test]
+    fn tile_layout_splits_fitted_wide_pages() {
+        // 3000x4000 JPEG -> fitted 2048x2731 -> tiles [2048, 683].
+        // (Crop/encode interplay for fitted pages shares the loop proven
+        // pixel-exact by the strip reassembly test.)
+        assert_eq!(
+            tile_layout_for_dimensions(3000, 4000, false),
+            (2048, vec![2048, 683])
+        );
+    }
+
+    #[test]
     fn tile_layout_splits_exact_multiples_without_empty_trailing_tile() {
         assert_eq!(
             tile_layout_for_dimensions(100, 4096, false),
@@ -540,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    fn fit_page_variant_passes_through_gifs_to_preserve_animation() {
+    fn decode_and_fit_rejects_gifs_and_garbage() {
         // Minimal 1x1 transparent GIF.
         let bytes = vec![
             0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00,
@@ -548,19 +619,8 @@ mod tests {
             0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
             0x3B,
         ];
-        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/gif");
-        assert_eq!(out, bytes);
-        assert_eq!(mime, "image/gif");
-        assert_eq!((width, height), (1, 1));
-    }
-
-    #[test]
-    fn fit_page_variant_passes_through_undecodable_bytes() {
-        let bytes = vec![0x00, 0x01, 0x02, 0x03];
-        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/png");
-        assert_eq!(out, bytes);
-        assert_eq!(mime, "image/png");
-        assert_eq!((width, height), (0, 0));
+        assert!(decode_and_fit(&bytes, "image/gif").is_err());
+        assert!(decode_and_fit(&[0x00, 0x01, 0x02, 0x03], "image/png").is_err());
     }
 
     fn png_bytes(width: u32, height: u32) -> Vec<u8> {

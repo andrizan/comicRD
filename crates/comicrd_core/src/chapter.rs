@@ -747,12 +747,13 @@ pub(crate) fn chapter_source(
     .map_err(|e| format!("failed loading chapter source: {e}"))
 }
 
-pub(crate) fn get_chapter_pages_conn(
-    conn: &Connection,
-    chapter_id: i64,
+/// Page list without touching the DB: archive listing, dimension probing,
+/// and tile layout. Must run WITHOUT holding the DB mutex (slow IO).
+pub(crate) fn build_page_list(
+    source_path: &str,
+    source_type: &str,
 ) -> Result<Vec<PageInfo>, String> {
-    let (source_path, source_type) = chapter_source(conn, chapter_id)?;
-    let pages = match source_type.as_str() {
+    let pages = match source_type {
         "folder" => image_entries_in_dir(Path::new(&source_path))
             .into_iter()
             .enumerate()
@@ -805,13 +806,22 @@ pub(crate) fn get_chapter_pages_conn(
             .collect::<Vec<_>>(),
         other => return Err(format!("unsupported source type: {other}")),
     };
-    let page_count = pages.len() as i64;
-    let modified_at = file_modified_ts(Path::new(&source_path));
+    Ok(pages)
+}
+
+/// Stats write after listing. Lenient by design: a failed stats write must
+/// never fail the listing itself (mirrors the old inline `let _ =`).
+pub(crate) fn update_chapter_page_count(
+    conn: &Connection,
+    chapter_id: i64,
+    source_path: &str,
+    page_count: i64,
+) {
+    let modified_at = file_modified_ts(Path::new(source_path));
     let _ = conn.execute(
         "UPDATE chapters SET page_count = ?1, date_modified = ?2 WHERE id = ?3",
         params![page_count, modified_at, chapter_id],
     );
-    Ok(pages)
 }
 
 pub(crate) fn get_chapter_context_conn(

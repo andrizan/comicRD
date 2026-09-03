@@ -149,6 +149,7 @@ The reader image pipeline must keep raw image/page data bounded around the curre
 - Flutter must ask Rust to evict other raw pages for the chapter as the active range changes and on reader close/chapter switch.
 - Rust caches up to 2 page sources and 16 raw tile byte entries.
 - Use `Arc<Vec<u8>>` for cached image bytes to avoid deep copies on Rust cache hits.
+- Never hold the DB (`conn`) mutex across filesystem IO, image decode/resize/encode, or archive scans. Resolve DB rows under a short scoped lock, drop the guard, then do slow work (`render_page_tile`, `prefetch_tiles`, `get_chapter_pages` follow this; `PageCache`/`ThumbnailCache` have their own mutexes).
 
 Do not expand reader raw-image cache, Flutter provider retention, or prefetch windows beyond this policy unless the user explicitly changes the memory policy.
 
