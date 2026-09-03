@@ -94,6 +94,7 @@ Files: `app_flutter/lib/state/reader_state.dart`, `app_flutter/lib/pages/reader_
 - [x] Cache tests: extend `tests/cache.rs` pattern — render tile twice → bytes equal + `page_bytes_cache_hits` increments; evict with `keep_pages` drops sibling tiles of evicted pages, keeps window tiles.
 - [x] Bound test: assert every emitted tile's decoded size ≤ 2048×2048×4 (16MB) for a mixed chapter (strip + spread + normal).
 - [ ] Manual QA checklist (real app, rebuilt `.so` — verify timestamp!): 20000px strip top→bottom (no seams, no blanks); zoom 0.2/1.0/1.5 mid-strip; resume mid-strip after close; bookmark a strip page; chapter switch mid-strip (no stale tiles); prev/next chapter at boundaries; observe RAM/GPU vs pre-tiling build.
+- [ ] Manual QA gate, fast chapter switch on Impeller (Flutter 3.47 default, not Skia): next/prev chapter 5x cepat → DevTools Memory `ImageCache` count/bytes tidak monoton naik, kolom GPU Task Manager turun kembali setelah 1-2 frame/GC (dealokasi texture Impeller ditunda sampai batas frame, bukan instan saat `clear()`). RSS OS boleh di high-water mark — yang dinilai heap Dart + `ImageCache`, bukan RSS saja.
 
 ## Follow-up: Scrollbar Exact Total (post-plan fix)
 

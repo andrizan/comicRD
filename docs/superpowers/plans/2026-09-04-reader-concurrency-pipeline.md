@@ -55,7 +55,7 @@ Entry criteria (do NOT start otherwise): after Phases 1–2, release-profile til
 
 Problem (structural, unmeasured in release): ~90MB transient per concurrent strip render (77MB RGBA decode + encode buffers); Flutter fires multiple tile providers at once on fast scroll.
 
-- [x] Measure first (release profile, scratch only): peak RSS while 8 threads render distinct strip tiles concurrently vs sequentially. Record numbers here. — DEFERRED: cannot measure release RSS headless; revisit with app profiling. Prefetch path stays sequential by design.
+- [x] Measure first (release profile, scratch only): peak RSS while 8 threads render distinct strip tiles concurrently vs sequentially. Record numbers here. — DEFERRED: cannot measure release RSS headless; revisit with app profiling. Prefetch path stays sequential by design. Note (Impeller, Flutter 3.47 default): GPU texture dealloc is deferred to frame boundary, so judge fast-switch peaks via DevTools Memory `ImageCache` + GPU column after 1-2 frames/GC, not instant RSS.
 - [ ] Only if peak is problematic (>500MB or OOM-adjacent on target machines): serialize tile renders per chapter in core (extend the existing sequential-prefetch pattern — e.g. a per-chapter mutex around the decode/encode section, never around cache hits; prove no deadlock with the Phase 1 liveness test extended to mixed render+prefetch concurrency). Do NOT serialize cache hits or DB reads.
 - [ ] If measurement is fine, check off as "measured, no action" with the numbers.
 
