@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -153,6 +152,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _initialScrollDone = false;
   bool _fullscreen = false;
   bool _toolbarVisible = true;
+  // Overlay-only version counter (toolbar + page indicator). Bumped instead
+  // of calling setState so scroll/page/toolbar updates don't rebuild the
+  // page list, and overlay changes don't rebuild it either.
+  final ValueNotifier<int> _overlayVersion = ValueNotifier(0);
   late final ComicRdApi _api;
   ReaderData? _lastReaderData;
   int? _lastReaderChapterId;
@@ -197,6 +200,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _overlayVersion.dispose();
     _scroll.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -219,6 +223,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _renderStart = 0;
     _renderEnd = -1;
     _toolbarVisible = true;
+    _refreshOverlay();
     final oldData = _lastReaderChapterId == oldWidget.chapterId
         ? _lastReaderData
         : null;
@@ -322,127 +327,144 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     child: const SizedBox.expand(),
                   ),
                 ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: AnimatedSlide(
-                    offset: _toolbarVisible ? Offset.zero : const Offset(0, -1),
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                    child: AnimatedOpacity(
-                      opacity: _toolbarVisible ? 1 : 0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      child: IgnorePointer(
-                        ignoring: !_toolbarVisible,
-                        child: MouseRegion(
-                          onEnter: (_) => _showToolbar(),
-                          child: _ReferenceReaderToolbar(
-                            text: text,
-                            data: data,
-                            currentPage: _currentPage,
-                            pageGap: readerSettings.pageGap,
-                            zoom: readerSettings.zoom,
-                            fullscreen: _fullscreen,
-                            unlimitedScroll: readerSettings.unlimitedScroll,
-                            forcePortrait: readerSettings.forcePortrait,
-                            isBookmarked: isBookmarked,
-                            isFavorited: isFavorited,
-                            onClose: () => _close(data),
-                            onPreviousPage: () => _jumpBy(-1),
-                            onNextPage: () => _jumpBy(1),
-                            onPreviousChapter:
-                                data.context?.prevChapterId == null
-                                ? null
-                                : () => _switchChapter(
-                                    data.context!.prevChapterId!,
+                Positioned.fill(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _overlayVersion,
+                    builder: (_, _, _) => Stack(
+                      children: [
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: AnimatedSlide(
+                            offset: _toolbarVisible
+                                ? Offset.zero
+                                : const Offset(0, -1),
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            child: AnimatedOpacity(
+                              opacity: _toolbarVisible ? 1 : 0,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                              child: IgnorePointer(
+                                ignoring: !_toolbarVisible,
+                                child: MouseRegion(
+                                  onEnter: (_) => _showToolbar(),
+                                  child: _ReferenceReaderToolbar(
+                                    text: text,
+                                    data: data,
+                                    currentPage: _currentPage,
+                                    pageGap: readerSettings.pageGap,
+                                    zoom: readerSettings.zoom,
+                                    fullscreen: _fullscreen,
+                                    unlimitedScroll:
+                                        readerSettings.unlimitedScroll,
+                                    forcePortrait: readerSettings.forcePortrait,
+                                    isBookmarked: isBookmarked,
+                                    isFavorited: isFavorited,
+                                    onClose: () => _close(data),
+                                    onPreviousPage: () => _jumpBy(-1),
+                                    onNextPage: () => _jumpBy(1),
+                                    onPreviousChapter:
+                                        data.context?.prevChapterId == null
+                                        ? null
+                                        : () => _switchChapter(
+                                            data.context!.prevChapterId!,
+                                          ),
+                                    onNextChapter:
+                                        data.context?.nextChapterId == null
+                                        ? null
+                                        : () => _switchChapter(
+                                            data.context!.nextChapterId!,
+                                          ),
+                                    onGapChanged: (gap) {
+                                      ref
+                                          .read(readerSettingsProvider.notifier)
+                                          .setPageGap(gap);
+                                    },
+                                    onZoomChanged: (zoom) {
+                                      ref
+                                          .read(readerSettingsProvider.notifier)
+                                          .setZoom(zoom);
+                                    },
+                                    onToggleFullscreen: _toggleFullscreen,
+                                    onToggleUnlimitedScroll: () {
+                                      ref
+                                          .read(readerSettingsProvider.notifier)
+                                          .setUnlimitedScroll(
+                                            !readerSettings.unlimitedScroll,
+                                          );
+                                    },
+                                    onToggleForcePortrait: () {
+                                      ref
+                                          .read(readerSettingsProvider.notifier)
+                                          .setForcePortrait(
+                                            !readerSettings.forcePortrait,
+                                          );
+                                    },
+                                    onToggleBookmark: () => _toggleBookmark(
+                                      chapterSourcePath,
+                                      comicPath,
+                                    ),
+                                    onToggleFavorite: () =>
+                                        _toggleFavorite(comicPath),
+                                    onTogglePageBookmark: _togglePageBookmark,
+                                    isPageBookmarked: _pageBookmarkedPages
+                                        .contains(_currentPage),
                                   ),
-                            onNextChapter: data.context?.nextChapterId == null
-                                ? null
-                                : () => _switchChapter(
-                                    data.context!.nextChapterId!,
-                                  ),
-                            onGapChanged: (gap) {
-                              ref
-                                  .read(readerSettingsProvider.notifier)
-                                  .setPageGap(gap);
-                            },
-                            onZoomChanged: (zoom) {
-                              ref
-                                  .read(readerSettingsProvider.notifier)
-                                  .setZoom(zoom);
-                            },
-                            onToggleFullscreen: _toggleFullscreen,
-                            onToggleUnlimitedScroll: () {
-                              ref
-                                  .read(readerSettingsProvider.notifier)
-                                  .setUnlimitedScroll(
-                                    !readerSettings.unlimitedScroll,
-                                  );
-                            },
-                            onToggleForcePortrait: () {
-                              ref
-                                  .read(readerSettingsProvider.notifier)
-                                  .setForcePortrait(
-                                    !readerSettings.forcePortrait,
-                                  );
-                            },
-                            onToggleBookmark: () =>
-                                _toggleBookmark(chapterSourcePath, comicPath),
-                            onToggleFavorite: () => _toggleFavorite(comicPath),
-                            onTogglePageBookmark: _togglePageBookmark,
-                            isPageBookmarked: _pageBookmarkedPages.contains(
-                              _currentPage,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: AnimatedOpacity(
-                    opacity: _toolbarVisible ? 0 : 1,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                    child: IgnorePointer(
-                      ignoring: _toolbarVisible,
-                      child: _ReferenceReaderIconButton(
-                        tooltip: text.readerControls,
-                        icon: AppIcons.settings,
-                        onPressed: _showToolbar,
-                        compact: true,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: AnimatedSlide(
-                    offset: _toolbarVisible ? Offset.zero : const Offset(0, 1),
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
-                    child: AnimatedOpacity(
-                      opacity: _toolbarVisible ? 1 : 0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      child: IgnorePointer(
-                        ignoring: !_toolbarVisible,
-                        child: MouseRegion(
-                          onEnter: (_) => _showToolbar(),
-                          child: _ReferencePageIndicator(
-                            currentPage: _currentPage,
-                            pageCount: data.pages.length,
-                            pageBookmarkedPages: _pageBookmarkedPages,
-                            onSelected: _jumpToPage,
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: AnimatedOpacity(
+                            opacity: _toolbarVisible ? 0 : 1,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            child: IgnorePointer(
+                              ignoring: _toolbarVisible,
+                              child: _ReferenceReaderIconButton(
+                                tooltip: text.readerControls,
+                                icon: AppIcons.settings,
+                                onPressed: _showToolbar,
+                                compact: true,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: AnimatedSlide(
+                            offset: _toolbarVisible
+                                ? Offset.zero
+                                : const Offset(0, 1),
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            child: AnimatedOpacity(
+                              opacity: _toolbarVisible ? 1 : 0,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                              child: IgnorePointer(
+                                ignoring: !_toolbarVisible,
+                                child: MouseRegion(
+                                  onEnter: (_) => _showToolbar(),
+                                  child: _ReferencePageIndicator(
+                                    currentPage: _currentPage,
+                                    pageCount: data.pages.length,
+                                    pageBookmarkedPages: _pageBookmarkedPages,
+                                    onSelected: _jumpToPage,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -569,7 +591,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _initialScrollTimer = null;
         }
         if (_isReaderCurrent(chapterId, generation)) {
-          setState(() => _initialScrollDone = true);
+          _initialScrollDone = true;
           _updateViewportWindow(persistProgress: false);
         }
       });
@@ -686,11 +708,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!pageChanged && !windowChanged) {
       return;
     }
-    setState(() {
-      _currentPage = page;
-      _renderStart = start;
-      _renderEnd = end;
-    });
+    _currentPage = page;
+    _renderStart = start;
+    _renderEnd = end;
+    if (pageChanged) {
+      _refreshOverlay();
+    }
     if (pageChanged && persistProgress) {
       _scheduleProgressSave();
     }
@@ -1093,9 +1116,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _setRenderWindowAround(page, count);
-    setState(() {
+    if (page != _currentPage) {
       _currentPage = page;
-    });
+      _refreshOverlay();
+    }
     if (persist) {
       _scheduleProgressSave();
     } else {
@@ -1169,18 +1193,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
+  void _refreshOverlay() {
+    if (!mounted) {
+      return;
+    }
+    _overlayVersion.value++;
+  }
+
   void _showToolbar() {
     if (_toolbarVisible || !mounted) {
       return;
     }
-    setState(() => _toolbarVisible = true);
+    _toolbarVisible = true;
+    _refreshOverlay();
   }
 
   void _hideToolbar() {
     if (!_toolbarVisible || !mounted) {
       return;
     }
-    setState(() => _toolbarVisible = false);
+    _toolbarVisible = false;
+    _refreshOverlay();
   }
 
   Future<void> _toggleFullscreen() async {
@@ -1193,7 +1226,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       await windowManager.setTitleBarStyle(TitleBarStyle.normal);
     }
     if (mounted) {
-      setState(() {});
+      _refreshOverlay();
     }
   }
 
@@ -1237,11 +1270,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     try {
       final bookmarks = await _api.listPageBookmarks(chapterId: chapterId);
       if (!mounted) return;
-      setState(() {
-        _pageBookmarkedPages
-          ..clear()
-          ..addAll(bookmarks.map((b) => b.page.toInt()));
-      });
+      _pageBookmarkedPages
+        ..clear()
+        ..addAll(bookmarks.map((b) => b.page.toInt()));
+      _refreshOverlay();
     } catch (_) {}
   }
 
@@ -1262,7 +1294,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
       } catch (_) {}
       if (mounted) {
-        setState(() => _pageBookmarkedPages.remove(pageIndex));
+        _pageBookmarkedPages.remove(pageIndex);
+        _refreshOverlay();
       }
     } else {
       try {
@@ -1275,7 +1308,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
       } catch (_) {}
       if (mounted) {
-        setState(() => _pageBookmarkedPages.add(pageIndex));
+        _pageBookmarkedPages.add(pageIndex);
+        _refreshOverlay();
       }
     }
   }
@@ -1312,28 +1346,30 @@ class _ReaderPageItem extends ConsumerWidget {
         RenderedPageRequest(chapterId: chapterId, pageIndex: page.index),
       ),
     );
-    return rendered.when(
-      data: (renderedPage) => Center(
-        child: SizedBox(
-          width: displayWidth,
-          child: AspectRatio(
-            aspectRatio: aspectRatio,
-            child: Image.memory(
-              renderedPage.bytes,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.medium,
-              fit: BoxFit.contain,
+    return RepaintBoundary(
+      child: rendered.when(
+        data: (renderedPage) => Center(
+          child: SizedBox(
+            width: displayWidth,
+            child: AspectRatio(
+              aspectRatio: aspectRatio,
+              child: Image.memory(
+                renderedPage.bytes,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+                fit: BoxFit.contain,
+              ),
             ),
           ),
         ),
+        error: (error, _) => _PagePlaceholder(
+          aspectRatio: aspectRatio,
+          width: displayWidth,
+          label: error.toString(),
+        ),
+        loading: () =>
+            _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
       ),
-      error: (error, _) => _PagePlaceholder(
-        aspectRatio: aspectRatio,
-        width: displayWidth,
-        label: error.toString(),
-      ),
-      loading: () =>
-          _PagePlaceholder(aspectRatio: aspectRatio, width: displayWidth),
     );
   }
 }
@@ -1387,24 +1423,22 @@ class _ReaderGlass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xff151922).withValues(alpha: 0.60),
-            border: border,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
+    // NOTE: intentionally no BackdropFilter blur here. A fullscreen backdrop
+    // blur is re-computed every frame while scrolling and saturates the GPU.
+    // A more opaque fill keeps the same look for a fraction of the cost.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xff151922).withValues(alpha: 0.88),
+        border: border,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
-          child: child,
-        ),
+        ],
       ),
+      child: child,
     );
   }
 }
