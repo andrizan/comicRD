@@ -4,6 +4,8 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use image::codecs::jpeg::JpegEncoder;
+use image::imageops::FilterType;
 use rusqlite::Connection;
 
 use crate::chapter::{
@@ -221,6 +223,8 @@ fn get_or_load_page_bytes(
     }
     let source = get_or_load_page_source(conn, cache, chapter_id)?;
     let (bytes, mime) = read_page_bytes(&source, page_index)?;
+    // Cache the fitted variant so oversized pages are decoded/resized once.
+    let (bytes, mime, _, _) = fit_page_variant(bytes, mime);
     let shared = Arc::new(bytes);
     let mut state = cache.lock_state()?;
     if let Some(cached) = state.bytes.get(&key) {
@@ -246,6 +250,68 @@ pub(crate) fn page_dimensions_from_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
         .ok()?
         .into_dimensions()
         .ok()
+}
+
+/// Width cap for reader page variants, in pixels.
+///
+/// Width is what maps to screen pixels in the vertical reader, so it alone
+/// decides on-screen sharpness. A long-side cap would crush tall webtoon
+/// strips (e.g. 1600x20000, whose width already fits the display) into
+/// unreadable slivers, so height is deliberately left untouched.
+/// Display targets are 1000px (portrait) / 1500px (landscape) wide at up to
+/// 1.5x zoom; 2048px keeps full sharpness there while cutting width
+/// monsters (3000px+) down to a fraction of the decoded GPU texture size
+/// (decoded RGBA costs width x height x 4 bytes per page).
+const MAX_VARIANT_WIDTH: u32 = 2048;
+const VARIANT_JPEG_QUALITY: u8 = 92;
+
+/// Downscale an over-wide page to the variant cap, returning
+/// (bytes, mime, width, height).
+///
+/// Cost/quality balance: CatmullRom resampling (sharper than Triangle, far
+/// cheaper than Lanczos3) and lossless PNG output for PNG inputs so line
+/// art and text gain no encoding artifacts beyond the resolution change.
+/// Other formats are re-encoded as JPEG q92. Images that already fit and
+/// GIFs (animation) are returned untouched.
+fn fit_page_variant(bytes: Vec<u8>, mime: &'static str) -> (Vec<u8>, &'static str, u32, u32) {
+    if mime == "image/gif" {
+        let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
+        return (bytes, mime, width, height);
+    }
+    let Ok(img) = image::load_from_memory(&bytes) else {
+        let (width, height) = page_dimensions_from_bytes(&bytes).unwrap_or((0, 0));
+        return (bytes, mime, width, height);
+    };
+    let (width, height) = (img.width(), img.height());
+    if width <= MAX_VARIANT_WIDTH {
+        return (bytes, mime, width, height);
+    }
+    let scale = MAX_VARIANT_WIDTH as f32 / width as f32;
+    let new_width = MAX_VARIANT_WIDTH;
+    let new_height = ((height as f32 * scale).round() as u32).max(1);
+    let resized = img.resize(new_width, new_height, FilterType::CatmullRom);
+    if mime == "image/png" {
+        let mut output = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(&mut output);
+        if resized.write_with_encoder(encoder).is_err() {
+            return (bytes, mime, width, height);
+        }
+        return (output, "image/png", new_width, new_height);
+    }
+    let rgb = resized.to_rgb8();
+    let mut output = Vec::new();
+    if JpegEncoder::new_with_quality(&mut output, VARIANT_JPEG_QUALITY)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            image::ColorType::Rgb8.into(),
+        )
+        .is_err()
+    {
+        return (bytes, mime, width, height);
+    }
+    (output, "image/jpeg", new_width, new_height)
 }
 
 pub(crate) fn render_page_variant_conn(
@@ -294,5 +360,87 @@ mod tests {
     fn page_dimensions_returns_none_for_invalid_bytes() {
         assert!(page_dimensions_from_bytes(&[]).is_none());
         assert!(page_dimensions_from_bytes(&[0x00, 0x01, 0x02]).is_none());
+    }
+
+    #[test]
+    fn fit_page_variant_passes_through_small_images_untouched() {
+        let bytes = png_bytes(800, 400);
+        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/png");
+        assert_eq!(out, bytes);
+        assert_eq!(mime, "image/png");
+        assert_eq!((width, height), (800, 400));
+    }
+
+    #[test]
+    fn fit_page_variant_downscales_oversized_pages_to_jpeg() {
+        let bytes = jpeg_bytes(3000, 4000);
+        let (out, mime, width, height) = fit_page_variant(bytes, "image/jpeg");
+        assert_eq!(mime, "image/jpeg");
+        assert_eq!((width, height), (2048, 2731));
+        let (probe_w, probe_h) = page_dimensions_from_bytes(&out).expect("dims");
+        assert_eq!((probe_w, probe_h), (2048, 2731));
+    }
+
+    #[test]
+    fn fit_page_variant_downscales_oversized_png_losslessly() {
+        let bytes = png_bytes(3000, 4000);
+        let (out, mime, width, height) = fit_page_variant(bytes, "image/png");
+        assert_eq!(mime, "image/png");
+        assert_eq!((width, height), (2048, 2731));
+        let (probe_w, probe_h) = page_dimensions_from_bytes(&out).expect("dims");
+        assert_eq!((probe_w, probe_h), (2048, 2731));
+    }
+
+    #[test]
+    fn fit_page_variant_leaves_tall_strips_untouched() {
+        // A webtoon strip whose width already fits the display must not be
+        // shrunk: capping the long side would crush it into a sliver.
+        let bytes = png_bytes(1600, 8000);
+        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/png");
+        assert_eq!(out, bytes);
+        assert_eq!(mime, "image/png");
+        assert_eq!((width, height), (1600, 8000));
+    }
+
+    #[test]
+    fn fit_page_variant_passes_through_gifs_to_preserve_animation() {
+        // Minimal 1x1 transparent GIF.
+        let bytes = vec![
+            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C,
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+            0x3B,
+        ];
+        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/gif");
+        assert_eq!(out, bytes);
+        assert_eq!(mime, "image/gif");
+        assert_eq!((width, height), (1, 1));
+    }
+
+    #[test]
+    fn fit_page_variant_passes_through_undecodable_bytes() {
+        let bytes = vec![0x00, 0x01, 0x02, 0x03];
+        let (out, mime, width, height) = fit_page_variant(bytes.clone(), "image/png");
+        assert_eq!(out, bytes);
+        assert_eq!(mime, "image/png");
+        assert_eq!((width, height), (0, 0));
+    }
+
+    fn png_bytes(width: u32, height: u32) -> Vec<u8> {
+        let image = image::ImageBuffer::from_pixel(width, height, image::Rgba([10u8, 20, 30, 255]));
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        image
+            .write_to(&mut cursor, image::ImageFormat::Png)
+            .expect("encode png");
+        cursor.into_inner()
+    }
+
+    fn jpeg_bytes(width: u32, height: u32) -> Vec<u8> {
+        let image = image::ImageBuffer::from_pixel(width, height, image::Rgb([10u8, 20, 30]));
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        image
+            .write_to(&mut cursor, image::ImageFormat::Jpeg)
+            .expect("encode jpeg");
+        cursor.into_inner()
     }
 }

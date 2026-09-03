@@ -301,6 +301,39 @@ fn rar_image_bytes(path: &Path, name: &str) -> Result<Vec<u8>, String> {
     }
 }
 
+/// Leading bytes read from a zip entry when probing dimensions.
+/// Covers JPEG/PNG/GIF/BMP/WebP headers; falls back to a full read below.
+const DIM_PROBE_BYTES: u64 = 64 * 1024;
+
+fn zip_image_dimensions(path: &Path, name: &str) -> Option<(u32, u32)> {
+    let file = fs::File::open(path).ok()?;
+    let mut archive = ZipArchive::new(file).ok()?;
+    let entry = archive.by_name(name).ok()?;
+    let mut head = Vec::new();
+    entry.take(DIM_PROBE_BYTES).read_to_end(&mut head).ok()?;
+    image_dimensions_from_bytes(&head)
+}
+
+/// Dimensions of an archive entry without fully extracting it when possible.
+///
+/// For zip/cbz only the leading bytes are decompressed for the header probe;
+/// a full read is kept as fallback for headers beyond the probe window
+/// (e.g. giant metadata). unrar only extracts whole entries, so cbr/rar
+/// keeps the full read.
+pub(crate) fn archive_image_dimensions(path: &Path, name: &str) -> Option<(u32, u32)> {
+    if !is_rar_archive(path) {
+        if let Some(dims) = zip_image_dimensions(path, name) {
+            return Some(dims);
+        }
+        return zip_image_bytes(path, name)
+            .ok()
+            .and_then(|bytes| image_dimensions_from_bytes(&bytes));
+    }
+    rar_image_bytes(path, name)
+        .ok()
+        .and_then(|bytes| image_dimensions_from_bytes(&bytes))
+}
+
 fn ignored_fs_entry(path: &Path) -> bool {
     path.components().any(|component| {
         let Some(name) = component.as_os_str().to_str() else {
@@ -742,9 +775,7 @@ pub(crate) fn get_chapter_pages_conn(
             .into_iter()
             .enumerate()
             .map(|(index, name)| {
-                let (width, height) = archive_image_bytes(Path::new(&source_path), &name)
-                    .ok()
-                    .and_then(|bytes| image_dimensions_from_bytes(&bytes))
+                let (width, height) = archive_image_dimensions(Path::new(&source_path), &name)
                     .map(|(width, height)| (Some(width), Some(height)))
                     .unwrap_or((None, None));
                 PageInfo {
@@ -1039,5 +1070,39 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("dir");
         assert_eq!(sort_name(&archive), "Chapter 06.5");
         assert_eq!(sort_name(&dir), "Chapter 07");
+    }
+
+    #[test]
+    fn archive_image_dimensions_probes_zip_entry_headers() {
+        use std::io::Write;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let archive = temp.path().join("pages.cbz");
+        {
+            let file = fs::File::create(&archive).expect("create zip");
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file("001.png", options).expect("start png");
+            zip.write_all(&test_png_bytes(200, 80)).expect("write png");
+            zip.start_file("junk.png", options).expect("start junk");
+            zip.write_all(b"not an image").expect("write junk");
+            zip.finish().expect("finish zip");
+        }
+
+        assert_eq!(
+            archive_image_dimensions(&archive, "001.png"),
+            Some((200, 80))
+        );
+        assert_eq!(archive_image_dimensions(&archive, "junk.png"), None);
+        assert_eq!(archive_image_dimensions(&archive, "missing.png"), None);
+    }
+
+    fn test_png_bytes(width: u32, height: u32) -> Vec<u8> {
+        let image = image::ImageBuffer::from_pixel(width, height, image::Rgba([10u8, 20, 30, 255]));
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        image
+            .write_to(&mut cursor, image::ImageFormat::Png)
+            .expect("encode png");
+        cursor.into_inner()
     }
 }

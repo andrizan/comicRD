@@ -172,7 +172,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     super.initState();
     _api = ref.read(comicRdApiProvider);
     _activeInstances++;
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 64 * 1024 * 1024;
+    // Sized for downscaled page variants (~3-12MB decoded each) so the
+    // prefetch window survives without constant evict/re-decode churn.
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 128 * 1024 * 1024;
     _scroll = _createScrollController();
   }
 

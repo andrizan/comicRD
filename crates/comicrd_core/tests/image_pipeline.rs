@@ -146,9 +146,50 @@ fn render_page_variant_returns_raw_image_bytes() {
     assert!(!rendered.bytes.is_empty());
 }
 
+#[test]
+fn render_page_variant_downscales_oversized_pages() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter = comic.join("Chapter 1");
+    fs::create_dir_all(&chapter).expect("chapter");
+    create_jpeg(chapter.join("001.jpg"), 3000, 4000);
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let chapter_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter.to_string_lossy().to_string(),
+        })
+        .expect("open chapter");
+
+    let rendered = core
+        .render_page_variant(RenderPagePayload {
+            chapter_id,
+            page_index: 0,
+        })
+        .expect("render page");
+
+    assert_eq!(rendered.mime, "image/jpeg");
+    assert_eq!(rendered.width, 2048);
+    assert_eq!(rendered.height, 2731);
+    assert!(!rendered.bytes.is_empty());
+}
+
 fn create_png(path: impl AsRef<std::path::Path>, width: u32, height: u32) {
     let image = ImageBuffer::from_pixel(width, height, Rgba([10u8, 20, 30, 255]));
     image.save(path).expect("save png");
+}
+
+fn create_jpeg(path: impl AsRef<std::path::Path>, width: u32, height: u32) {
+    let image = image::ImageBuffer::from_pixel(width, height, image::Rgb([10u8, 20, 30]));
+    image.save(path).expect("save jpeg");
 }
 
 fn create_png_bytes(width: u32, height: u32) -> Vec<u8> {
