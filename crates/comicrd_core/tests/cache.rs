@@ -1,4 +1,4 @@
-use comicrd_core::{ComicRdCore, OpenChapterPayload, RenderPageTilePayload};
+use comicrd_core::{ComicRdCore, OpenChapterPayload, PageTile, PrefetchTilesPayload, RenderPageTilePayload};
 use image::{ImageBuffer, ImageFormat, Rgba};
 use std::fs;
 use std::sync::{Arc, Barrier};
@@ -220,22 +220,23 @@ fn evict_chapter_pages_drops_sibling_tiles_but_keeps_window() {
     core.render_page_tile(tile(0, 0)).expect("strip tile 0");
     core.render_page_tile(tile(0, 1)).expect("strip tile 1");
     core.render_page_tile(tile(1, 0)).expect("page 1");
-    // One miss serves both strip tiles (decode-once), so 3 renders = 2 loads.
-    assert_eq!(core.cache_stats_for_test().page_bytes_loads, 2);
+    // Lazy siblings: each single render encodes only its own tile, so 3
+    // renders = 3 loads (the batched prefetch still decodes once per page).
+    assert_eq!(core.cache_stats_for_test().page_bytes_loads, 3);
 
     // Keep only page 1: both sibling tiles of page 0 must go. Rendering
-    // tile (0,0) re-decodes once and re-caches both strip tiles.
+    // tile (0,0) re-decodes and caches just that tile.
     core.evict_chapter_pages(chapter_id, vec![1]);
     core.render_page_tile(tile(0, 0)).expect("strip tile 0 again");
-    assert_eq!(core.cache_stats_for_test().page_bytes_loads, 3);
+    assert_eq!(core.cache_stats_for_test().page_bytes_loads, 4);
     core.render_page_tile(tile(1, 0)).expect("page 1 again");
     let stats = core.cache_stats_for_test();
-    assert_eq!(stats.page_bytes_loads, 3);
-    assert_eq!(stats.page_bytes_cache_hits, 2);
+    assert_eq!(stats.page_bytes_loads, 4);
+    assert_eq!(stats.page_bytes_cache_hits, 1);
 }
 
 #[test]
-fn rendering_all_strip_tiles_counts_single_page_miss() {
+fn rendering_strip_tiles_lazily_counts_one_load_per_tile_miss() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");
     let library = temp.path().join("library");
@@ -268,8 +269,9 @@ fn rendering_all_strip_tiles_counts_single_page_miss() {
         .expect("render tile");
     }
     let after = core.cache_stats_for_test();
-    // One decode serves every tile of the page: a single page-miss.
-    assert_eq!(after.page_bytes_loads - before.page_bytes_loads, 1);
+    // Lazy siblings: sequential single renders each pay their own decode.
+    // (One decode serves every tile only via the batched prefetch path.)
+    assert_eq!(after.page_bytes_loads - before.page_bytes_loads, 3);
     for tile_index in 0..3usize {
         core.render_page_tile(RenderPageTilePayload {
             chapter_id,
@@ -277,6 +279,57 @@ fn rendering_all_strip_tiles_counts_single_page_miss() {
             tile_index,
         })
         .expect("render tile again");
+    }
+    let again = core.cache_stats_for_test();
+    assert_eq!(again.page_bytes_loads - after.page_bytes_loads, 0);
+    assert_eq!(again.page_bytes_cache_hits - after.page_bytes_cache_hits, 3);
+}
+
+#[test]
+fn prefetch_batch_decodes_once_per_page() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter = comic.join("Chapter 1");
+    fs::create_dir_all(&chapter).expect("chapter");
+    // 1600x4100 -> tiles [2048, 2048, 4].
+    create_png(chapter.join("strip.png"), 1600, 4100);
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let chapter_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter.to_string_lossy().to_string(),
+        })
+        .expect("open chapter");
+
+    let before = core.cache_stats_for_test();
+    core.prefetch_tiles(PrefetchTilesPayload {
+        chapter_id,
+        tiles: vec![
+            PageTile { page_index: 0, tile_index: 0 },
+            PageTile { page_index: 0, tile_index: 1 },
+            PageTile { page_index: 0, tile_index: 2 },
+        ],
+    })
+    .expect("prefetch");
+    let after = core.cache_stats_for_test();
+    // One decode serves every prefetched tile of the page.
+    assert_eq!(after.page_bytes_loads - before.page_bytes_loads, 1);
+    // Every tile is now a hit, byte-identical to lazy single renders.
+    for tile_index in 0..3usize {
+        core.render_page_tile(RenderPageTilePayload {
+            chapter_id,
+            page_index: 0,
+            tile_index,
+        })
+        .expect("render tile");
     }
     let again = core.cache_stats_for_test();
     assert_eq!(again.page_bytes_loads - after.page_bytes_loads, 0);

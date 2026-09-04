@@ -286,3 +286,46 @@ fn create_zip_with_png_entries(path: impl AsRef<std::path::Path>, entries: &[(&s
     }
     zip.finish().expect("finish zip");
 }
+
+#[test]
+fn render_page_tile_passthrough_counts_single_load_then_hit() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter = comic.join("Chapter 1");
+    fs::create_dir_all(&chapter).expect("chapter");
+    create_png(chapter.join("001.png"), 800, 400);
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let chapter_id = open_chapter(&core, &comic, &chapter);
+
+    let before = core.cache_stats_for_test();
+    let rendered = core
+        .render_page_tile(RenderPageTilePayload {
+            chapter_id,
+            page_index: 0,
+            tile_index: 0,
+        })
+        .expect("render page");
+    // Pass-through stays byte-identical to the source file (no decode).
+    let source = fs::read(chapter.join("001.png")).expect("read source");
+    assert_eq!(&*rendered.bytes, &source);
+    let after_miss = core.cache_stats_for_test();
+    assert_eq!(after_miss.page_bytes_loads - before.page_bytes_loads, 1);
+
+    core.render_page_tile(RenderPageTilePayload {
+        chapter_id,
+        page_index: 0,
+        tile_index: 0,
+    })
+    .expect("render page again");
+    let after_hit = core.cache_stats_for_test();
+    assert_eq!(after_hit.page_bytes_loads - after_miss.page_bytes_loads, 0);
+    assert_eq!(after_hit.page_bytes_cache_hits - after_miss.page_bytes_cache_hits, 1);
+}

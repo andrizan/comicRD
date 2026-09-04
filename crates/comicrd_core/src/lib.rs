@@ -818,16 +818,23 @@ impl ComicRdCore {
                 .map_err(|_| "db lock poisoned".to_string())?;
             chapter_source(&conn, payload.chapter_id)?
         };
-        for tile in payload.tiles {
-            render_page_tile_conn(
+        // Group by page in first-appearance order: one decode serves every
+        // missed tile of the page (single renders stay lazy per tile).
+        let mut pages: Vec<(usize, Vec<usize>)> = Vec::new();
+        for tile in &payload.tiles {
+            match pages.iter_mut().find(|(page, _)| *page == tile.page_index) {
+                Some((_, wanted)) => wanted.push(tile.tile_index),
+                None => pages.push((tile.page_index, vec![tile.tile_index])),
+            }
+        }
+        for (page_index, tile_indices) in pages {
+            prefetch_page_tiles_conn(
                 &self.page_cache,
                 &source_path,
                 &source_type,
-                RenderPageTilePayload {
-                    chapter_id: payload.chapter_id,
-                    page_index: tile.page_index,
-                    tile_index: tile.tile_index,
-                },
+                payload.chapter_id,
+                page_index,
+                &tile_indices,
             )?;
         }
         Ok(())

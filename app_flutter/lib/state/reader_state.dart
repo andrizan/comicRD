@@ -8,9 +8,17 @@ final readerDataProvider = FutureProvider.autoDispose.family<ReaderData, int>((
   chapterId,
 ) async {
   final api = ref.watch(comicRdApiProvider);
-  final context = await api.getChapterContext(chapterId);
-  final pages = await api.getChapterPages(chapterId);
-  final progress = await api.getProgress(chapterId);
+  // Parallelize the three independent fetches: each crosses the bridge on
+  // its own, so serial awaits stack their latencies on every chapter open.
+  // Error semantics are unchanged (any failure fails the provider).
+  final results = await Future.wait<dynamic>([
+    api.getChapterContext(chapterId),
+    api.getChapterPages(chapterId),
+    api.getProgress(chapterId),
+  ]);
+  final context = results[0] as bridge.ChapterContext?;
+  final pages = results[1] as List<bridge.PageInfo>;
+  final progress = results[2] as bridge.ReadingProgress?;
   final initialPage = initialReaderPageForProgress(
     progress: progress,
     pageCount: pages.length,

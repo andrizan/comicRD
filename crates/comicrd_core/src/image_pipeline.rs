@@ -273,7 +273,50 @@ fn resize_to_width(img: &image::DynamicImage) -> Option<image::DynamicImage> {
     }
     let scale = MAX_VARIANT_WIDTH as f32 / width as f32;
     let new_height = ((height as f32 * scale).round() as u32).max(1);
+    // SIMD fast path; exotic pixel types fall back to the image crate.
+    if let Some(resized) = fir_resize_to_width(img, new_height) {
+        return Some(resized);
+    }
     Some(img.resize(MAX_VARIANT_WIDTH, new_height, FilterType::CatmullRom))
+}
+
+/// SIMD downscale via fast_image_resize (CatmullRom, same kernel family as
+/// before; `use_alpha` keeps straight-alpha correctness for RGBA PNGs).
+/// Returns None for non-8-bit pixel types (caller falls back) or on any
+/// internal error (dimensions are pre-validated, so errors are unreachable
+/// in practice but must never panic the reader).
+fn fir_resize_to_width(img: &image::DynamicImage, new_height: u32) -> Option<image::DynamicImage> {
+    use fast_image_resize::images::Image as FirImage;
+    use fast_image_resize::{
+        FilterType as FirFilter, PixelType, ResizeAlg, ResizeOptions, Resizer,
+    };
+    // 8-bit only; 16-bit sources keep the image-crate fallback below.
+    // (`img` serves as the source view directly: zero-copy, no alignment
+    // pitfalls from borrowed slices.)
+    let pixel_type = match img.color() {
+        image::ColorType::L8 => PixelType::U8,
+        image::ColorType::La8 => PixelType::U8x2,
+        image::ColorType::Rgb8 => PixelType::U8x3,
+        image::ColorType::Rgba8 => PixelType::U8x4,
+        _ => return None,
+    };
+    let mut dst = FirImage::new(MAX_VARIANT_WIDTH, new_height, pixel_type);
+    let mut resizer = Resizer::new();
+    let options = ResizeOptions::new()
+        .resize_alg(ResizeAlg::Convolution(FirFilter::CatmullRom))
+        .use_alpha(true);
+    resizer.resize(img, &mut dst, &options).ok()?;
+    let buffer = dst.buffer().to_vec();
+    match pixel_type {
+        PixelType::U8 => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+            .map(image::DynamicImage::ImageLuma8),
+        PixelType::U8x2 => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+            .map(image::DynamicImage::ImageLumaA8),
+        PixelType::U8x3 => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+            .map(image::DynamicImage::ImageRgb8),
+        _ => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+            .map(image::DynamicImage::ImageRgba8),
+    }
 }
 
 /// Encode with the variant rule shared by whole-page and tile paths:
@@ -337,6 +380,189 @@ fn decode_and_fit(bytes: &[u8], mime: &'static str) -> Result<DecodedPage, ()> {
     }
 }
 
+/// Cache-hit-or-insert for a single tile: concurrent duplicate work
+/// collapses into a hit instead of double-counting a load.
+fn remember_tile_bytes(
+    cache: &PageCache,
+    key: (i64, usize, usize),
+    bytes: Vec<u8>,
+    mime: &'static str,
+) -> Result<(Arc<Vec<u8>>, &'static str), String> {
+    let shared = Arc::new(bytes);
+    let mut state = cache.lock_state()?;
+    if let Some(cached) = state.bytes.get(&key) {
+        let result = (Arc::clone(&cached.bytes), cached.mime);
+        state.stats.page_bytes_cache_hits += 1;
+        state.touch_bytes(key);
+        return Ok(result);
+    }
+    state.stats.page_bytes_loads += 1;
+    state.remember_bytes(
+        key,
+        CachedPageBytes {
+            bytes: Arc::clone(&shared),
+            mime,
+        },
+    );
+    Ok((shared, mime))
+}
+
+/// Tile work plan for one page, shared by the single render and the
+/// batched prefetch so both agree on layout and output bytes.
+enum PageBody {
+    /// Serve the original file bytes untouched: fits without resize or
+    /// tiling (fast header path), GIF animation, or undecodable file.
+    /// No full decode is performed (or needed).
+    Raw,
+    /// One decoded image to crop/encode tiles from.
+    Decoded(image::DynamicImage),
+}
+
+struct PagePlan {
+    body: PageBody,
+    /// Fitted width + tile heights (from headers for the Raw fast path,
+    /// from pixels for Decoded; a single whole-file tile otherwise).
+    fitted_width: u32,
+    tiles: Vec<u32>,
+    /// For single-tile Decoded pages: whether the width cap was applied
+    /// (false serves the original bytes, byte-identical to the old output).
+    resized: bool,
+}
+
+fn plan_page_tiles(bytes: &[u8], mime: &'static str) -> PagePlan {
+    // Fast path: the header probe is ~1000x cheaper than a full decode.
+    // When the headers already prove the page needs neither resize nor
+    // tiling, the original bytes serve as-is (byte-identical to the old
+    // decode-then-discard pass-through). GIFs and undecodable files keep
+    // the slow path: GIFs preserve the animation rule and corrupt files
+    // must survive as whole-file single tiles (matching list-time layout).
+    if mime != "image/gif" {
+        if let Some((width, height)) = page_dimensions_from_bytes(bytes) {
+            let (fitted_width, tiles) = tile_layout_for_dimensions(width, height, false);
+            if fitted_width == width && tiles.len() == 1 {
+                return PagePlan {
+                    body: PageBody::Raw,
+                    fitted_width,
+                    tiles,
+                    resized: false,
+                };
+            }
+        }
+    }
+    match decode_and_fit(bytes, mime) {
+        Err(()) => PagePlan {
+            body: PageBody::Raw,
+            fitted_width: 0,
+            tiles: vec![0],
+            resized: false,
+        },
+        Ok(page) => {
+            let (fitted_width, fitted_height) = (page.image.width(), page.image.height());
+            let (_, tiles) = tile_layout_for_dimensions(fitted_width, fitted_height, false);
+            if page.resized {
+                debug_assert_eq!(fitted_width, MAX_VARIANT_WIDTH);
+            }
+            PagePlan {
+                body: PageBody::Decoded(page.image),
+                fitted_width,
+                tiles,
+                resized: page.resized,
+            }
+        }
+    }
+}
+
+/// Encode one tile from a plan. Callers validate `tile_index` first.
+fn encode_planned_tile(
+    plan: &PagePlan,
+    bytes: &[u8],
+    mime: &'static str,
+    tile_index: usize,
+) -> Result<(Vec<u8>, &'static str), String> {
+    match &plan.body {
+        PageBody::Raw => Ok((bytes.to_vec(), mime)),
+        PageBody::Decoded(image) => {
+            if plan.tiles.len() == 1 {
+                if !plan.resized {
+                    return Ok((bytes.to_vec(), mime));
+                }
+                return encode_variant_image(image, mime)
+                    .ok_or_else(|| "failed encoding page tile".to_string());
+            }
+            let y = tile_index as u32 * TILE_MAX_HEIGHT;
+            let crop = image.crop_imm(0, y, plan.fitted_width, plan.tiles[tile_index]);
+            encode_variant_image(&crop, mime)
+                .ok_or_else(|| "failed encoding page tile".to_string())
+        }
+    }
+}
+
+/// Batched prefetch for one page: hit-filter under a short lock, then a
+/// single decode serves every missed tile of the page. Tiles are handled
+/// in payload order and fail fast on the first out-of-range tile, like
+/// the old per-tile loop. Stats: +1 `page_bytes_loads` per decoded page,
+/// per-tile hits as usual.
+pub(crate) fn prefetch_page_tiles_conn(
+    cache: &PageCache,
+    source_path: &str,
+    source_type: &str,
+    chapter_id: i64,
+    page_index: usize,
+    tile_indices: &[usize],
+) -> Result<(), String> {
+    let mut need = Vec::new();
+    {
+        let state = cache.lock_state()?;
+        for &tile_index in tile_indices {
+            if !state.bytes.contains_key(&(chapter_id, page_index, tile_index))
+                && !need.contains(&tile_index)
+            {
+                need.push(tile_index);
+            }
+        }
+    }
+    if need.is_empty() {
+        return Ok(());
+    }
+    let source = get_or_load_page_source(cache, chapter_id, source_path, source_type)?;
+    let (bytes, mime) = read_page_bytes(&source, page_index)?;
+    let plan = plan_page_tiles(&bytes, mime);
+    let mut encoded = Vec::with_capacity(need.len());
+    for tile_index in need {
+        if tile_index >= plan.tiles.len() {
+            return Err("tile index out of range".to_string());
+        }
+        let (out, out_mime) = encode_planned_tile(&plan, &bytes, mime, tile_index)?;
+        encoded.push((tile_index, out, out_mime));
+    }
+    // One decode served the whole batch: +1 load no matter how many tiles
+    // were encoded (a lost race counts as a hit instead).
+    {
+        let mut state = cache.lock_state()?;
+        let mut fresh = 0;
+        for (tile_index, out, out_mime) in encoded {
+            let key = (chapter_id, page_index, tile_index);
+            if state.bytes.contains_key(&key) {
+                state.stats.page_bytes_cache_hits += 1;
+                state.touch_bytes(key);
+            } else {
+                state.remember_bytes(
+                    key,
+                    CachedPageBytes {
+                        bytes: Arc::new(out),
+                        mime: out_mime,
+                    },
+                );
+                fresh += 1;
+            }
+        }
+        if fresh > 0 {
+            state.stats.page_bytes_loads += 1;
+        }
+    }
+    Ok(())
+}
+
 fn get_or_load_tile_bytes(
     cache: &PageCache,
     source_path: &str,
@@ -357,117 +583,18 @@ fn get_or_load_tile_bytes(
     }
     let source = get_or_load_page_source(cache, chapter_id, source_path, source_type)?;
     let (bytes, mime) = read_page_bytes(&source, page_index)?;
-    // Single decode per page-miss: GIFs and corrupt files fall through to
-    // the whole-file single tile (matching list-time layout).
-    let Ok(page) = decode_and_fit(&bytes, mime) else {
-        if tile_index != 0 {
-            return Err("tile index out of range".to_string());
-        }
-        let shared = Arc::new(bytes);
-        let mut state = cache.lock_state()?;
-        if let Some(cached) = state.bytes.get(&key) {
-            let result = (Arc::clone(&cached.bytes), cached.mime);
-            state.stats.page_bytes_cache_hits += 1;
-            state.touch_bytes(key);
-            return Ok(result);
-        }
-        state.stats.page_bytes_loads += 1;
-        state.remember_bytes(
-            key,
-            CachedPageBytes {
-                bytes: Arc::clone(&shared),
-                mime,
-            },
-        );
-        return Ok((shared, mime));
-    };
-    let (fitted_width, fitted_height) = (page.image.width(), page.image.height());
-    let (_, tiles) = tile_layout_for_dimensions(fitted_width, fitted_height, false);
-    if tile_index >= tiles.len() {
+    // Shared layout/output plan: the fast header path, GIF/corrupt
+    // whole-file fallback, and decode+tile math agree here so the single
+    // render and the batched prefetch below serve identical bytes.
+    let plan = plan_page_tiles(&bytes, mime);
+    if tile_index >= plan.tiles.len() {
         return Err("tile index out of range".to_string());
     }
-    if tiles.len() == 1 {
-        // Byte-identical to `fit_page_variant` output without decoding
-        // twice: untouched originals pass through, resized pages encode the
-        // one decoded image.
-        if !page.resized {
-            let shared = Arc::new(bytes);
-            let mut state = cache.lock_state()?;
-            if let Some(cached) = state.bytes.get(&key) {
-                let result = (Arc::clone(&cached.bytes), cached.mime);
-                state.stats.page_bytes_cache_hits += 1;
-                state.touch_bytes(key);
-                return Ok(result);
-            }
-            state.stats.page_bytes_loads += 1;
-            state.remember_bytes(
-                key,
-                CachedPageBytes {
-                    bytes: Arc::clone(&shared),
-                    mime,
-                },
-            );
-            return Ok((shared, mime));
-        }
-        let (new_width, new_height) = (page.image.width(), page.image.height());
-        let (out, out_mime) = encode_variant_image(&page.image, mime)
-            .ok_or_else(|| "failed encoding page tile".to_string())?;
-        debug_assert_eq!(
-            (new_width, new_height),
-            (fitted_width, fitted_height)
-        );
-        let shared = Arc::new(out);
-        let mut state = cache.lock_state()?;
-        if let Some(cached) = state.bytes.get(&key) {
-            let result = (Arc::clone(&cached.bytes), cached.mime);
-            state.stats.page_bytes_cache_hits += 1;
-            state.touch_bytes(key);
-            return Ok(result);
-        }
-        state.stats.page_bytes_loads += 1;
-        state.remember_bytes(
-            key,
-            CachedPageBytes {
-                bytes: Arc::clone(&shared),
-                mime: out_mime,
-            },
-        );
-        return Ok((shared, out_mime));
-    }
-    // Multi-tile: crop every tile from the one decoded image and cache
-    // them all, so sibling tiles never pay another full decode. Counts as
-    // ONE page-miss in stats regardless of tile count.
-    let mut encoded: Vec<(Vec<u8>, &'static str)> = Vec::with_capacity(tiles.len());
-    for (t, tile_height) in tiles.iter().enumerate() {
-        let y = t as u32 * TILE_MAX_HEIGHT;
-        let crop = page.image.crop_imm(0, y, fitted_width, *tile_height);
-        let (out, out_mime) = encode_variant_image(&crop, mime)
-            .ok_or_else(|| "failed encoding page tile".to_string())?;
-        encoded.push((out, out_mime));
-    }
-    let mut state = cache.lock_state()?;
-    if let Some(cached) = state.bytes.get(&key) {
-        let result = (Arc::clone(&cached.bytes), cached.mime);
-        state.stats.page_bytes_cache_hits += 1;
-        state.touch_bytes(key);
-        return Ok(result);
-    }
-    state.stats.page_bytes_loads += 1;
-    let mut requested: Option<(Arc<Vec<u8>>, &'static str)> = None;
-    for (t, (out, out_mime)) in encoded.into_iter().enumerate() {
-        let shared = Arc::new(out);
-        if t == tile_index {
-            requested = Some((Arc::clone(&shared), out_mime));
-        }
-        state.remember_bytes(
-            (chapter_id, page_index, t),
-            CachedPageBytes {
-                bytes: Arc::clone(&shared),
-                mime: out_mime,
-            },
-        );
-    }
-    Ok(requested.expect("requested tile was just encoded"))
+    // Lazy siblings: only the requested tile is encoded here, so first
+    // paint pays one decode + one encode. The batched prefetch above
+    // decodes once per page for its whole window (no per-tile re-decode).
+    let (out, out_mime) = encode_planned_tile(&plan, &bytes, mime, tile_index)?;
+    remember_tile_bytes(cache, key, out, out_mime)
 }
 
 pub(crate) fn render_page_tile_conn(
@@ -608,6 +735,123 @@ mod tests {
             (1600, vec![20000])
         );
         assert_eq!(tile_layout_for_dimensions(0, 0, false), (0, vec![0]));
+    }
+
+    #[test]
+    fn fir_resize_matches_image_crate_within_tolerance() {
+        // Small-but-wide patterned fixtures: FIR CatmullRom must agree with
+        // the image crate's CatmullRom reference (encoders differ, so no
+        // exact-bytes assert — only perceptual closeness + exact dims).
+        // 2600x100 RGB -> 2048x79.
+        let rgb = image::ImageBuffer::from_fn(2600, 100, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x * y) % 256) as u8])
+        });
+        let src = image::DynamicImage::ImageRgb8(rgb);
+        let fir = fir_resize_to_width(&src, 79).expect("fir resize");
+        assert_eq!((fir.width(), fir.height()), (2048, 79));
+        let reference = src.resize(2048, 79, FilterType::CatmullRom);
+        let (mean, max) = mean_max_abs_diff(fir.to_rgb8().as_raw(), reference.to_rgb8().as_raw());
+        assert!(mean < 2.0, "mean abs diff too large: {mean}");
+        assert!(max < 30, "max abs diff too large: {max}");
+
+        // Fully-opaque RGBA (the common comic case) must match tightly:
+        // with alpha == 255 everywhere, premultiplied and straight-alpha
+        // convolution are the same math up to float rounding.
+        let rgba = image::ImageBuffer::from_fn(2600, 100, |x, y| {
+            image::Rgba([
+                (x % 256) as u8,
+                (y % 256) as u8,
+                ((x + y) % 256) as u8,
+                255,
+            ])
+        });
+        let src = image::DynamicImage::ImageRgba8(rgba);
+        let fir = fir_resize_to_width(&src, 79).expect("fir resize rgba");
+        assert_eq!((fir.width(), fir.height()), (2048, 79));
+        let reference = src.resize(2048, 79, FilterType::CatmullRom);
+        let (mean, max) = mean_max_abs_diff(
+            fir.to_rgba8().as_raw(),
+            reference.to_rgba8().as_raw(),
+        );
+        assert!(mean < 2.0, "rgba mean abs diff too large: {mean}");
+        assert!(max < 30, "rgba max abs diff too large: {max}");
+
+        // Varying alpha exercises the use_alpha path. FIR premultiplies
+        // before convolution (the compositing-correct choice; the image
+        // crate convolves straight alpha), so color channels may differ
+        // where the alpha gradient is steep while alpha itself stays
+        // close. This pins "sane", not "identical".
+        let rgba = image::ImageBuffer::from_fn(2600, 100, |x, y| {
+            image::Rgba([
+                (x % 256) as u8,
+                (y % 256) as u8,
+                ((x + y) % 256) as u8,
+                (x % 200 + 55) as u8,
+            ])
+        });
+        let src = image::DynamicImage::ImageRgba8(rgba);
+        let fir = fir_resize_to_width(&src, 79).expect("fir varying alpha");
+        assert_eq!((fir.width(), fir.height()), (2048, 79));
+        let reference = src.resize(2048, 79, FilterType::CatmullRom);
+        let (color_mean, color_max, alpha_mean, alpha_max) =
+            rgba_channel_diffs(&fir.to_rgba8(), &reference.to_rgba8());
+        assert!(alpha_mean < 5.0, "alpha mean diff too large: {alpha_mean}");
+        assert!(alpha_max < 16, "alpha max diff too large: {alpha_max}");
+        assert!(color_mean < 10.0, "color mean diff too large: {color_mean}");
+        assert!(color_max < 90, "color max diff too large: {color_max}");
+    }
+
+    #[test]
+    fn fir_resize_falls_back_for_non_8bit_pixels() {
+        let rgb16 = image::ImageBuffer::from_pixel(2600, 100, image::Rgb([1000u16, 2000, 3000]));
+        let src = image::DynamicImage::ImageRgb16(rgb16);
+        assert!(fir_resize_to_width(&src, 79).is_none());
+        // The public path still serves 16-bit PNGs via the image fallback.
+        let page = decode_and_fit_png16(&src);
+        assert_eq!((page.0, page.1), (2048, 79));
+    }
+
+    fn mean_max_abs_diff(a: &[u8], b: &[u8]) -> (f64, u8) {
+        assert_eq!(a.len(), b.len());
+        let mut sum: u64 = 0;
+        let mut max: u8 = 0;
+        for (&x, &y) in a.iter().zip(b.iter()) {
+            let d = x.abs_diff(y);
+            sum += d as u64;
+            max = max.max(d);
+        }
+        (sum as f64 / a.len() as f64, max)
+    }
+
+    fn rgba_channel_diffs(
+        a: &image::RgbaImage,
+        b: &image::RgbaImage,
+    ) -> (f64, u8, f64, u8) {
+        assert_eq!(a.dimensions(), b.dimensions());
+        let (mut color_sum, mut alpha_sum): (u64, u64) = (0, 0);
+        let (mut color_max, mut alpha_max): (u8, u8) = (0, 0);
+        for (x, y) in a.pixels().zip(b.pixels()) {
+            for c in 0..3 {
+                let d = x[c].abs_diff(y[c]);
+                color_sum += d as u64;
+                color_max = color_max.max(d);
+            }
+            let d = x[3].abs_diff(y[3]);
+            alpha_sum += d as u64;
+            alpha_max = alpha_max.max(d);
+        }
+        let n = a.pixels().len() as f64;
+        (
+            color_sum as f64 / (3.0 * n),
+            color_max,
+            alpha_sum as f64 / n,
+            alpha_max,
+        )
+    }
+
+    fn decode_and_fit_png16(src: &image::DynamicImage) -> (u32, u32) {
+        let resized = resize_to_width(src).expect("fallback resize");
+        (resized.width(), resized.height())
     }
 
     #[test]
