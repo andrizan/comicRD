@@ -747,6 +747,40 @@ pub(crate) fn chapter_source(
     .map_err(|e| format!("failed loading chapter source: {e}"))
 }
 
+/// Page list for a rar/cbr chapter from its extracted session: fast header
+/// probes from disk instead of per-entry decompression. `entries`
+/// (archive names, list order) and `files` (extracted paths) are parallel,
+/// both coming from one `ensure_rar_session` call.
+pub(crate) fn build_rar_session_page_list(
+    entries: &[String],
+    files: &[PathBuf],
+) -> Vec<PageInfo> {
+    entries
+        .iter()
+        .zip(files.iter())
+        .enumerate()
+        .map(|(index, (name, path))| {
+            let dims = image_dimensions_from_path(path);
+            let (width, height) = dims
+                .map(|(width, height)| (Some(width), Some(height)))
+                .unwrap_or((None, None));
+            let tile_heights = match dims {
+                Some((w, h)) => {
+                    tile_layout_for_dimensions(w, h, ext_eq(Path::new(name), "gif")).1
+                }
+                None => vec![0],
+            };
+            PageInfo {
+                index,
+                name: name.clone(),
+                width,
+                height,
+                tile_heights,
+            }
+        })
+        .collect()
+}
+
 /// Page list without touching the DB: archive listing, dimension probing,
 /// and tile layout. Must run WITHOUT holding the DB mutex (slow IO).
 pub(crate) fn build_page_list(

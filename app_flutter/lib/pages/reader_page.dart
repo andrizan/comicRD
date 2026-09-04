@@ -288,6 +288,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _initialScrollDone = false;
     _renderStart = 0;
     _renderEnd = -1;
+    // Per-chapter state: the bookmark set must not leak into the new
+    // chapter (the loader below only fetches when this is empty).
+    _pageBookmarkedPages.clear();
     _toolbarVisible = true;
     _refreshOverlay();
     final oldData = _lastReaderChapterId == oldWidget.chapterId

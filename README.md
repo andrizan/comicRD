@@ -38,12 +38,12 @@ history, backup/import, and the reader image pipeline.
 The main Flutter/Rust application flows are implemented, including library
 listing, scan, chapter discovery, reader flow, progress, bookmarks, history,
 settings, backup/import, comic thumbnails, and database maintenance
-(Optimize Data). Recent work focused on reader performance and quality: blur-free toolbar overlays, per-page `RepaintBoundary` isolation, overlay state decoupled from the page list, width-capped page variants (2048px, CatmullRom, lossless PNG for PNG inputs) so tall webtoon strips pass through untouched, strip tiling (2048px tiles, pixel-exact reassembly, page-based progress preserved), and an exact-total scrollbar delegate so the thumb never jumps on variable-height lists. Also UI polish (library/history/detail
+(Optimize Data). Recent work focused on reader performance and quality: blur-free toolbar overlays, per-page `RepaintBoundary` isolation, overlay state decoupled from the page list, width-capped page variants (2048px, SIMD CatmullRom via `fast_image_resize`, lossless PNG for PNG inputs) so tall webtoon strips pass through untouched, strip tiling (2048px tiles, pixel-exact reassembly, page-based progress preserved), and an exact-total scrollbar delegate so the thumb never jumps on variable-height lists. Also UI polish (library/history/detail
 covers, selectable metadata, open-folder action, stable sidebar hover state),
 performance (persistent thumbnail cache, bounded reader memory), schema cleanup
 (dropping unused columns), framework migration to the standalone
 `material_ui` package ahead of the November 2026 SDK Material deprecation, and
-dependency updates (flutter_rust_bridge 2.13, forui 0.26, go_router 18.0.1, material_ui 1.1.1). Linux
+dependency updates (flutter_rust_bridge 2.13, forui 0.26, go_router 18.0.1, material_ui 1.1.1, fast_image_resize 6.1). Most recent work cut chapter-open image latency (header-probe short-circuit without decoding, lazy per-tile encode with batched prefetch, parallel provider fetch) and gave RAR/CBR chapters extract-once session dirs served from disk. Current versions: app 2.8.1, Rust core/bridge 1.6.1. Linux
 packaging is available and the application has been smoke tested directly on
 Windows and Linux. The macOS build target is present, but still needs a native
 macOS smoke test before release claims for that platform.
@@ -74,8 +74,8 @@ Download the Linux tarball from GitHub Releases, extract it, and run the bundled
 executable:
 
 ```bash
-tar -xzf comicrd-2.8.0-linux-x86_64.tar.gz
-./comicrd-2.8.0-linux-x86_64/opt/comicrd/ComicRD
+tar -xzf comicrd-2.8.1-linux-x86_64.tar.gz
+./comicrd-2.8.1-linux-x86_64/opt/comicrd/ComicRD
 ```
 
 ### Local Pacman Package
@@ -83,8 +83,8 @@ tar -xzf comicrd-2.8.0-linux-x86_64.tar.gz
 On Arch-based systems, a local install package can be created from source:
 
 ```bash
-./scripts/package-arch-local.sh 2.8.0
-sudo pacman -U dist/arch/comicrd-bin-2.8.0-1-x86_64.pkg.tar.zst
+./scripts/package-arch-local.sh 2.8.1
+sudo pacman -U dist/arch/comicrd-bin-2.8.1-1-x86_64.pkg.tar.zst
 ```
 
 ## Build From Source
@@ -104,9 +104,8 @@ Skia or disable Impeller without a documented reason.
 
 The UI imports Material symbols from the standalone `material_ui` /
 `cupertino_ui` packages instead of the copies bundled in the Flutter SDK
-(deprecated in the November 2026 stable). While forui still consumes the
-bundled SDK Material internally, `MaterialUiCompatibilityBridge` bridges the
-standalone theme down to it; remove that bridge once forui migrates.
+(deprecated in the November 2026 stable). No compatibility bridge remains in
+`app_flutter/lib` — first-party code has zero legacy SDK Material imports.
 
 Linux build dependencies on Arch/CachyOS:
 
@@ -298,7 +297,7 @@ To build the Inno Setup installer (requires
 [Inno Setup](https://jrsoftware.org/isinfo.php) installed):
 
 ```bash
-ISCC.exe /D"AppVersion=2.8.0" app_flutter\windows\installer\comicrd-setup.iss
+ISCC.exe /D"AppVersion=2.8.1" app_flutter\windows\installer\comicrd-setup.iss
 ```
 
 The output is written to `dist/comicrd-{version}-windows-x86_64-setup.exe`.
@@ -317,13 +316,13 @@ flutter build macos --release
 Create the Linux release tarball used by GitHub Releases and AUR:
 
 ```bash
-./scripts/package-linux.sh 2.8.0
+./scripts/package-linux.sh 2.8.1
 ```
 
 The output is written to:
 
 ```text
-dist/comicrd-2.8.0-linux-x86_64.tar.gz
+dist/comicrd-2.8.1-linux-x86_64.tar.gz
 ```
 
 ## Repository Layout
@@ -479,7 +478,10 @@ Each tile reserves stable space using the Rust width/height metadata
 ↓
 When Flutter builds a tile item, it requests only that tile's bytes from Rust
 ↓
-Rust width-caps (2048px), slices, encodes, and returns the tile on demand
+Rust skips decoding entirely for fitting single-tile pages (header probe),
+width-caps over-wide pages (2048px, SIMD CatmullRom), encodes only the
+requested tile (prefetch batches one decode per page), and returns the tile
+on demand
 ```
 
 The reader does not load every image byte in a chapter into Dart memory. Flutter
@@ -496,8 +498,10 @@ Format handling:
   system files such as `__MACOSX`, `thumbs.db`, and `desktop.ini`
 - ZIP/CBZ chapters are listed from archive entries and page bytes are read by
   entry name on demand
-- RAR/CBR chapters use the Rust `unrar` backend and read matching entries on
-  demand
+- RAR/CBR chapters extract image entries once into a session dir under the
+  app-data folder on first access; reads and dimension probes are served from
+  disk afterwards. Sessions are deleted on reader close/chapter switch,
+  follow the page-source LRU while open, and are swept on startup
 - image names are natural-sorted, so `2.png` comes before `10.png`
 
 Memory is bounded around the current viewport:
@@ -507,7 +511,7 @@ Memory is bounded around the current viewport:
 - Flutter prefetches a small window around the visible tiles, from
   `visibleFirst - 2` through `visibleLast + 2`
 - Flutter asks Rust to evict tiles of pages outside that window
-- Rust caches up to 2 page sources
+- Rust caches up to 2 page sources (RAR session dirs follow the same bound)
 - Rust caches up to 16 raw tile byte entries (each tile decodes to at most
   2048x2048x4 = 16MB; GIFs and fitting pages pass through byte-identical)
 - cached page bytes use `Arc<Vec<u8>>` to avoid deep copies on cache hits inside
@@ -544,7 +548,7 @@ are constant for every item in a response, or are unused by Flutter.
 Rust integration tests are organized by concern in
 `crates/comicrd_core/tests/`, including library source checks, library listing,
 scan, chapters, reader flow, image pipeline, cache behavior, bookmarks, history,
-migrations, backup/import, and database optimization (stale-row purge,
+migrations, backup/import, rar/cbr session lifecycle, and database optimization (stale-row purge,
 thumbnail cleanup, VACUUM consistency, unavailable-library guard).
 
 Focused checks:

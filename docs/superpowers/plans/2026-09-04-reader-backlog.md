@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Complete tasks in phase order. Do NOT commit unless the user explicitly asks.
 
-**Goal:** Sisa pekerjaan reader yang masih terbuka dan terverifikasi masih berlaku di tree saat ini (2026-09-04). Aturan desain (tiling, pipeline, cache, prefetch) tinggal di `AGENTS.md` — tidak diduplikasi di sini. Riwayat plan yang sudah selesai/diganti ada di git (lihat `git log -- docs/superpowers/plans/`).
+**Goal:** Sisa pekerjaan reader yang masih terbuka, dengan standar ketat: hanya percepatan murni, correctness fix tanpa biaya kecepatan, dan gate QA. Item yang berbau trade-off kecepatan-demi-memori sengaja TIDAK dikerjakan (daftar + alasan di bawah). Aturan desain (tiling, pipeline, cache, prefetch) tinggal di `AGENTS.md` — tidak diduplikasi di sini. Riwayat plan yang sudah selesai/diganti ada di git (lihat `git log -- docs/superpowers/plans/`).
 
-Asal tiap seksi: (A)Concurrency Phase 5 yang belum tersentuh; (B) rekomendasi audit RAM 2026-09-03 yang belum diimplementasi, diverifikasi ulang masih ada di kode pada 2026-09-04; (C) gate QA manual yang belum dicentang dari plan tiling/rewrite/decoupled-UI.
+Asal tiap seksi: (A) Concurrency Phase 5 yang belum tersentuh; (B) bug correctness dari audit RAM 2026-09-03; (C) gate QA manual dari plan lama. Keputusan ruang lingkup 2026-09-04: B0/B1/B2 dan 3 bullet B3 non-correctness dicoret (lihat "Sengaja tidak dikerjakan").
 
 ---
 
@@ -12,40 +12,26 @@ Asal tiap seksi: (A)Concurrency Phase 5 yang belum tersentuh; (B) rekomendasi au
 
 Masalah: `rar_image_bytes` (`crates/comicrd_core/src/chapter.rs`) header-scan dari awal arsip per request, dan `get_chapter_pages` full-extract per halaman (trik probe 64KB tidak berlaku — API unrar tidak punya partial read). CBR 200 halaman ≈ 200 decompress penuh saat open + scan O(n) per render. Tidak ada fixture RAR-writer, jadi phase ini test-light.
 
-- [ ] Implement session temp-extract: pada akses halaman pertama chapter rar/cbr, extract image entries SEKALI ke session dir terbatas di bawah app-data temp (pakai urutan `image_entries`), baca probe/read berikutnya dari disk, hapus session saat `evictChapterPages(chapter_id, [])` (sudah dipanggil di close/switch) + sapu orphaned session best-effort saat startup.
-- [ ] Batasan: disk-bounded (satu chapter per open reader + cap total session, LRU-hapus tertua); jangan tahan mutex DB selama extraction (aturan AGENTS.md); semantik `PageSource::Archive` untuk zip tidak tersentuh.
-- [ ] Uji: test fixture `VERSION_RAR` tetap hijau; tambah unit test lifecycle session (create/reuse/cleanup/evict-all-clears) dengan fake extractor bila perlu; QA manual dengan CBR multi-entry asli (waktu open + scroll + close membersihkan temp).
-- [ ] AGENTS.md: perbarui bullet CBR (temp extraction kini ada) dengan lokasi session-dir dan kontrak cleanup.
+- [x] Implement session temp-extract: pada akses halaman pertama chapter rar/cbr, extract image entries SEKALI ke session dir terbatas di bawah app-data temp (pakai urutan `image_entries`), baca probe/read berikutnya dari disk, hapus session saat `evictChapterPages(chapter_id, [])` (sudah dipanggil di close/switch) + sapu orphaned session best-effort saat startup. — DONE 2026-09-04: `ensure_rar_session` (`image_pipeline.rs`) + `build_rar_session_page_list` (`chapter.rs`); session `<app-data>/rar-sessions/chapter-<id>`; `PageSource::RarSession`; zip/cbz/folder tidak tersentuh; thumbnail cover tetap on-demand (di luar ruang lingkup).
+- [x] Batasan: disk-bounded (satu chapter per open reader + cap total session, LRU-hapus tertua); jangan tahan mutex DB selama extraction (aturan AGENTS.md); semantik `PageSource::Archive` untuk zip tidak tersentuh. — DONE: session mengikuti LRU page-source yang sudah ada (cap 2 → maks 2 session hidup); semua IO ekstraksi di luar lock cache maupun DB; zip tetap varian `Archive`.
+- [x] Uji: test fixture `VERSION_RAR` tetap hijau; tambah unit test lifecycle session (create/reuse/cleanup/evict-all-clears) dengan fake extractor bila perlu; QA manual dengan CBR multi-entry asli (waktu open + scroll + close membersihkan temp). — DONE tanpa QA manual CBR asli (headless): unit test `session_file_name` + `extract_rar_session` fake-extractor (order/isi/error-cleanup) + integration `tests/rar_session.rs` (create → evict-all → re-extract, partial-evict bertahan). QA CBR multi-entry pindah ke Phase C.
+- [x] AGENTS.md: perbarui bullet CBR (temp extraction kini ada) dengan lokasi session-dir dan kontrak cleanup. — DONE.
 
-## Phase B — Tindak lanjut audit RAM (terverifikasi masih berlaku)
+## Phase B — Correctness fix tanpa biaya kecepatan
 
-### B0 — Serialisasi render tile per chapter (GATED)
+- [x] Clear `_pageBookmarkedPages` saat chapter switch (`didUpdateWidget` di `app_flutter/lib/pages/reader_page.dart` me-reset `_currentPage`/`_renderStart` tapi tidak Set ini — chapter baru gagal load bookmark karena guard `isEmpty` + Set campur antar chapter). Murni correctness: tanpa decode/encode/IO tambahan. — DONE 2026-09-04: satu baris `clear()` di blok reset `didUpdateWidget`.
+- [x] Uji: `flutter analyze` + `flutter test` hijau. — DONE (analyze bersih, `reader_page_test.dart` 13/13 hijau).
 
-- [ ] Kriteria masuk: ukur dulu (release, scratch saja): peak RSS saat 8 thread render tile strip berbeda konkuren vs sekuensial. Lanjut hanya jika puncak bermasalah (>500MB atau dekat OOM di mesin target). Prefetch tetap sekuensial by design; yang belum dibatasi adalah render on-demand konkuren dari `renderedTileProvider` saat scroll cepat (`decode_and_fit` menahan 1 full RGBA strip per miss, mis. 1600×20000 = 128MB transient).
-- [ ] Jika masuk: serialkan render tile per chapter di core (pola sequential-prefetch yang sudah ada — mis. mutex per-chapter di sekitar seksi decode/encode, jangan di sekitar cache hit; buktikan tanpa deadlock via liveness test `reader_flow.rs`). JANGAN serialkan cache hit atau DB read.
-- [ ] Jika tidak masuk: coret sebagai "measured, no action" dengan angkanya.
+## Sengaja tidak dikerjakan (keputusan 2026-09-04)
 
-### B1 — Overlap 2 chapter saat pindah + evict eksplisit
+Item di bawah terverifikasi masih ada di kode, tetapi dicoret karena menukar kecepatan dengan batas memori (premi steady-state kecil, kecuali B0 yang riil). Tidak dikerjakan kecuali keluhan "RAM monoton naik" kembali dengan data pengukuran.
 
-Masalah (`app_flutter/lib/pages/reader_page.dart`): `dispose` mengandalkan `autoDispose` tanpa invalidate eksplisit; `didUpdateWidget` (jalur `go('/reader/$id')` reuse state) menunda invalidate tile lama ke post-frame sementara chapter baru sudah loading; `_releaseChapterMemory` memegang cache lama selama drain prefetch — jendela lama+baru hidup bareng tiap next/prev.
-
-- [ ] Invalidate eksplisit tile chapter lama di `dispose` (jangan hanya andalkan `autoDispose`) + double-evict (sebelum dan sesudah drain prefetch) di dispose/switch.
-- [ ] Uji: `flutter test` hijau; gate manual Impeller di Phase C.
-
-### B2 — Cap `chapter_discovery_cache`
-
-Masalah (`crates/comicrd_core/src/lib.rs:296`): `Mutex<HashMap<...>>` tanpa cap; entry expired (>60s) hanya dianggap miss tanpa `remove`. Browse banyak komik tanpa open = tumbuh terus.
-
-- [ ] Cap LRU 200 (samakan provider Dart lain yang sudah `_maxSize=200`) + prune expired saat akses.
-- [ ] Uji: `cargo test -p comicrd_core` hijau + unit test cap/evict.
-
-### B3 — Provider `autoDispose` + `imageCache.maximumSize` + prefetch ganda + bookmark set
-
-- [ ] `FutureProvider.family` berikut masih non-`autoDispose` (terverifikasi 2026-09-04) — jadikan `autoDispose.family`: `comicChaptersProvider`, `chapterBookmarksProvider`, `comicReadingHistoryProvider`, `comicFavoritedProvider` (`comic_state.dart`), `rawLibraryComicsProvider`, `readingHistoryProvider`, `allFavoritesProvider` (`library_state.dart`). (`readerDataProvider`, `renderedTileProvider`, `comicThumbnailProvider` sudah jadi contoh yang benar.)
-- [ ] Set `imageCache.maximumSize` (count) di reader — saat ini hanya `maximumSizeBytes` (128MB reader / 100MB luar, `reader_page.dart:241,264`), count default 1000 tidak pernah diset.
-- [ ] Hapus satu sisi double prefetch: warm 4 tile di `comic_page.dart:397` vs `_restoreProgress` + `_prefetchWindow` yang prefetch ulang window yang sama setelah navigasi.
-- [ ] Clear `_pageBookmarkedPages` saat chapter switch (`didUpdateWidget` me-reset `_currentPage`/`_renderStart` tapi tidak Set ini — chapter baru gagal load bookmark + Set campur antar chapter).
-- [ ] Uji: `flutter analyze` + `flutter test` hijau.
+- B0 serialisasi render per chapter: satu-satunya trade-off kecepatan yang riil (tile konkuren jadi antre). Coret penuh, bukan gated.
+- B1 double-evict + invalidate eksplisit: HashMap-remove/invalidate murah, tetapi manfaatnya hanya jendela transient switch — tidak mempercepat apa pun.
+- B2 cap `chapter_discovery_cache`: re-walk saat revisit entry ter-evict adalah pelambatan (kecil) demi batas memori.
+- B3 `autoDispose.family` 7 provider: kunjungan ulang membayar re-fetch DB demi melepas state.
+- B3 `imageCache.maximumSize`: skenario terburuk memaksa re-decode `Image.memory`.
+- B3 hapus satu sisi double prefetch: penghematan hanya hit-check murah; risiko menyentuh jalur warm-start yang sudah benar tidak sepadan.
 
 ## Phase C — Gate QA manual (satu-satunya yang tersisa dari plan lama)
 

@@ -138,8 +138,8 @@ Tall pages are split into stacked tiles so no single GPU texture exceeds 2048x20
 
 - Folder pages: read metadata up front, then read only the requested page file on demand.
 - ZIP/CBZ pages: list archive entries up front, then read only the requested entry on demand.
-- RAR/CBR pages: current implementation uses the Rust `unrar` backend and reads matching entries on demand. Do not switch to loading all RAR entries into memory.
-- If CBR is changed to temp extraction later, use a bounded temp session folder and delete it on reader close.
+- RAR/CBR pages: first page access extracts image entries once into a bounded session dir (`<app-data>/rar-sessions/chapter-<id>`, at most 2 live sessions following the page-source LRU); subsequent reads and dimension probes serve from disk. Do not switch to loading all RAR entries into memory.
+- RAR/CBR session dirs are deleted on `evictChapterPages(chapter_id, [])` (reader close/switch), when the page-source LRU evicts the chapter, and swept wholesale on startup (crash orphans re-extract on demand).
 
 ### Cache And Prefetch Policy
 

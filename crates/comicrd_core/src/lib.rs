@@ -304,17 +304,24 @@ impl ComicRdCore {
             .map_err(|e| format!("failed creating app data dir: {e}"))?;
         let db_path = app_data_dir.join("comicrd.db");
         let thumbnail_dir = app_data_dir.join("thumbnails");
+        let rar_session_base = app_data_dir.join("rar-sessions");
         copy_legacy_database_if_missing(app_data_dir, &db_path)?;
         let conn = open_database_file(&db_path)?;
         run_migrations(&conn)?;
         fs::create_dir_all(&thumbnail_dir)
             .map_err(|e| format!("failed creating thumbnail dir: {e}"))?;
+        // Best-effort sweep of orphaned rar sessions (crash leftovers).
+        // Live sessions re-extract on demand: the page cache starts empty,
+        // so nothing can reference the swept dirs.
+        let _ = fs::remove_dir_all(&rar_session_base);
+        fs::create_dir_all(&rar_session_base)
+            .map_err(|e| format!("failed creating rar session dir: {e}"))?;
 
         Ok(Self {
             db_path,
             thumbnail_dir,
             conn: Mutex::new(conn),
-            page_cache: PageCache::default(),
+            page_cache: PageCache::with_rar_session_base(rar_session_base),
             thumbnail_cache: ThumbnailCache::default(),
             scan_state: Mutex::new(LibraryScanState::default()),
             library_list_cache: Mutex::new(None),
@@ -749,7 +756,8 @@ impl ComicRdCore {
 
     pub fn get_chapter_pages(&self, chapter_id: i64) -> Result<Vec<PageInfo>, String> {
         // Short scoped lock for the DB row; the slow listing (archive scans,
-        // dimension probes) runs lock-free. Never hold the DB mutex across IO.
+        // dimension probes, rar extraction) runs lock-free. Never hold the
+        // DB mutex across IO.
         let (source_path, source_type) = {
             let conn = self
                 .conn
@@ -757,7 +765,15 @@ impl ComicRdCore {
                 .map_err(|_| "db lock poisoned".to_string())?;
             chapter_source(&conn, chapter_id)?
         };
-        let pages = build_page_list(&source_path, &source_type)?;
+        // Rar/cbr cannot probe headers without full extraction: the first
+        // listing extracts once into a session dir and probes from disk.
+        // Zip/cbz keep the cheap leading-bytes probe path.
+        let pages = if matches!(source_type.as_str(), "cbr" | "rar") {
+            let session = ensure_rar_session(&self.page_cache, chapter_id, &source_path)?;
+            build_rar_session_page_list(&session.entries, &session.files)
+        } else {
+            build_page_list(&source_path, &source_type)?
+        };
         {
             let conn = self
                 .conn

@@ -25,6 +25,12 @@ pub(crate) enum PageSource {
         source_path: PathBuf,
         pages: Arc<Vec<String>>,
     },
+    /// Rar/cbr chapter extracted once into a session dir (see below).
+    /// Reads and dimension probes serve from disk; no per-request unrar
+    /// scan. Zip/cbz keep the `Archive` variant (cheap header probes).
+    RarSession {
+        files: Arc<Vec<PathBuf>>,
+    },
 }
 
 #[derive(Clone)]
@@ -44,6 +50,17 @@ pub struct CacheStats {
 #[derive(Default)]
 pub(crate) struct PageCache {
     state: Mutex<PageCacheState>,
+    rar_session_base: PathBuf,
+}
+
+/// One extracted rar/cbr chapter: `entries` (archive names, list order)
+/// and `files` (extracted paths) are parallel. Served from disk until the
+/// page source is evicted or the reader closes.
+#[derive(Clone)]
+pub(crate) struct RarSession {
+    dir: PathBuf,
+    pub(crate) entries: Arc<Vec<String>>,
+    pub(crate) files: Arc<Vec<PathBuf>>,
 }
 
 #[derive(Default)]
@@ -52,6 +69,10 @@ struct PageCacheState {
     source_order: VecDeque<i64>,
     bytes: HashMap<(i64, usize, usize), CachedPageBytes>,
     bytes_order: VecDeque<(i64, usize, usize)>,
+    /// Live rar sessions by chapter. Bounded by the page-source LRU
+    /// below: a session dies with its source (plus reader-close evict
+    /// and the startup sweep in `ComicRdCore::open`).
+    rar_sessions: HashMap<i64, std::sync::Arc<RarSession>>,
     pub(crate) stats: CacheStats,
 }
 
@@ -66,15 +87,23 @@ impl PageCacheState {
         self.bytes_order.push_back(key);
     }
 
-    fn remember_source(&mut self, chapter_id: i64, source: PageSource) {
+    fn remember_source(&mut self, chapter_id: i64, source: PageSource) -> Vec<PathBuf> {
         self.sources.insert(chapter_id, source);
         self.touch_source(chapter_id);
+        let mut evicted_sessions = Vec::new();
         while self.source_order.len() > PAGE_SOURCE_CACHE_CAP {
             let Some(old_key) = self.source_order.pop_front() else {
                 break;
             };
             self.sources.remove(&old_key);
+            // Sessions follow their source through the same LRU: at most
+            // PAGE_SOURCE_CACHE_CAP live session dirs. The caller deletes
+            // the dirs after dropping this lock (no IO under the mutex).
+            if let Some(session) = self.rar_sessions.remove(&old_key) {
+                evicted_sessions.push(session.dir.clone());
+            }
         }
+        evicted_sessions
     }
 
     fn remember_bytes(&mut self, key: (i64, usize, usize), bytes: CachedPageBytes) {
@@ -90,6 +119,13 @@ impl PageCacheState {
 }
 
 impl PageCache {
+    pub(crate) fn with_rar_session_base(base: PathBuf) -> Self {
+        Self {
+            state: Mutex::new(PageCacheState::default()),
+            rar_session_base: base,
+        }
+    }
+
     fn lock_state(&self) -> Result<MutexGuard<'_, PageCacheState>, String> {
         self.state
             .lock()
@@ -105,8 +141,10 @@ impl PageCache {
 
     /// Drop cached raw bytes for all pages except `keep_pages`.
     /// The key is (chapter, page, tile); every tile of an evicted page goes.
+    /// An empty keep list also drops the page source and its rar session
+    /// dir (reader close/switch path).
     pub(crate) fn evict_except(&self, chapter_id: i64, keep_pages: &[usize]) {
-        if let Ok(mut state) = self.state.lock() {
+        let session_dir = if let Ok(mut state) = self.state.lock() {
             let keys_to_remove: Vec<(i64, usize, usize)> = state
                 .bytes
                 .keys()
@@ -120,7 +158,18 @@ impl PageCache {
             if keep_pages.is_empty() {
                 state.sources.remove(&chapter_id);
                 state.source_order.retain(|key| *key != chapter_id);
+                state
+                    .rar_sessions
+                    .remove(&chapter_id)
+                    .map(|session| session.dir.clone())
+            } else {
+                None
             }
+        } else {
+            None
+        };
+        if let Some(dir) = session_dir {
+            let _ = fs::remove_dir_all(dir);
         }
     }
 }
@@ -146,15 +195,123 @@ pub(crate) fn mime_for_path(path: &Path) -> &'static str {
     }
 }
 
-fn compute_page_source(source_path: &str, source_type: &str) -> Result<PageSource, String> {
+/// Disk file name for one extracted session entry. The index prefix keeps
+/// entries unique (archives may repeat bare names across folders) and
+/// preserves list order under natural sort; the original extension is kept
+/// so mime probing agrees with the archive entry.
+fn session_file_name(index: usize, entry: &str) -> String {
+    let base = Path::new(entry)
+        .file_name()
+        .and_then(|v| v.to_str())
+        .unwrap_or("");
+    let base = if base.is_empty() {
+        "page".to_string()
+    } else {
+        base.replace(
+            ['/', '\\', ':', '*', '?', '"', '<', '>', '|'],
+            "_",
+        )
+    };
+    format!("{index:05}-{base}")
+}
+
+/// Extract every entry into `dir`, returning paths in entry order.
+/// A failed entry removes the half-written dir so retries start clean.
+/// `extract_one` is a parameter (not hardcoded to unrar) so the lifecycle
+/// is unit-testable with a fake extractor; production passes
+/// `archive_image_bytes`.
+fn extract_rar_session(
+    entries: &[String],
+    extract_one: impl Fn(&str) -> Result<Vec<u8>, String>,
+    dir: &Path,
+) -> Result<Vec<PathBuf>, String> {
+    if let Err(e) = fs::create_dir_all(dir) {
+        return Err(format!("failed creating rar session dir: {e}"));
+    }
+    let mut files = Vec::with_capacity(entries.len());
+    for (index, entry) in entries.iter().enumerate() {
+        let bytes = extract_one(entry).map_err(|e| {
+            let _ = fs::remove_dir_all(dir);
+            e
+        })?;
+        let path = dir.join(session_file_name(index, entry));
+        if let Err(e) = fs::write(&path, &bytes) {
+            let _ = fs::remove_dir_all(dir);
+            return Err(format!("failed writing rar session file: {e}"));
+        }
+        files.push(path);
+    }
+    Ok(files)
+}
+
+/// Session for one rar/cbr chapter, extracted once and served from disk.
+/// Slow work (listing, decompress, file writes) runs lock-free; the cache
+/// lock only guards the map check/insert. Never call under the DB mutex.
+pub(crate) fn ensure_rar_session(
+    cache: &PageCache,
+    chapter_id: i64,
+    source_path: &str,
+) -> Result<Arc<RarSession>, String> {
+    {
+        let state = cache.lock_state()?;
+        if let Some(session) = state.rar_sessions.get(&chapter_id) {
+            return Ok(Arc::clone(session));
+        }
+    }
+    let base = cache.rar_session_base.clone();
+    let _ = fs::create_dir_all(&base);
+    let dir = base.join(format!("chapter-{chapter_id}"));
+    // Stale leftovers (crash between extract and evict, or an evicted
+    // session re-opened) must not mix with fresh files.
+    let _ = fs::remove_dir_all(&dir);
+    let entries = archive_image_entries(Path::new(source_path))?;
+    let files = extract_rar_session(
+        &entries,
+        |name| archive_image_bytes(Path::new(source_path), name),
+        &dir,
+    )?;
+    {
+        let mut state = cache.lock_state()?;
+        if let Some(existing) = state.rar_sessions.get(&chapter_id) {
+            // Lost a race: keep the winner, drop the dir we just made.
+            let existing = Arc::clone(existing);
+            drop(state);
+            let _ = fs::remove_dir_all(&dir);
+            return Ok(existing);
+        }
+        let session = Arc::new(RarSession {
+            dir,
+            entries: Arc::new(entries),
+            files: Arc::new(files),
+        });
+        state.rar_sessions.insert(chapter_id, Arc::clone(&session));
+        Ok(session)
+    }
+}
+
+fn compute_page_source(
+    cache: &PageCache,
+    chapter_id: i64,
+    source_path: &str,
+    source_type: &str,
+) -> Result<PageSource, String> {
     match source_type {
         "folder" => Ok(PageSource::Folder(Arc::new(image_entries_in_dir(
             Path::new(source_path),
         )))),
-        "zip" | "cbz" | "cbr" | "rar" => Ok(PageSource::Archive {
+        "zip" | "cbz" => Ok(PageSource::Archive {
             source_path: PathBuf::from(source_path),
             pages: Arc::new(archive_image_entries(Path::new(source_path))?),
         }),
+        // Rar/cbr cannot probe headers without full extraction, so the
+        // first access extracts once into a session dir; reads and
+        // dimension probes serve from disk afterwards.
+        "cbr" | "rar" => {
+            let session = ensure_rar_session(cache, chapter_id, source_path)?;
+            Ok(PageSource::RarSession {
+                files: Arc::clone(&session.files),
+            })
+        }
         other => Err(format!("unsupported source type: {other}")),
     }
 }
@@ -176,7 +333,7 @@ fn get_or_load_page_source(
             return Ok(source);
         }
     }
-    let source = compute_page_source(source_path, source_type)?;
+    let source = compute_page_source(cache, chapter_id, source_path, source_type)?;
     let mut state = cache.lock_state()?;
     if let Some(source) = state.sources.get(&chapter_id).cloned() {
         state.stats.page_source_cache_hits += 1;
@@ -184,7 +341,12 @@ fn get_or_load_page_source(
         return Ok(source);
     }
     state.stats.page_source_loads += 1;
-    state.remember_source(chapter_id, source.clone());
+    let evicted_sessions = state.remember_source(chapter_id, source.clone());
+    drop(state);
+    // Session dirs die outside the cache lock (plain IO, best effort).
+    for dir in evicted_sessions {
+        let _ = fs::remove_dir_all(dir);
+    }
     Ok(source)
 }
 
@@ -193,7 +355,7 @@ pub(crate) fn read_page_bytes(
     page_index: usize,
 ) -> Result<(Vec<u8>, &'static str), String> {
     match source {
-        PageSource::Folder(pages) => {
+        PageSource::Folder(pages) | PageSource::RarSession { files: pages } => {
             let page_path = pages
                 .get(page_index)
                 .ok_or_else(|| "page index out of range".to_string())?;
@@ -865,6 +1027,65 @@ mod tests {
         ];
         assert!(decode_and_fit(&bytes, "image/gif").is_err());
         assert!(decode_and_fit(&[0x00, 0x01, 0x02, 0x03], "image/png").is_err());
+    }
+
+    #[test]
+    fn session_file_name_is_indexed_and_safe() {
+        // Index prefix keeps entries unique and list-ordered; extension
+        // survives for mime probing; separators and Windows-illegal chars
+        // are neutralized.
+        assert_eq!(session_file_name(0, "2.png"), "00000-2.png");
+        assert_eq!(session_file_name(12, "sub/dir/10.JPG"), "00012-10.JPG");
+        assert_eq!(session_file_name(3, "a:b*c?.png"), "00003-a_b_c_.png");
+        assert_eq!(session_file_name(0, ""), "00000-page");
+    }
+
+    #[test]
+    fn extract_rar_session_writes_entries_in_order() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let dir = temp.path().join("session");
+        let entries = vec![
+            "sub/2.png".to_string(),
+            "10.png".to_string(),
+            "anim.gif".to_string(),
+        ];
+        let files = extract_rar_session(
+            &entries,
+            |name| Ok(format!("bytes-of-{name}").into_bytes()),
+            &dir,
+        )
+        .expect("extract");
+        assert_eq!(files.len(), 3);
+        // Order follows the entry list (archive order), not the sort.
+        assert_eq!(files[0].file_name().unwrap(), "00000-2.png");
+        assert_eq!(files[1].file_name().unwrap(), "00001-10.png");
+        assert_eq!(files[2].file_name().unwrap(), "00002-anim.gif");
+        for (entry, path) in entries.iter().zip(files.iter()) {
+            assert_eq!(
+                std::fs::read(path).expect("read session file"),
+                format!("bytes-of-{entry}").into_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn extract_rar_session_failure_removes_half_written_dir() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let dir = temp.path().join("session");
+        let entries = vec!["ok.png".to_string(), "bad.png".to_string()];
+        let result = extract_rar_session(
+            &entries,
+            |name| {
+                if name == "bad.png" {
+                    Err("boom".to_string())
+                } else {
+                    Ok(vec![1, 2, 3])
+                }
+            },
+            &dir,
+        );
+        assert!(result.is_err());
+        assert!(!dir.exists(), "half-written session dir must be gone");
     }
 
     fn png_bytes(width: u32, height: u32) -> Vec<u8> {
