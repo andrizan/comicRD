@@ -215,17 +215,13 @@ src/library.rs::tests      — library_source_status_for edge cases
 
 ## Planning
 
-The active migration plan is:
+The active plan (single source of truth for remaining work) is:
 
 ```text
-docs/superpowers/plans/2026-06-04-comicrd-flutter-rust-rewrite.md
+docs/superpowers/plans/2026-09-04-reader-backlog.md
 ```
 
-The active audit is:
-
-```text
-docs/superpowers/plans/2026-06-06-memory-performance-audit.md
-```
+Retired plans were deleted; their history remains in git. Design rules live in this file (AGENTS.md), not in plans.
 
 Update the plan checklist when a task is actually implemented and verified. Do not mark work complete only because files were edited.
 
