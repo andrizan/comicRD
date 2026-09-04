@@ -35,18 +35,7 @@ history, backup/import, and the reader image pipeline.
 
 ## Status
 
-The main Flutter/Rust application flows are implemented, including library
-listing, scan, chapter discovery, reader flow, progress, bookmarks, history,
-settings, backup/import, comic thumbnails, and database maintenance
-(Optimize Data). Recent work focused on reader performance and quality: blur-free toolbar overlays, per-page `RepaintBoundary` isolation, overlay state decoupled from the page list, width-capped page variants (2048px, SIMD CatmullRom via `fast_image_resize`, lossless PNG for PNG inputs) so tall webtoon strips pass through untouched, strip tiling (2048px tiles, pixel-exact reassembly, page-based progress preserved), and an exact-total scrollbar delegate so the thumb never jumps on variable-height lists. Also UI polish (library/history/detail
-covers, selectable metadata, open-folder action, stable sidebar hover state),
-performance (persistent thumbnail cache, bounded reader memory), schema cleanup
-(dropping unused columns), framework migration to the standalone
-`material_ui` package ahead of the November 2026 SDK Material deprecation, and
-dependency updates (flutter_rust_bridge 2.13, forui 0.26, go_router 18.0.1, material_ui 1.1.1, fast_image_resize 6.1). Most recent work cut chapter-open image latency (header-probe short-circuit without decoding, lazy per-tile encode with batched prefetch, parallel provider fetch) and gave RAR/CBR chapters extract-once session dirs served from disk. Current versions: app 2.8.1, Rust core/bridge 1.6.1. Linux
-packaging is available and the application has been smoke tested directly on
-Windows and Linux. The macOS build target is present, but still needs a native
-macOS smoke test before release claims for that platform.
+Main app flows are done: library listing/scan, chapters, reader, progress, bookmarks, history, settings, backup/import, thumbnails, and Optimize Data. Reader loads page bytes on demand with 2048px tiling and a stable scrollbar. Smoke tested on Windows and Linux with Linux packaging available. macOS target exists but still needs a native smoke test.
 
 ## Install
 
