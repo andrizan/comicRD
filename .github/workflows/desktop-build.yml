@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FLUTTER_VERSION: "3.47.2"
+  FLUTTER_VERSION: "3.47.6"
   APP_NAME: ComicRD
 
 jobs:
