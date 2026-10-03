@@ -1168,9 +1168,9 @@ class _ComicCard extends StatelessWidget {
   String get _progressTooltip {
     final total = comic.chapterCount.toInt();
     if (total <= 0) return text.unread;
-    final read = (comic.readChapterCount.toInt() +
-            comic.inProgressChapterCount.toInt())
-        .clamp(0, total);
+    final read =
+        (comic.readChapterCount.toInt() + comic.inProgressChapterCount.toInt())
+            .clamp(0, total);
     final percent = ((read / total) * 100).round();
     return text.readingProgressTemplate
         .replaceAll('{percent}', '$percent')
@@ -1335,10 +1335,7 @@ class _ComicCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _ProgressBar(
-                    progress: _progress,
-                    tooltip: _progressTooltip,
-                  ),
+                  _ProgressBar(progress: _progress, tooltip: _progressTooltip),
                 ],
               ),
             ),
@@ -1978,9 +1975,10 @@ class _FavoriteCard extends StatelessWidget {
   String get _progressTooltip {
     final total = comic?.chapterCount.toInt() ?? 0;
     if (comic == null || total <= 0) return text.unread;
-    final read = (comic!.readChapterCount.toInt() +
-            comic!.inProgressChapterCount.toInt())
-        .clamp(0, total);
+    final read =
+        (comic!.readChapterCount.toInt() +
+                comic!.inProgressChapterCount.toInt())
+            .clamp(0, total);
     final percent = ((read / total) * 100).round();
     return text.readingProgressTemplate
         .replaceAll('{percent}', '$percent')
@@ -2068,10 +2066,7 @@ class _FavoriteCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _ProgressBar(
-                  progress: _progress,
-                  tooltip: _progressTooltip,
-                ),
+                _ProgressBar(progress: _progress, tooltip: _progressTooltip),
               ],
             ],
           ),
