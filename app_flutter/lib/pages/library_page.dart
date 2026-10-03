@@ -1165,6 +1165,19 @@ class _ComicCard extends StatelessWidget {
     return (completed / comic.chapterCount).clamp(0.0, 1.0);
   }
 
+  String get _progressTooltip {
+    final total = comic.chapterCount.toInt();
+    if (total <= 0) return text.unread;
+    final read = (comic.readChapterCount.toInt() +
+            comic.inProgressChapterCount.toInt())
+        .clamp(0, total);
+    final percent = ((read / total) * 100).round();
+    return text.readingProgressTemplate
+        .replaceAll('{percent}', '$percent')
+        .replaceAll('{read}', '$read')
+        .replaceAll('{total}', '$total');
+  }
+
   String get _chapterLabel {
     if (comic.chapterCount <= 0) return text.unread;
     return '${text.chapterCountLabel} ${comic.chapterCount}';
@@ -1249,7 +1262,7 @@ class _ComicCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              _ProgressBar(progress: _progress),
+              _ProgressBar(progress: _progress, tooltip: _progressTooltip),
             ],
           ),
         ),
@@ -1322,7 +1335,10 @@ class _ComicCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _ProgressBar(progress: _progress),
+                  _ProgressBar(
+                    progress: _progress,
+                    tooltip: _progressTooltip,
+                  ),
                 ],
               ),
             ),
@@ -1511,26 +1527,31 @@ class _FavoriteButton extends StatelessWidget {
 }
 
 class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.progress});
+  const _ProgressBar({required this.progress, required this.tooltip});
 
   final double progress;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 5,
-      decoration: BoxDecoration(
-        color: context.appReader.progressTrack,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: progress,
-        child: Container(
-          decoration: BoxDecoration(
-            color: context.appReader.progress,
-            borderRadius: BorderRadius.circular(5),
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 100),
+      child: Container(
+        width: double.infinity,
+        height: 5,
+        decoration: BoxDecoration(
+          color: context.appReader.progressTrack,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: FractionallySizedBox(
+          alignment: Alignment.centerLeft,
+          widthFactor: progress,
+          child: Container(
+            decoration: BoxDecoration(
+              color: context.appReader.progress,
+              borderRadius: BorderRadius.circular(5),
+            ),
           ),
         ),
       ),
@@ -1954,6 +1975,19 @@ class _FavoriteCard extends StatelessWidget {
     return (completed / comic!.chapterCount).clamp(0.0, 1.0);
   }
 
+  String get _progressTooltip {
+    final total = comic?.chapterCount.toInt() ?? 0;
+    if (comic == null || total <= 0) return text.unread;
+    final read = (comic!.readChapterCount.toInt() +
+            comic!.inProgressChapterCount.toInt())
+        .clamp(0, total);
+    final percent = ((read / total) * 100).round();
+    return text.readingProgressTemplate
+        .replaceAll('{percent}', '$percent')
+        .replaceAll('{read}', '$read')
+        .replaceAll('{total}', '$total');
+  }
+
   String get _chapterLabel {
     if (comic == null || comic!.chapterCount <= 0) return text.unread;
     return '${text.chapterCountLabel} ${comic!.chapterCount}';
@@ -2034,7 +2068,10 @@ class _FavoriteCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _ProgressBar(progress: _progress),
+                _ProgressBar(
+                  progress: _progress,
+                  tooltip: _progressTooltip,
+                ),
               ],
             ],
           ),
@@ -2109,7 +2146,10 @@ class _FavoriteCard extends StatelessWidget {
                   ),
                   if (comic != null) ...[
                     const SizedBox(height: 12),
-                    _ProgressBar(progress: _progress),
+                    _ProgressBar(
+                      progress: _progress,
+                      tooltip: _progressTooltip,
+                    ),
                   ],
                 ],
               ),
