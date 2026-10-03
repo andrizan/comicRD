@@ -508,28 +508,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                           left: 0,
                           right: 0,
                           bottom: 0,
-                          child: AnimatedSlide(
-                            offset: _toolbarVisible
-                                ? Offset.zero
-                                : const Offset(0, 1),
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutCubic,
-                            child: AnimatedOpacity(
-                              opacity: _toolbarVisible ? 1 : 0,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeOutCubic,
-                              child: IgnorePointer(
-                                ignoring: !_toolbarVisible,
-                                child: MouseRegion(
-                                  onEnter: (_) => _showToolbar(),
-                                  child: _ReferencePageIndicator(
-                                    currentPage: _currentPage,
-                                    pageCount: data.pages.length,
-                                    pageBookmarkedPages: _pageBookmarkedPages,
-                                    onSelected: _jumpToPage,
-                                  ),
-                                ),
-                              ),
+                          // Page indicator stays visible while scrolling:
+                          // only shrinks to its non-hovered look instead of
+                          // hiding with the toolbar.
+                          child: MouseRegion(
+                            onEnter: (_) => _showToolbar(),
+                            child: _ReferencePageIndicator(
+                              currentPage: _currentPage,
+                              pageCount: data.pages.length,
+                              pageBookmarkedPages: _pageBookmarkedPages,
+                              onSelected: _jumpToPage,
                             ),
                           ),
                         ),
