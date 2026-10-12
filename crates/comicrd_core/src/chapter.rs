@@ -236,11 +236,11 @@ fn zip_image_entries(path: &Path) -> Result<Vec<String>, String> {
         let file = archive
             .by_index(idx)
             .map_err(|e| format!("failed reading archive entry: {e}"))?;
-        if !file.name().ends_with('/') {
-            let p = Path::new(file.name());
-            if is_image(p) {
-                names.push(file.name().to_string());
-            }
+        let Ok(name) = file.name() else {
+            continue;
+        };
+        if !name.ends_with('/') && is_image(Path::new(name.as_ref())) {
+            names.push(name.into_owned());
         }
     }
     names.sort_by(|a, b| natural_compare(a, b));
