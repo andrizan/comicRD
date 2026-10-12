@@ -1,22 +1,47 @@
-# Technical Notes
+# ComicRD Technical Notes
 
-The user-facing summary lives in `README.md`. Agent design rules (source of truth)
-live in `AGENTS.md`. This file keeps the technical details trimmed from the README
-so they are not lost.
+Developer documentation for the Flutter + Rust rewrite. The user-facing summary
+lives in `README.md`; the design rules agents must follow (reader pipeline,
+cache policy, bridge minimization, provider architecture) are the source of
+truth in `AGENTS.md`. The active work plan is
+`docs/superpowers/plans/2026-09-04-reader-backlog.md`.
 
-## Rendering & UI Framework
+Contents:
 
-- Use Flutter's default renderer as-is. Since Flutter 3.47, Impeller is the
-  default on macOS, Windows, and Linux (Metal on macOS, Vulkan on Windows/Linux).
-  Do not force Skia or disable Impeller without a written reason.
-- Material symbols are imported from the standalone `material_ui` /
-  `cupertino_ui` packages, not from the copies bundled in the Flutter SDK
-  (deprecated in the November 2026 stable). No compatibility bridge remains in
-  `app_flutter/lib` — first-party code has zero legacy SDK Material imports.
+- [Requirements](#requirements)
+- [Run Locally](#run-locally)
+- [Bridge Workflow](#bridge-workflow)
+- [Desktop Builds And Packaging](#desktop-builds-and-packaging)
+- [Continuous Integration](#continuous-integration)
+- [Repository Layout](#repository-layout)
+- [Architecture](#architecture)
+- [Rendering, UI Framework And Design System](#rendering-ui-framework-and-design-system)
+- [Data Model And Listing](#data-model-and-listing)
+- [Database Maintenance](#database-maintenance)
+- [Flutter State](#flutter-state)
+- [Reader Image Pipeline](#reader-image-pipeline)
+- [Tests](#tests)
 
-## Windows dav1d & PKG_CONFIG_PATH
+## Requirements
 
-From a Windows host with Visual Studio desktop build tools.
+- Flutter desktop SDK (3.47+, Dart ^3.12.1)
+- Rust toolchain (`rustc 1.98`)
+- `flutter_rust_bridge_codegen` 2.13.0, `cargo-expand`
+- Platform desktop build tools (below)
+
+### Linux (Arch/CachyOS)
+
+```bash
+sudo pacman -S --needed base-devel clang cmake ninja pkgconf gtk3 dav1d
+```
+
+Debian/Ubuntu: `build-essential clang cmake ninja-build pkg-config libgtk-3-dev libdav1d-dev`.
+
+### Windows
+
+Visual Studio 2022 with the "Desktop development with C++" workload, plus dav1d
+for AVIF decoding (the Rust `image` AVIF decoder links against it through
+`pkg-config`).
 
 Option A — vcpkg:
 
@@ -27,8 +52,7 @@ $env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT\installed\x64-windows\lib\pkgconfig"
 setx PKG_CONFIG_PATH "$env:VCPKG_ROOT\installed\x64-windows\lib\pkgconfig"
 ```
 
-On GitHub Actions, vcpkg is already available via
-`$env:VCPKG_INSTALLATION_ROOT`.
+On GitHub Actions, vcpkg is already available via `$env:VCPKG_INSTALLATION_ROOT`.
 
 Option B — meson (build from source):
 
@@ -47,7 +71,7 @@ terminal, use `$env:PKG_CONFIG_PATH = "..."` instead.
 Scripted equivalent: `scripts/setup-dav1d.ps1` (builds + installs dav1d 1.5.4 to
 `%LOCALAPPDATA%\dav1d`, sets `PKG_CONFIG_PATH` in the user environment).
 
-Persistent alternative via local `.cargo/config.toml` (Windows-only):
+Persistent alternative via a local `.cargo/config.toml` (Windows-only):
 
 ```toml
 # .cargo/config.toml  (local, not committed — see .gitignore)
@@ -64,7 +88,30 @@ PKG_CONFIG_PATH = { value = "C:/Users/<you>/dav1d-install/lib/pkgconfig", force 
   from the system package manager). The file is already in `.gitignore`; each
   Windows developer creates it locally with their own path.
 
-## Native Bridge Build
+### macOS
+
+```bash
+brew install dav1d pkg-config
+```
+
+## Run Locally
+
+```bash
+cd app_flutter
+flutter pub get
+flutter run -d linux
+```
+
+Everyday commands:
+
+```bash
+cargo test
+flutter analyze
+flutter test
+cargo build -p comicrd_bridge --release
+```
+
+### Native Bridge Build
 
 - `flutter run -d linux` drives the Flutter desktop build. The Linux CMake file
   calls `scripts/build-native-bridge.sh`, which builds `comicrd_bridge` and copies
@@ -89,58 +136,114 @@ target/release/libcomicrd_bridge.so
 
 Copied into the Flutter bundle's `lib/` directory.
 
-- Windows: `scripts/build-native-bridge.ps1` from the Windows CMake build.
+- Windows: `scripts/build-native-bridge.ps1` from the Windows CMake build; it uses
+  `VCPKG_INSTALLATION_ROOT` / `VCPKG_ROOT` to populate `PKG_CONFIG_PATH` when
+  vcpkg is available.
 - macOS: the Xcode project calls `scripts/build-native-bridge.sh` and copies
   `libcomicrd_bridge.dylib` into the app framework directory.
 
-## Desktop Builds & Packaging
+## Bridge Workflow
+
+API boundary: `crates/comicrd_bridge/src/api.rs`. Generated files are committed:
+
+```text
+crates/comicrd_bridge/src/frb_generated.rs
+app_flutter/lib/api.dart
+app_flutter/lib/frb_generated.dart
+app_flutter/lib/frb_generated.io.dart
+```
+
+Regenerate after changing public bridge structs/functions:
+
+```bash
+flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
+```
+
+No codegen is needed for `comicrd_core`-only changes, but still restart the app.
+The bridge must stay minimal: do not send fields that duplicate other fields, are
+constant for every item in a response, or are unused by Flutter.
+
+## Desktop Builds And Packaging
 
 ```bash
 flutter build linux --release
 flutter build windows --release
 flutter build macos --release
-ISCC.exe /D"AppVersion=2.8.1" app_flutter\windows\installer\comicrd-setup.iss
-./scripts/package-linux.sh 2.8.1
+ISCC.exe /D"AppVersion=2.8.3" app_flutter\windows\installer\comicrd-setup.iss
+./scripts/package-linux.sh 2.8.3
 ```
 
 - The Windows installer requires [Inno Setup](https://jrsoftware.org/isinfo.php).
-  Output: `dist/comicrd-{version}-windows-x86_64-setup.exe`.
-- Windows AVIF support is native and requires the `dav1d` vcpkg package above. The
-  Windows Flutter build calls `scripts/build-native-bridge.ps1`, which uses
-  `VCPKG_INSTALLATION_ROOT` / `VCPKG_ROOT` to populate `PKG_CONFIG_PATH` when
-  vcpkg is available.
+  Output: `dist/comicrd-{version}-windows-x86_64-setup.exe`. Windows AVIF support
+  is native and requires the dav1d setup above.
 - The Linux tarball is used by GitHub Releases and AUR. Output:
-  `dist/comicrd-2.8.1-linux-x86_64.tar.gz`.
+  `dist/comicrd-2.8.3-linux-x86_64.tar.gz`.
+- Local pacman package for testing the AUR layout:
 
-## Repository Layout (Full)
+```bash
+./scripts/package-arch-local.sh 2.8.3
+sudo pacman -U dist/arch/comicrd-bin-2.8.3-1-x86_64.pkg.tar.zst
+```
+
+## Continuous Integration
+
+`.github/workflows/desktop-build.yml`:
+
+- `quality` runs `cargo test`, `flutter analyze` and `flutter test` on every push
+  and pull request.
+- `build-linux`, `build-windows` and `build-macos` run on tags (`v*`) or manual
+  dispatch, bump `app_flutter/pubspec.yaml` to the tag version, and upload the
+  tarball, zip, installer and macOS bundle as artifacts.
+- `release` collects the artifacts into a GitHub Release (prerelease when the
+  tag carries a suffix) and commits the version bump to `master`; `publish-aur`
+  updates the `comicrd-bin` AUR package from the published tarball checksum.
+- `cache-dav1d` warms the Windows dav1d cache on pushes to `master` so tag builds
+  skip the meson build; the Windows job also builds it itself on a cold cache.
+
+The repeated steps live in composite actions under `.github/actions/`:
+
+| Action | Purpose |
+| --- | --- |
+| `setup-toolchain` | Flutter + Rust toolchains with caches and the native dependencies of the runner OS (`flutter: "false"` for Rust-only jobs) |
+| `dav1d-windows` | Restore-or-build a static dav1d 1.5.4 and export `PKG_CONFIG_PATH` |
+| `release-version` | Tag validation, `version`/`prerelease` outputs and the pubspec bump, in one bash implementation for all platforms |
+
+Workflow permissions are read-only by default; only the release job has
+`contents: write`. `codeql.yml` scans the Rust workspace (CodeQL has no Dart
+support).
+
+## Repository Layout
 
 ```text
 comicrd_flutter/
 ├── app_flutter/              # Flutter desktop UI
 │   ├── lib/
 │   │   ├── api/              # Dart facade over generated bridge APIs
-│   │   ├── pages/            # Library, comic, and reader pages
+│   │   ├── pages/            # library, comic, reader, settings
 │   │   ├── routes/           # Route/path helpers
-│   │   ├── state/            # Riverpod providers and notifiers
-│   │   ├── widgets/          # Shared UI widgets
-│   │   ├── app.dart
+│   │   ├── state/            # Riverpod providers, settings, strings
+│   │   ├── utils/            # theme tokens, formatting, update checker
+│   │   ├── widgets/          # soft_ui building blocks, thumbnails
+│   │   ├── app.dart          # router, shell, sidebar
 │   │   ├── main.dart
 │   │   ├── bridge_generated.dart
 │   │   ├── api.dart
 │   │   ├── frb_generated.dart
 │   │   └── frb_generated.io.dart
+│   ├── assets/               # Plus Jakarta Sans, app icon source
 │   ├── linux/
 │   ├── windows/
-│   │   └── installer/       # Inno Setup script
-│   ├── test/
+│   │   └── installer/        # Inno Setup script
+│   ├── test/                 # widget/unit tests, support/ helpers, screenshot tool
 │   └── pubspec.yaml
 │
 ├── crates/
 │   ├── comicrd_core/         # Reusable Rust core
 │   └── comicrd_bridge/       # flutter_rust_bridge API crate
 │
-├── docs/                     # Migration plans and audits
-├── scripts/                  # Packaging helpers
+├── docs/                     # this file, screenshots, the active plan
+├── scripts/                  # bridge build, packaging, icon generation
+├── .github/                  # workflows and composite actions
 ├── Cargo.toml
 └── flutter_rust_bridge.yaml
 ```
@@ -148,7 +251,7 @@ comicrd_flutter/
 Do not reintroduce the old Tauri/React/WebView stack. The target architecture is
 Flutter desktop plus Rust core/bridge crates.
 
-## Architecture (Full)
+## Architecture
 
 Flutter: routes, Riverpod state, theme, localization, desktop behavior, rendering.
 Rust: reusable application data and heavy work:
@@ -178,7 +281,42 @@ comicrd_core
 UI/page/widget/state code calls the facade in
 `app_flutter/lib/api/comicrd_api.dart`, not generated bridge functions directly.
 
-## Data Model And Listing (Full)
+## Rendering, UI Framework And Design System
+
+- Use Flutter's default renderer as-is. Since Flutter 3.47, Impeller is the
+  default on macOS, Windows, and Linux (Metal on macOS, Vulkan on Windows/Linux).
+  Do not force Skia or disable Impeller without a written reason.
+- Material symbols are imported from the standalone `material_ui` /
+  `cupertino_ui` packages, not from the copies bundled in the Flutter SDK
+  (deprecated in the November 2026 stable). No compatibility bridge remains in
+  `app_flutter/lib` — first-party code has zero legacy SDK Material imports.
+- Controls come from `forui` (`FTheme`, popover menus, tooltips, toaster) with
+  Lucide icons from `forui_lucide`.
+
+The UI follows a soft, modern system: a lavender-cream ground with white cards
+and tinted shadows, radii 12–28, one 44 px control height, accent reserved for
+the active state and amber for bookmark/"new" markers, set in Plus Jakarta Sans
+(bundled under `app_flutter/assets/fonts`, OFL).
+
+- Tokens: `app_flutter/lib/utils/forui_theme.dart` — `ComicReaderFTheme`
+  (light/dark `FThemeData`), `ComicReaderColors` (theme extension: canvas,
+  progress, badge, star, success, line, shadow, scrim), `AppShape` (radii,
+  control height, shadows) and `AppIcons`.
+- Shared widgets: `app_flutter/lib/widgets/soft_ui.dart` — `SoftCard`,
+  `HoverCard`, `SoftButton`, `SoftIconButton`, `SoftChip`, `SoftSegmented`,
+  `SoftSortMenu`, `SoftPill`, `SoftSwitch`, `SoftSlider`, `SoftSearchField`,
+  `SoftProgressBar`, `SoftBadge`, `CoverThumbnail`, `PageHeading`,
+  `SectionHeading`, `SoftEmptyState`. Pages compose these instead of styling
+  raw containers.
+- The reader chrome (`_ReaderTopBar`, Display/Mark panels, `_ReaderPageBar`)
+  uses its own fixed dark palette so pages keep the same surround in both
+  themes; it deliberately draws no `BackdropFilter` (a fullscreen blur is
+  recomputed every scrolled frame).
+- Contrast was verified by calculation: every text pairing is at least 4.5:1
+  and every UI pairing at least 3:1 in both themes. Keyboard focus rings,
+  `Semantics` labels/toggle states and tooltips are part of the shared widgets.
+
+## Data Model And Listing
 
 The library tab treats the filesystem as the source of truth.
 `list_library_comics_raw` shallow-walks the library root:
@@ -195,7 +333,8 @@ counts and read progress come from the DB only when already known; otherwise the
 listing returns zero counts. Archive comics are represented as a single chapter.
 
 An explicit scan walks depth-1 entries then upserts comics/chapters into SQLite.
-Opening a comic also discovers chapters on demand.
+Opening a comic also discovers chapters on demand. Picking a folder on the
+first-run screen stores it, registers the library and starts a background scan.
 
 Chapters are natural-sorted by display title: archive files are compared by file
 stem (not the full file name), so the `.cbz`/`.cbr` extension never affects
@@ -207,7 +346,7 @@ The `comics` and `chapters` tables keep only fields that are actually read
 foreign keys). Unused columns such as `created_at`/`updated_at` are not created
 on fresh DBs and are dropped via migration on existing DBs.
 
-## Database Maintenance (Full)
+## Database Maintenance
 
 Settings → Optimize Data runs maintenance on the SQLite database and thumbnail
 cache:
@@ -228,7 +367,7 @@ The thumbnail cache (`app_data_dir/thumbnails`, named `{width}x{height}-{hash}.j
 is a normal LRU, but its size is only trimmed when new covers are written.
 Optimize Data is the explicit cleanup that removes orphan covers immediately.
 
-## Flutter State (Full)
+## Flutter State
 
 Library state is split so filtering does not trigger loading-state churn:
 
@@ -242,7 +381,14 @@ Library state is split so filtering does not trigger loading-state churn:
 Search input is debounced in the UI before updating preferences. Scroll offsets
 are throttled and restored via local state providers.
 
-## Reader Image Pipeline (Full)
+The shell (`ComicRdShell`) hydrates the stored settings once into the app,
+library and reader notifiers; the sidebar selection derives from the current
+route and `libraryPreferencesProvider.selectedTab`, so a tab change made inside
+a page ("View History") is reflected without a second source of truth.
+`library_source_actions.dart` holds the shared "set library folder" and
+"invalidate library data" steps used by the first-run screen and Settings.
+
+## Reader Image Pipeline
 
 Metadata-first, bytes-on-demand pipeline:
 
@@ -272,6 +418,12 @@ and progress stable even before image bytes finish loading. Progress, bookmarks,
 and the page indicator stay page-based; tiles are a rendering detail unknown to
 the DB.
 
+The reader chrome (toolbar, Display/Mark panels, segmented page bar) is an
+overlay rebuilt on its own version counter (`_overlayVersion`), so opening a
+panel or moving the current page never relayouts the page strip. Keyboard:
+`Esc` closes an open panel, then fullscreen, then the reader; `↑ ↓` / `PgUp
+PgDn` scroll; `← →` switch chapter; `0` / `Home` jump to the first page.
+
 Format handling:
 
 - folder chapters are scanned up to depth 3, ignoring hidden/system files such as
@@ -296,39 +448,58 @@ Memory is bounded around the viewport:
   2048x2048x4 = 16MB; GIFs and fitting pages pass through byte-identical)
 - cached page bytes use `Arc<Vec<u8>>` so cache hits inside Rust avoid deep copies
 
-## Bridge Workflow (Full)
-
-API boundary: `crates/comicrd_bridge/src/api.rs`. Generated files are committed:
-
-```text
-crates/comicrd_bridge/src/frb_generated.rs
-app_flutter/lib/api.dart
-app_flutter/lib/frb_generated.dart
-app_flutter/lib/frb_generated.io.dart
-```
-
-Regenerate after changing public bridge structs/functions:
-
-```bash
-flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
-```
-
-The bridge must stay minimal. Do not send fields that duplicate other fields, are
-constant for every item in a response, or are unused by Flutter.
-
-## Tests (Full)
-
-Rust integration tests per concern in `crates/comicrd_core/tests/`: library source
-checks, library listing, scan, chapters, reader flow, image pipeline, cache
-behavior, bookmarks, history, migrations, backup/import, rar/cbr session lifecycle,
-and database optimization (stale-row purge, thumbnail cleanup, VACUUM consistency,
-unavailable-library guard).
+## Tests
 
 ```bash
 cargo test
 flutter analyze
 flutter test
+flutter test --coverage   # writes app_flutter/coverage/lcov.info (gitignored)
 ```
 
-Rust tests for core/bridge changes. Flutter analyzer/tests for Dart, UI, generated
-bridge, routing, state, or pubspec changes.
+Rust tests for core/bridge changes; Flutter analyzer/tests for Dart, UI,
+generated bridge, routing, state, or pubspec changes.
+
+### Rust
+
+Integration tests per concern in `crates/comicrd_core/tests/`: library source
+checks, library listing, scan, chapters, reader flow, image pipeline, cache
+behavior, bookmarks, history, migrations, backup/import, rar/cbr session lifecycle,
+and database optimization (stale-row purge, thumbnail cleanup, VACUUM consistency,
+unavailable-library guard). Unit tests are inline (`chapter.rs`,
+`image_pipeline.rs`, `library.rs`).
+
+### Flutter
+
+Widget and unit tests in `app_flutter/test/`:
+
+| File | Covers |
+| --- | --- |
+| `app_shell_test.dart` | sidebar tabs and persistence, badges, status card states, collapse/expand, `Ctrl+T`/`Ctrl+L` |
+| `library_page_test.dart` | first-run screen, source error banner, continue-reading shelf, filter chips, sort, list mode, search, history, favorites, card menus |
+| `comic_page_ui_test.dart`, `comic_page_test.dart`, `comic_bookmark_test.dart` | header/progress card, chapter rows and resume, bookmark tab, sort, menus, auto-scroll, favorite toggle |
+| `reader_page_test.dart`, `reader_chrome_test.dart`, `reader_state_test.dart`, `reader_tiles_test.dart` | pipeline (lazy render, prefetch/evict, tiles, unlimited scroll) and chrome (panels, `0` key, page bar, track taps, back) |
+| `settings_page_test.dart` | sections, theme/locale, switches, sliders, scan progress/cancel, optimize, path save, update flow, section navigation |
+| `soft_ui_test.dart` | every shared widget |
+| `strings_test.dart`, `update_test.dart`, `library_source_actions_test.dart`, `comic_thumbnail_*_test.dart`, `back_to_top_button_test.dart` | strings tables, update parsing/notifier, source actions, thumbnails |
+
+Shared helpers under `test/support/`: `fake_api.dart` (`FakeComicRdApi`, an
+in-memory `ComicRdApi` with a small library that records every call — extend it
+rather than adding fakes) and `router_host.dart` (`pumpRoutedPage`, one page
+under a private GoRouter whose other routes render their location as text, with
+settings hydration like the shell). Environment traps worth knowing are listed
+in `AGENTS.md` → "Flutter Tests" (double-tap arena in the shell, test font
+widths, tooltip timers, lazy lists).
+
+### Screenshots
+
+The README images are produced headlessly, with the bundled fonts and sample
+data, by a gated test:
+
+```bash
+cd app_flutter
+COMICRD_SCREENSHOTS=1 flutter test test/screenshots_test.dart   # → build/screenshots/*.png
+```
+
+`COMICRD_SCREENSHOT_DIR` overrides the output folder. Copy the ones you want
+into `docs/screenshots/`.
