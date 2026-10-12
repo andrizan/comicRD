@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#8B7BFF"/>
+      <stop offset="1" stop-color="#5441BE"/>
+    </linearGradient>
+    <clipPath id="tileClip">
+      <rect x="72" y="72" width="880" height="880" rx="210"/>
+    </clipPath>
+    <filter id="tileShadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#17151C" flood-opacity="0.28"/>
+    </filter>
+    <filter id="pageShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#2B2170" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- tile -->
+  <rect x="72" y="72" width="880" height="880" rx="210" fill="url(#tile)" filter="url(#tileShadow)"/>
+
+  <g clip-path="url(#tileClip)">
+    <!-- stacked volumes behind the page: the local library -->
+    <rect x="236" y="168" width="480" height="644" rx="36" fill="#B6ABFF" transform="rotate(-12 476 490)"/>
+    <rect x="236" y="168" width="480" height="644" rx="36" fill="#D9D3FF" transform="rotate(-6 476 490)"/>
+
+    <!-- comic page -->
+    <rect x="236" y="168" width="480" height="644" rx="36" fill="#FBFAF8" filter="url(#pageShadow)"/>
+
+    <!-- panels, inked -->
+    <g stroke="#221F2C" stroke-width="9" stroke-linejoin="round">
+      <rect x="268" y="200" width="416" height="236" rx="14" fill="#3D3564"/>
+      <rect x="268" y="458" width="196" height="322" rx="14" fill="#FFB547"/>
+      <rect x="486" y="458" width="198" height="150" rx="14" fill="#B6ABFF"/>
+      <rect x="486" y="630" width="198" height="150" rx="14" fill="#221F2C"/>
+    </g>
+
+    <!-- speed lines in the tall panel -->
+    <g stroke="#E8941F" stroke-width="12" stroke-linecap="round">
+      <line x1="300" y1="640" x2="432" y2="508"/>
+      <line x1="300" y1="710" x2="432" y2="578"/>
+      <line x1="332" y1="750" x2="432" y2="650"/>
+    </g>
+
+    <!-- impact burst -->
+    <polygon points="585,486 602,520 640,514 622,548 652,572 614,582 618,596 585,578 552,596 556,582 518,572 548,548 530,514 568,520"
+             fill="#FBFAF8" stroke="#221F2C" stroke-width="8" stroke-linejoin="round"/>
+
+    <!-- caption box -->
+    <rect x="506" y="652" width="104" height="40" rx="8" fill="#FBFAF8"/>
+
+    <!-- speech bubble -->
+    <path d="M476 256 C550 256 604 290 604 330 C604 370 550 404 476 404 C464 404 453 403 442 401 L396 420 L408 388 C376 376 348 356 348 330 C348 290 402 256 476 256 Z"
+          fill="#FFFFFF" stroke="#221F2C" stroke-width="9" stroke-linejoin="round"/>
+    <circle cx="432" cy="330" r="13" fill="#3D3564"/>
+    <circle cx="476" cy="330" r="13" fill="#3D3564"/>
+    <circle cx="520" cy="330" r="13" fill="#3D3564"/>
+  </g>
+
+  <!-- offline badge -->
+  <circle cx="768" cy="768" r="128" fill="#FFB547" stroke="#4B3AAE" stroke-width="22"/>
+  <g fill="none" stroke="#221F2C" stroke-width="22" stroke-linecap="round">
+    <path d="M740.7 794.7 A 40 40 0 0 1 797.3 794.7"/>
+    <path d="M712.4 766.4 A 80 80 0 0 1 825.6 766.4"/>
+    <path d="M684.1 738.1 A 120 120 0 0 1 853.9 738.1"/>
+  </g>
+  <circle cx="769" cy="823" r="14" fill="#221F2C"/>
+  <line x1="700" y1="700" x2="836" y2="836" stroke="#FFB547" stroke-width="46" stroke-linecap="round"/>
+  <line x1="700" y1="700" x2="836" y2="836" stroke="#221F2C" stroke-width="22" stroke-linecap="round"/>
+</svg>
