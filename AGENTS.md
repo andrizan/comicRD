@@ -227,18 +227,6 @@ Rules learned the hard way:
 - Buttons wrapped in `FTooltip` leave a short hover timer behind; end such tests with `tester.pumpAndSettle(const Duration(milliseconds: 200))` or a 1 s pump.
 - `test/screenshots_test.dart` renders every screen with the real fonts and sample data; it is skipped unless `COMICRD_SCREENSHOTS=1` and writes PNGs to `build/screenshots` (`COMICRD_SCREENSHOT_DIR` overrides). README images come from it.
 
-## Planning
-
-The active plan (single source of truth for remaining work) is:
-
-```text
-docs/superpowers/plans/2026-09-04-reader-backlog.md
-```
-
-Retired plans were deleted; their history remains in git. Design rules live in this file (AGENTS.md), not in plans.
-
-Update the plan checklist when a task is actually implemented and verified. Do not mark work complete only because files were edited.
-
 ## Verification
 
 Use the smallest reliable verification for the change, but do not claim success without fresh evidence.

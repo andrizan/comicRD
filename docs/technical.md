@@ -3,8 +3,7 @@
 Developer documentation for the Flutter + Rust rewrite. The user-facing summary
 lives in `README.md`; the design rules agents must follow (reader pipeline,
 cache policy, bridge minimization, provider architecture) are the source of
-truth in `AGENTS.md`. The active work plan is
-`docs/superpowers/plans/2026-09-04-reader-backlog.md`.
+truth in `AGENTS.md`.
 
 Contents:
 
@@ -241,7 +240,7 @@ comicrd_flutter/
 │   ├── comicrd_core/         # Reusable Rust core
 │   └── comicrd_bridge/       # flutter_rust_bridge API crate
 │
-├── docs/                     # this file, screenshots, the active plan
+├── docs/                     # this file and the README screenshots
 ├── scripts/                  # bridge build, packaging, icon generation
 ├── .github/                  # workflows and composite actions
 ├── Cargo.toml

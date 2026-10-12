@@ -68,7 +68,6 @@ workflow and CI are described in [`docs/technical.md`](docs/technical.md).
 - [`docs/technical.md`](docs/technical.md) — requirements, build/run, CI,
   repository layout, architecture, data model, reader pipeline, tests, screenshots
 - [`AGENTS.md`](AGENTS.md) — design rules for contributors and coding agents
-- [`docs/superpowers/plans/2026-09-04-reader-backlog.md`](docs/superpowers/plans/2026-09-04-reader-backlog.md) — the active plan
 
 ## License
 
