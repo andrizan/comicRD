@@ -1,11 +1,11 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use rusqlite::{params, Connection};
 
 use crate::chapter::{
-    chapter_size_bytes, chapter_snapshot_by_source_path, comic_title_for_path,
-    discover_chapter_entries_from_comic_dir, is_archive, source_type_for_path, upsert_chapter,
-    upsert_comic, ChapterUpsert,
+    chapter_size_bytes, comic_title_for_path, discover_chapter_entries_from_comic_dir, is_archive,
+    source_type_for_path, upsert_chapter, upsert_comic, ChapterUpsert,
 };
 use crate::database::{file_modified_ts, now_ts};
 use crate::{Library, LibrarySourceStatus, RawComic};
@@ -309,157 +309,273 @@ pub(crate) fn list_libraries_conn(conn: &Connection) -> Result<Vec<Library>, Str
         .map_err(|e| format!("failed collecting libraries: {e}"))
 }
 
-pub(crate) fn scan_comic_dir(
-    conn: &Connection,
-    library_id: i64,
-    _library_path: &str,
-    comic_dir: &Path,
-) -> Result<(usize, usize), String> {
-    let title = comic_title_for_path(comic_dir);
-    let source_path = comic_dir.to_string_lossy().to_string();
-    let comic_id = upsert_comic(
-        conn,
-        library_id,
-        &title,
-        &source_path,
-        "folder",
-        file_modified_ts(comic_dir),
-    )?;
-    let chapter_entries = discover_chapter_entries_from_comic_dir(comic_dir);
-
-    let mut chapter_count = 0usize;
-    let mut total_size_bytes: i64 = 0;
-    for (chapter_title, chapter_path, chapter_type, idx) in chapter_entries {
-        let modified_at = file_modified_ts(Path::new(&chapter_path));
-
-        let mut cached_page_count = 0i64;
-        let mut skip_upsert = false;
-        if let Some((existing_page_count, cached_modified_at, cached_size, cached_index)) =
-            chapter_snapshot_by_source_path(conn, &chapter_path)?
-        {
-            cached_page_count = existing_page_count;
-            if cached_modified_at == modified_at && cached_index == idx {
-                total_size_bytes = total_size_bytes.saturating_add(cached_size);
-                chapter_count += 1;
-                skip_upsert = true;
-            }
-        }
-        if skip_upsert {
-            continue;
-        }
-
-        let chapter_size = chapter_size_bytes(Path::new(&chapter_path), &chapter_type);
-        total_size_bytes = total_size_bytes.saturating_add(chapter_size);
-        upsert_chapter(
-            conn,
-            ChapterUpsert {
-                comic_id,
-                title: &chapter_title,
-                chapter_index: idx,
-                source_path: &chapter_path,
-                source_type: &chapter_type,
-                page_count: cached_page_count.max(0) as usize,
-                date_modified: modified_at,
-                size_bytes: chapter_size,
-            },
-        )?;
-        chapter_count += 1;
-    }
-
-    conn.execute(
-        "UPDATE comics SET size_bytes = ?1 WHERE id = ?2",
-        params![total_size_bytes, comic_id],
-    )
-    .map_err(|e| format!("failed updating comic size_bytes: {e}"))?;
-
-    Ok((1, chapter_count))
+/// Filesystem half of scanning one top-level library entry: everything that
+/// touches disk, gathered before any DB lock is taken so a long scan never
+/// blocks the UI's DB calls.
+pub(crate) enum ScanEntryPlan {
+    Folder {
+        title: String,
+        source_path: String,
+        modified_at: i64,
+        chapters: Vec<DiscoveredChapter>,
+    },
+    Archive {
+        title: String,
+        source_path: String,
+        source_type: String,
+        modified_at: i64,
+        size_bytes: i64,
+    },
 }
 
-pub(crate) fn scan_library_entries<F>(
+pub(crate) struct DiscoveredChapter {
+    pub(crate) title: String,
+    pub(crate) source_path: String,
+    pub(crate) source_type: String,
+    pub(crate) index: i64,
+    pub(crate) modified_at: i64,
+}
+
+/// `(page_count, date_modified, size_bytes, chapter_index)` as stored.
+pub(crate) type ChapterSnapshot = (i64, i64, i64, i64);
+
+/// Placeholders per `IN (...)` snapshot query (SQLite allows 32766).
+const SNAPSHOT_QUERY_CHUNK: usize = 500;
+
+impl ScanEntryPlan {
+    /// None for entries that are neither a comic folder nor an archive.
+    pub(crate) fn from_entry(entry: &Path) -> Option<Self> {
+        if entry.is_dir() {
+            let chapters = discover_chapter_entries_from_comic_dir(entry)
+                .into_iter()
+                .map(|(title, source_path, source_type, index)| DiscoveredChapter {
+                    modified_at: file_modified_ts(Path::new(&source_path)),
+                    title,
+                    source_path,
+                    source_type,
+                    index,
+                })
+                .collect();
+            return Some(Self::Folder {
+                title: comic_title_for_path(entry),
+                source_path: entry.to_string_lossy().to_string(),
+                modified_at: file_modified_ts(entry),
+                chapters,
+            });
+        }
+        if entry.is_file() && is_archive(entry) {
+            let source_type = source_type_for_path(entry);
+            let size_bytes = chapter_size_bytes(entry, &source_type);
+            return Some(Self::Archive {
+                title: comic_title_for_path(entry),
+                source_path: entry.to_string_lossy().to_string(),
+                source_type,
+                modified_at: file_modified_ts(entry),
+                size_bytes,
+            });
+        }
+        None
+    }
+
+    pub(crate) fn source_path(&self) -> &str {
+        match self {
+            Self::Folder { source_path, .. } | Self::Archive { source_path, .. } => source_path,
+        }
+    }
+
+    /// Chapter paths whose stored snapshot decides what gets rewritten.
+    pub(crate) fn chapter_paths(&self) -> Vec<String> {
+        match self {
+            Self::Folder { chapters, .. } => {
+                chapters.iter().map(|c| c.source_path.clone()).collect()
+            }
+            Self::Archive { source_path, .. } => vec![source_path.clone()],
+        }
+    }
+
+    /// Sizes that must be measured on disk: chapters with no snapshot or a
+    /// changed one (unchanged chapters reuse the stored size). Lock-free.
+    pub(crate) fn measure_changed_sizes(
+        &self,
+        snapshots: &HashMap<String, ChapterSnapshot>,
+    ) -> HashMap<String, i64> {
+        let Self::Folder { chapters, .. } = self else {
+            return HashMap::new();
+        };
+        chapters
+            .iter()
+            .filter(|chapter| !chapter.snapshot_matches(snapshots))
+            .map(|chapter| {
+                (
+                    chapter.source_path.clone(),
+                    chapter_size_bytes(Path::new(&chapter.source_path), &chapter.source_type),
+                )
+            })
+            .collect()
+    }
+}
+
+impl DiscoveredChapter {
+    /// Stored row still describes this chapter: same mtime and position.
+    fn snapshot_matches(&self, snapshots: &HashMap<String, ChapterSnapshot>) -> bool {
+        matches!(
+            snapshots.get(&self.source_path),
+            Some(&(_, cached_modified_at, _, cached_index))
+                if cached_modified_at == self.modified_at && cached_index == self.index
+        )
+    }
+}
+
+/// Stored snapshots for many chapter paths in a few batched queries.
+pub(crate) fn chapter_snapshots_by_source_paths(
+    conn: &Connection,
+    paths: &[String],
+) -> Result<HashMap<String, ChapterSnapshot>, String> {
+    let mut snapshots = HashMap::with_capacity(paths.len());
+    for chunk in paths.chunks(SNAPSHOT_QUERY_CHUNK) {
+        let placeholders: String = (1..=chunk.len())
+            .map(|i| format!("?{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let query = format!(
+            "SELECT source_path, page_count, date_modified, size_bytes, chapter_index FROM chapters WHERE source_path IN ({placeholders})"
+        );
+        let mut stmt = conn
+            .prepare(&query)
+            .map_err(|e| format!("failed preparing chapter snapshot query: {e}"))?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = chunk
+            .iter()
+            .map(|path| path as &dyn rusqlite::types::ToSql)
+            .collect();
+        let rows = stmt
+            .query_map(params.as_slice(), |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    (
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ),
+                ))
+            })
+            .map_err(|e| format!("failed querying chapter snapshots: {e}"))?;
+        for row in rows {
+            let (path, snapshot) =
+                row.map_err(|e| format!("failed reading chapter snapshot: {e}"))?;
+            snapshots.insert(path, snapshot);
+        }
+    }
+    Ok(snapshots)
+}
+
+/// DB half of one entry: upsert the comic and its changed chapters in one
+/// short transaction. Returns `(comics, chapters)` counting every discovered
+/// chapter, rewritten or not, like the previous scan.
+pub(crate) fn apply_scan_entry(
     conn: &mut Connection,
     library_id: i64,
-    library_path: &str,
-    entries: &[std::path::PathBuf],
-    mut on_progress: F,
-) -> Result<(usize, usize), String>
-where
-    F: FnMut(&str) -> bool,
-{
-    let mut comic_count = 0usize;
-    let mut chapter_count = 0usize;
-
+    plan: &ScanEntryPlan,
+    snapshots: &HashMap<String, ChapterSnapshot>,
+    measured_sizes: &HashMap<String, i64>,
+) -> Result<(usize, usize), String> {
     let tx = conn
         .transaction()
         .map_err(|e| format!("failed opening scan transaction: {e}"))?;
-
-    for entry in entries {
-        if entry.is_dir() {
-            let (dir_comic_count, dir_chapter_count) = scan_comic_dir(&tx, library_id, library_path, entry)?;
-            comic_count += dir_comic_count;
-            chapter_count += dir_chapter_count;
-            if !on_progress(&entry.to_string_lossy()) {
-                break;
+    let counts = match plan {
+        ScanEntryPlan::Folder {
+            title,
+            source_path,
+            modified_at,
+            chapters,
+        } => {
+            let comic_id =
+                upsert_comic(&tx, library_id, title, source_path, "folder", *modified_at)?;
+            let mut total_size_bytes: i64 = 0;
+            for chapter in chapters {
+                let snapshot = snapshots.get(&chapter.source_path);
+                if chapter.snapshot_matches(snapshots) {
+                    let (_, _, cached_size, _) = snapshot.expect("matching snapshot exists");
+                    total_size_bytes = total_size_bytes.saturating_add(*cached_size);
+                    continue;
+                }
+                let cached_page_count = snapshot
+                    .map(|(page_count, _, _, _)| *page_count)
+                    .unwrap_or(0);
+                // Measured lock-free beforehand; the fallback only runs if
+                // a caller skipped `measure_changed_sizes`.
+                let chapter_size = measured_sizes
+                    .get(&chapter.source_path)
+                    .copied()
+                    .unwrap_or_else(|| {
+                        chapter_size_bytes(Path::new(&chapter.source_path), &chapter.source_type)
+                    });
+                total_size_bytes = total_size_bytes.saturating_add(chapter_size);
+                upsert_chapter(
+                    &tx,
+                    ChapterUpsert {
+                        comic_id,
+                        title: &chapter.title,
+                        chapter_index: chapter.index,
+                        source_path: &chapter.source_path,
+                        source_type: &chapter.source_type,
+                        page_count: cached_page_count.max(0) as usize,
+                        date_modified: chapter.modified_at,
+                        size_bytes: chapter_size,
+                    },
+                )?;
             }
-        } else if entry.is_file() && is_archive(entry) {
-            let title = comic_title_for_path(entry);
-            let source_type = source_type_for_path(entry);
-            let source_path = entry.to_string_lossy().to_string();
-            let modified_at = file_modified_ts(entry);
-            let comic_id = upsert_comic(
-                &tx,
-                library_id,
-                &title,
-                &source_path,
-                &source_type,
-                modified_at,
-            )?;
-            let mut should_upsert_chapter = true;
-            let page_count =
-                if let Some((cached_page_count, cached_modified_at, _cached_size, cached_index)) =
-                    chapter_snapshot_by_source_path(&tx, &source_path)?
-                {
-                    if cached_modified_at == modified_at && cached_index == 1 {
-                        should_upsert_chapter = false;
-                        cached_page_count as usize
-                    } else {
-                        cached_page_count.max(0) as usize
-                    }
-                } else {
-                    0
-                };
-            let archive_size = chapter_size_bytes(entry, &source_type);
-            if should_upsert_chapter {
+            tx.execute(
+                "UPDATE comics SET size_bytes = ?1 WHERE id = ?2",
+                params![total_size_bytes, comic_id],
+            )
+            .map_err(|e| format!("failed updating comic size_bytes: {e}"))?;
+            (1, chapters.len())
+        }
+        ScanEntryPlan::Archive {
+            title,
+            source_path,
+            source_type,
+            modified_at,
+            size_bytes,
+        } => {
+            let comic_id =
+                upsert_comic(&tx, library_id, title, source_path, source_type, *modified_at)?;
+            let snapshot = snapshots.get(source_path);
+            let unchanged = matches!(
+                snapshot,
+                Some(&(_, cached_modified_at, _, cached_index))
+                    if cached_modified_at == *modified_at && cached_index == 1
+            );
+            if !unchanged {
+                let cached_page_count = snapshot
+                    .map(|(page_count, _, _, _)| *page_count)
+                    .unwrap_or(0);
                 upsert_chapter(
                     &tx,
                     ChapterUpsert {
                         comic_id,
                         title: "Chapter 1",
                         chapter_index: 1,
-                        source_path: &source_path,
-                        source_type: &source_type,
-                        page_count,
-                        date_modified: modified_at,
-                        size_bytes: archive_size,
+                        source_path,
+                        source_type,
+                        page_count: cached_page_count.max(0) as usize,
+                        date_modified: *modified_at,
+                        size_bytes: *size_bytes,
                     },
                 )?;
             }
             tx.execute(
                 "UPDATE comics SET size_bytes = ?1 WHERE id = ?2",
-                params![archive_size, comic_id],
+                params![*size_bytes, comic_id],
             )
             .map_err(|e| format!("failed updating archive comic size_bytes: {e}"))?;
-            comic_count += 1;
-            chapter_count += 1;
-            if !on_progress(&source_path) {
-                break;
-            }
+            (1, 1)
         }
-    }
-
+    };
     tx.commit()
         .map_err(|e| format!("failed committing scan transaction: {e}"))?;
-
-    Ok((comic_count, chapter_count))
+    Ok(counts)
 }
 
 #[cfg(test)]

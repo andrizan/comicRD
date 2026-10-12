@@ -208,3 +208,100 @@ fn scan_reindexes_chapters_when_new_chapter_inserted_in_middle() {
     assert_eq!(context.prev_chapter_title.as_deref(), Some("Chapter 06"));
     assert_eq!(context.next_chapter_title.as_deref(), Some("Chapter 07"));
 }
+
+#[test]
+fn rescan_reuses_stored_sizes_and_remeasures_only_changed_chapters() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    for (name, size) in [
+        ("Chapter 01", 100usize),
+        ("Chapter 02", 200),
+        ("Chapter 03", 300),
+    ] {
+        let chapter = comic.join(name);
+        fs::create_dir_all(&chapter).expect("chapter");
+        fs::write(chapter.join("001.png"), vec![0u8; size]).expect("page");
+    }
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+
+    let comic_size = |core: &ComicRdCore| {
+        core.list_library_comics_raw(SortBy::Name, SortDir::Asc)
+            .expect("list")
+            .into_iter()
+            .find(|c| c.title == "Comic A")
+            .expect("comic listed")
+            .size_bytes
+    };
+
+    let summary = core.scan_libraries().expect("first scan");
+    assert_eq!(summary.chapters, 3);
+    assert_eq!(comic_size(&core), 600);
+
+    // Nothing changed: counts and the stored sizes carry over.
+    let summary = core.scan_libraries().expect("rescan");
+    assert_eq!(summary.chapters, 3);
+    assert_eq!(comic_size(&core), 600);
+
+    // Chapter mtimes have second resolution: let the clock tick before a
+    // new page bumps one chapter directory's mtime.
+    thread::sleep(Duration::from_millis(1100));
+    fs::write(comic.join("Chapter 02").join("002.png"), vec![0u8; 50]).expect("new page");
+
+    let summary = core.scan_libraries().expect("rescan after change");
+    assert_eq!(summary.chapters, 3);
+    assert_eq!(
+        comic_size(&core),
+        650,
+        "changed chapter re-measured, others reused"
+    );
+}
+
+#[test]
+fn scan_handles_more_chapters_than_one_snapshot_query_chunk() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter_total = 1203usize;
+    for index in 1..=chapter_total {
+        let chapter = comic.join(format!("Chapter {index:04}"));
+        fs::create_dir_all(&chapter).expect("chapter");
+        fs::write(chapter.join("001.png"), b"x").expect("page");
+    }
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    core.add_library(&library.to_string_lossy())
+        .expect("add library");
+
+    let summary = core.scan_libraries().expect("first scan");
+    assert_eq!(summary.comics, 1);
+    assert_eq!(summary.chapters, chapter_total);
+    // The rescan looks every chapter up in batches; nothing may be dropped
+    // or duplicated across chunk boundaries.
+    let summary = core.scan_libraries().expect("rescan");
+    assert_eq!(summary.chapters, chapter_total);
+    let chapters = core
+        .list_comic_chapters_raw(&comic.to_string_lossy())
+        .expect("list chapters");
+    assert_eq!(chapters.len(), chapter_total);
+    assert_eq!(chapters[0].title, "Chapter 0001");
+    assert_eq!(
+        chapters[chapter_total - 1].title,
+        format!("Chapter {chapter_total:04}")
+    );
+}

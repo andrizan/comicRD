@@ -493,16 +493,24 @@ impl ComicRdCore {
                 }
             }
         }
-        comics.sort_by(|a, b| {
-            let ord = match sort_by {
-                SortBy::FolderDate => a.date_modified.cmp(&b.date_modified),
-                SortBy::Name => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
-            };
-            match sort_dir {
-                SortDir::Desc => ord.reverse(),
-                SortDir::Asc => ord,
+        let direction = |ord: std::cmp::Ordering| match sort_dir {
+            SortDir::Desc => ord.reverse(),
+            SortDir::Asc => ord,
+        };
+        match sort_by {
+            SortBy::FolderDate => {
+                comics.sort_by(|a, b| direction(a.date_modified.cmp(&b.date_modified)));
             }
-        });
+            SortBy::Name => {
+                // Lowercase each title once instead of twice per comparison.
+                let mut keyed: Vec<(String, RawComic)> = comics
+                    .into_iter()
+                    .map(|comic| (comic.title.to_lowercase(), comic))
+                    .collect();
+                keyed.sort_by(|a, b| direction(a.0.cmp(&b.0)));
+                comics = keyed.into_iter().map(|(_, comic)| comic).collect();
+            }
+        }
         Ok(comics)
     }
 
@@ -606,37 +614,42 @@ impl ComicRdCore {
             current_path: String::new(),
         }));
 
-        for (lib_id, lib_path, entries) in library_entries {
-            if self.cancel_token.load(Ordering::SeqCst) {
-                break;
+        'libraries: for (lib_id, _, entries) in library_entries {
+            for entry in &entries {
+                if self.cancel_token.load(Ordering::SeqCst) {
+                    break 'libraries;
+                }
+                // Filesystem work (chapter discovery, size measurement)
+                // runs lock-free so the UI's DB calls interleave with the
+                // scan; the DB is locked only for the batched snapshot
+                // lookup and the short per-entry transaction.
+                let Some(plan) = ScanEntryPlan::from_entry(entry) else {
+                    continue;
+                };
+                let snapshots = {
+                    let conn = self
+                        .conn
+                        .lock()
+                        .map_err(|_| "db lock poisoned".to_string())?;
+                    chapter_snapshots_by_source_paths(&conn, &plan.chapter_paths())?
+                };
+                let measured_sizes = plan.measure_changed_sizes(&snapshots);
+                let (entry_comics, entry_chapters) = {
+                    let mut conn = self
+                        .conn
+                        .lock()
+                        .map_err(|_| "db lock poisoned".to_string())?;
+                    apply_scan_entry(&mut conn, lib_id, &plan, &snapshots, &measured_sizes)?
+                };
+                comic_count += entry_comics;
+                chapter_count += entry_chapters;
+                processed_entries += 1;
+                self.update_scan_progress(Some(ScanProgress {
+                    processed: processed_entries,
+                    total: total_entries,
+                    current_path: plan.source_path().to_string(),
+                }));
             }
-
-            let mut conn = self
-                .conn
-                .lock()
-                .map_err(|_| "db lock poisoned".to_string())?;
-            let (lib_comic_count, lib_chapter_count) = scan_library_entries(
-                &mut conn,
-                lib_id,
-                &lib_path,
-                &entries,
-                |entry_path| {
-                    if self.cancel_token.load(Ordering::SeqCst) {
-                        return false;
-                    }
-                    processed_entries += 1;
-                    self.update_scan_progress(Some(ScanProgress {
-                        processed: processed_entries,
-                        total: total_entries,
-                        current_path: entry_path.to_string(),
-                    }));
-                    true
-                },
-            )?;
-            drop(conn);
-
-            comic_count += lib_comic_count;
-            chapter_count += lib_chapter_count;
         }
 
         Ok(ScanSummary {

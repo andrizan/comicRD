@@ -207,6 +207,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   static const double _bottomChromeHeight = 48;
   late ScrollController _scroll;
   final _focusNode = FocusNode(debugLabel: 'ReaderPage');
+  _TileLayout? _tileLayout;
   Timer? _progressTimer;
   Timer? _initialScrollTimer;
   int _currentPage = 0;
@@ -618,17 +619,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (index < 0 || index >= tiles.length) {
       return null;
     }
-    final tile = tiles[index];
-    final layout = _tilePages(pages, tile);
-    return _tileDisplayHeight(
-          tile: tile,
-          page: layout.page,
-          zoom: readerSettings.zoom,
-          maxWidth: maxWidth,
-          prevPage: layout.prevPage,
-          forcePortrait: readerSettings.forcePortrait,
-        ) +
-        _tileGap(tiles, index, readerSettings.pageGap);
+    return _layoutFor(
+      tiles,
+      pages,
+      zoom: readerSettings.zoom,
+      maxWidth: maxWidth,
+      pageGap: readerSettings.pageGap,
+      forcePortrait: readerSettings.forcePortrait,
+    ).extents[index];
   }
 
   double _totalTilesExtent(
@@ -637,11 +635,68 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ReaderSettings readerSettings,
     double maxWidth,
   ) {
-    var total = _topPadding + _bottomChromeHeight + readerSettings.pageGap;
-    for (var i = 0; i < tiles.length; i++) {
-      total += _tileExtentAt(tiles, pages, readerSettings, maxWidth, i)!;
+    return _layoutFor(
+      tiles,
+      pages,
+      zoom: readerSettings.zoom,
+      maxWidth: maxWidth,
+      pageGap: readerSettings.pageGap,
+      forcePortrait: readerSettings.forcePortrait,
+    ).totalExtent;
+  }
+
+  /// Prefix-summed geometry for the current tiles and layout inputs, built
+  /// once and reused until any input changes (new chapter, zoom, window
+  /// width, gap). Every per-scroll lookup goes through this instead of
+  /// re-measuring all tiles.
+  _TileLayout _layoutFor(
+    List<TileItem> tiles,
+    List<bridge.PageInfo> pages, {
+    required double zoom,
+    required double maxWidth,
+    required double pageGap,
+    required bool forcePortrait,
+  }) {
+    final cached = _tileLayout;
+    if (cached != null &&
+        cached.matches(tiles, zoom, maxWidth, pageGap, forcePortrait)) {
+      return cached;
     }
-    return total;
+    final tops = List<double>.filled(tiles.length, 0);
+    final bottoms = List<double>.filled(tiles.length, 0);
+    final extents = List<double>.filled(tiles.length, 0);
+    var top = _topPadding;
+    var total = _topPadding + _bottomChromeHeight + pageGap;
+    for (var i = 0; i < tiles.length; i++) {
+      final layout = _tilePages(pages, tiles[i]);
+      final height = _tileDisplayHeight(
+        tile: tiles[i],
+        page: layout.page,
+        zoom: zoom,
+        maxWidth: maxWidth,
+        prevPage: layout.prevPage,
+        forcePortrait: forcePortrait,
+      );
+      final gap = _tileGap(tiles, i, pageGap);
+      tops[i] = top;
+      bottoms[i] = top + height;
+      extents[i] = height + gap;
+      total += height + gap;
+      top = bottoms[i] + gap;
+    }
+    final built = _TileLayout(
+      tiles: tiles,
+      zoom: zoom,
+      maxWidth: maxWidth,
+      pageGap: pageGap,
+      forcePortrait: forcePortrait,
+      tops: tops,
+      bottoms: bottoms,
+      extents: extents,
+      totalExtent: total,
+    );
+    _tileLayout = built;
+    return built;
   }
 
   Widget _readerTileListItem(
@@ -918,44 +973,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       final tile = _firstTileOfPage(tiles, _currentPage);
       return (first: tile, last: tile);
     }
-    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
+    final layout = _layoutFor(
+      tiles,
+      pages,
+      zoom: zoom,
+      maxWidth: _ReaderPageLayout.maxDisplayWidth(context),
+      pageGap: pageGap,
+      forcePortrait: forcePortrait,
+    );
     final visibleTop = _scroll.offset;
     final visibleBottom = visibleTop + _scroll.position.viewportDimension;
-    var first = -1;
-    var last = -1;
-    var top = _topPadding;
-    for (var i = 0; i < tiles.length; i++) {
-      final layout = _tilePages(pages, tiles[i]);
-      final bottom =
-          top +
-          _tileDisplayHeight(
-            tile: tiles[i],
-            page: layout.page,
-            zoom: zoom,
-            maxWidth: maxWidth,
-            prevPage: layout.prevPage,
-            forcePortrait: forcePortrait,
-          );
-      if (bottom >= visibleTop && top <= visibleBottom) {
-        first = first == -1 ? i : first;
-        last = i;
-      } else if (top > visibleBottom) {
-        break;
-      }
-      top = bottom + _tileGap(tiles, i, pageGap);
-    }
-    if (first == -1) {
-      final tile = _tileForOffset(
-        tiles: tiles,
-        pages: pages,
-        zoom: zoom,
-        pageGap: pageGap,
-        offset: visibleTop,
-        forcePortrait: forcePortrait,
-      );
+    final range = layout.visibleRange(visibleTop, visibleBottom);
+    if (range == null) {
+      final tile = layout.tileForOffset(visibleTop);
       return (first: tile, last: tile);
     }
-    return (first: first, last: last);
+    return range;
   }
 
   int _tileForOffset({
@@ -969,39 +1002,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (tiles.isEmpty) {
       return 0;
     }
-    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
-    var top = _topPadding;
-    for (var i = 0; i < tiles.length; i++) {
-      final layout = _tilePages(pages, tiles[i]);
-      final bottom =
-          top +
-          _tileDisplayHeight(
-            tile: tiles[i],
-            page: layout.page,
-            zoom: zoom,
-            maxWidth: maxWidth,
-            prevPage: layout.prevPage,
-            forcePortrait: forcePortrait,
-          );
-      if (offset <= bottom || i == tiles.length - 1) {
-        return i;
-      }
-      top = bottom + _tileGap(tiles, i, pageGap);
-    }
-    return tiles.length - 1;
+    return _layoutFor(
+      tiles,
+      pages,
+      zoom: zoom,
+      maxWidth: _ReaderPageLayout.maxDisplayWidth(context),
+      pageGap: pageGap,
+      forcePortrait: forcePortrait,
+    ).tileForOffset(offset);
   }
 
-  /// First tile position of a page (pages are ordered, so linear scan).
+  /// First tile position of a page (binary search; pages are ordered).
   int _firstTileOfPage(List<TileItem> tiles, int page) {
-    if (tiles.isEmpty) {
-      return 0;
-    }
-    for (var i = 0; i < tiles.length; i++) {
-      if (tiles[i].pageIndex >= page) {
-        return i;
-      }
-    }
-    return tiles.length - 1;
+    return firstTileOfPage(tiles, page);
   }
 
   void _setRenderWindowAroundTile(int tilePos, int tileCount) {
@@ -1516,6 +1529,72 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 }
 
+/// Prefix-summed tile geometry for one (tiles, zoom, width, gap) state.
+///
+/// Built once in O(n); the lookups the scroll handler needs on every scroll
+/// event (visible range, tile under an offset, item extents, total extent)
+/// are then O(log n) or O(1) instead of a walk over every tile per event.
+class _TileLayout {
+  const _TileLayout({
+    required this.tiles,
+    required this.zoom,
+    required this.maxWidth,
+    required this.pageGap,
+    required this.forcePortrait,
+    required this.tops,
+    required this.bottoms,
+    required this.extents,
+    required this.totalExtent,
+  });
+
+  final List<TileItem> tiles;
+  final double zoom;
+  final double maxWidth;
+  final double pageGap;
+  final bool forcePortrait;
+
+  /// Top edge of each tile, including the reader's top padding.
+  final List<double> tops;
+
+  /// Bottom edge of each tile (top + display height, no gap).
+  final List<double> bottoms;
+
+  /// Sliver item extent of each tile: display height + the gap after it.
+  final List<double> extents;
+  final double totalExtent;
+
+  bool matches(
+    List<TileItem> tiles,
+    double zoom,
+    double maxWidth,
+    double pageGap,
+    bool forcePortrait,
+  ) {
+    return identical(this.tiles, tiles) &&
+        this.zoom == zoom &&
+        this.maxWidth == maxWidth &&
+        this.pageGap == pageGap &&
+        this.forcePortrait == forcePortrait;
+  }
+
+  /// Tiles overlapping [top, bottom], or null when none does (viewport
+  /// entirely inside a gap or past the end).
+  ({int first, int last})? visibleRange(double top, double bottom) {
+    final first = lowerBoundIndex(bottoms, top);
+    final last = upperBoundIndex(tops, bottom);
+    if (first >= tiles.length || last < first) {
+      return null;
+    }
+    return (first: first, last: last);
+  }
+
+  /// First tile whose bottom edge is at or below [offset], else the last.
+  int tileForOffset(double offset) {
+    final index = lowerBoundIndex(bottoms, offset);
+    return index < tiles.length ? index : tiles.length - 1;
+  }
+}
+
 class _ReaderPageItem extends ConsumerWidget {
   const _ReaderPageItem({
     required this.chapterId,
@@ -1548,6 +1627,11 @@ class _ReaderPageItem extends ConsumerWidget {
     final aspectRatio = tilePixelHeight > 0
         ? fittedPageWidth(page) / tilePixelHeight
         : _ReaderPageLayout.aspectRatio(page);
+    final decodeWidth = decodeWidthFor(
+      fittedWidth: fittedPageWidth(page),
+      displayWidth: displayWidth,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
     final rendered = ref.watch(
       renderedTileProvider(
         TileRequest(
@@ -1566,8 +1650,14 @@ class _ReaderPageItem extends ConsumerWidget {
               aspectRatio: aspectRatio,
               child: Image.memory(
                 renderedPage.bytes,
+                // Decode at the size the tile is drawn at (zoom included):
+                // a 2048px tile on a 1000px column is a quarter of the
+                // decoded memory and a cheaper, DCT-scaled JPEG decode.
+                // Texture and display scale match, so bilinear is enough
+                // (no mipmap chain to build and hold).
+                cacheWidth: decodeWidth,
                 gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
+                filterQuality: FilterQuality.low,
                 fit: BoxFit.contain,
               ),
             ),

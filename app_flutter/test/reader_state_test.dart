@@ -45,6 +45,128 @@ void main() {
     });
   });
 
+  group('decodeWidthFor', () {
+    test('rounds the drawn width up to a 128px step below the tile width', () {
+      expect(
+        decodeWidthFor(
+          fittedWidth: 2048,
+          displayWidth: 1000,
+          devicePixelRatio: 1,
+        ),
+        1024,
+      );
+      expect(
+        decodeWidthFor(
+          fittedWidth: 2048,
+          displayWidth: 700,
+          devicePixelRatio: 2,
+        ),
+        1408,
+      );
+    });
+
+    test('is null when the tile is already at or below the drawn size', () {
+      expect(
+        decodeWidthFor(
+          fittedWidth: 900,
+          displayWidth: 1000,
+          devicePixelRatio: 1,
+        ),
+        isNull,
+      );
+      expect(
+        decodeWidthFor(
+          fittedWidth: 1024,
+          displayWidth: 1000,
+          devicePixelRatio: 1,
+        ),
+        isNull,
+      );
+      expect(
+        decodeWidthFor(fittedWidth: 0, displayWidth: 1000, devicePixelRatio: 1),
+        isNull,
+      );
+    });
+
+    test('follows zoom through the display width', () {
+      expect(
+        decodeWidthFor(
+          fittedWidth: 2048,
+          displayWidth: 1000 * 1.5,
+          devicePixelRatio: 1,
+        ),
+        1536,
+      );
+    });
+  });
+
+  group('binary search helpers', () {
+    const values = [10.0, 20.0, 20.0, 30.0];
+
+    test('lowerBoundIndex finds the first value >= target', () {
+      expect(lowerBoundIndex(values, 5), 0);
+      expect(lowerBoundIndex(values, 10), 0);
+      expect(lowerBoundIndex(values, 15), 1);
+      expect(lowerBoundIndex(values, 20), 1);
+      expect(lowerBoundIndex(values, 30), 3);
+      expect(lowerBoundIndex(values, 31), 4);
+      expect(lowerBoundIndex(const [], 1), 0);
+    });
+
+    test('upperBoundIndex finds the last value <= target', () {
+      expect(upperBoundIndex(values, 5), -1);
+      expect(upperBoundIndex(values, 10), 0);
+      expect(upperBoundIndex(values, 20), 2);
+      expect(upperBoundIndex(values, 25), 2);
+      expect(upperBoundIndex(values, 31), 3);
+      expect(upperBoundIndex(const [], 1), -1);
+    });
+
+    test('firstTileOfPage matches a linear scan', () {
+      const tiles = [
+        TileItem(
+          pageIndex: 0,
+          tileIndex: 0,
+          isLastTileOfPage: false,
+          pixelHeight: 1,
+        ),
+        TileItem(
+          pageIndex: 0,
+          tileIndex: 1,
+          isLastTileOfPage: true,
+          pixelHeight: 1,
+        ),
+        TileItem(
+          pageIndex: 2,
+          tileIndex: 0,
+          isLastTileOfPage: true,
+          pixelHeight: 1,
+        ),
+        TileItem(
+          pageIndex: 3,
+          tileIndex: 0,
+          isLastTileOfPage: true,
+          pixelHeight: 1,
+        ),
+      ];
+      int linear(int page) {
+        for (var i = 0; i < tiles.length; i++) {
+          if (tiles[i].pageIndex >= page) return i;
+        }
+        return tiles.length - 1;
+      }
+
+      for (var page = -1; page <= 5; page++) {
+        expect(
+          firstTileOfPage(tiles, page),
+          linear(page),
+          reason: 'page $page',
+        );
+      }
+      expect(firstTileOfPage(const [], 3), 0);
+    });
+  });
+
   group('initialReaderPageForProgress', () {
     test('starts from saved page when chapter is in progress', () {
       final page = initialReaderPageForProgress(

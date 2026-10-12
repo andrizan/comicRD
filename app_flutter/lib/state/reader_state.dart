@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -113,6 +115,81 @@ double tileGapAfter(List<TileItem> tiles, int tilePos, double pageGap) {
     return 0;
   }
   return tiles[tilePos].isLastTileOfPage ? pageGap : 0;
+}
+
+/// Width to decode a tile at: the physical pixels it is drawn with, rounded
+/// up to a 128px step so window resizes do not re-decode on every pixel,
+/// and capped at the tile's own width. Null when the tile is already at or
+/// below that size (no resize wrapper needed).
+///
+/// `displayWidth` already includes zoom, so a zoomed-in tile decodes at a
+/// correspondingly higher resolution: sharpness tracks the zoom level while
+/// a 2048px-wide tile on a 1000px column costs a quarter of the memory.
+int? decodeWidthFor({
+  required int fittedWidth,
+  required double displayWidth,
+  required double devicePixelRatio,
+}) {
+  if (fittedWidth <= 0) {
+    return null;
+  }
+  final physical = (displayWidth * devicePixelRatio).ceil();
+  final quantized = ((physical + 127) ~/ 128) * 128;
+  if (quantized >= fittedWidth) {
+    return null;
+  }
+  return math.max(quantized, 128);
+}
+
+/// First index whose value is >= [target] in a non-decreasing list, or
+/// `values.length` when every value is smaller.
+int lowerBoundIndex(List<double> values, double target) {
+  var low = 0;
+  var high = values.length;
+  while (low < high) {
+    final mid = (low + high) >> 1;
+    if (values[mid] < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+/// Last index whose value is <= [target] in a non-decreasing list, or -1
+/// when every value is larger.
+int upperBoundIndex(List<double> values, double target) {
+  var low = 0;
+  var high = values.length;
+  while (low < high) {
+    final mid = (low + high) >> 1;
+    if (values[mid] <= target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low - 1;
+}
+
+/// First tile position of [page], or the last tile when the page is past
+/// the end. Tiles are ordered by page, so this is a binary search.
+int firstTileOfPage(List<TileItem> tiles, int page) {
+  if (tiles.isEmpty) {
+    return 0;
+  }
+  var low = 0;
+  var high = tiles.length;
+  while (low < high) {
+    final mid = (low + high) >> 1;
+    if (tiles[mid].pageIndex < page) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low < tiles.length ? low : tiles.length - 1;
 }
 
 /// Fitted pixel width mirror of Rust `tile_layout_for_dimensions`.

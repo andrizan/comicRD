@@ -17,6 +17,8 @@ import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  _decodeWidthTests();
+
   Widget wrap(Widget child, {GoRouter? router}) {
     final core = router == null
         ? MaterialApp(home: child)
@@ -559,10 +561,84 @@ void main() {
   });
 }
 
+void _decodeWidthTests() {
+  Widget wrap(Widget child) {
+    return FTheme(
+      data: ComicReaderFTheme.light,
+      child: FToaster(
+        child: FTooltipGroup(child: MaterialApp(home: child)),
+      ),
+    );
+  }
+
+  testWidgets('wide tiles decode at the drawn width, not the file width', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    // 2048px-wide pages on a 1200px window: the portrait column is 1000px
+    // (zoom 1), so tiles decode at the next 128px step above it.
+    final api = _ReaderFakeComicRdApi(
+      lastPage: 0,
+      pageCount: 2,
+      pageWidth: 2048,
+      pageHeight: 3000,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: wrap(const ReaderPage(chapterId: 7)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final images = tester.widgetList<Image>(find.byType(Image)).toList();
+    expect(images, isNotEmpty);
+    for (final image in images) {
+      final provider = image.image;
+      expect(provider, isA<ResizeImage>());
+      expect((provider as ResizeImage).width, 1024);
+      expect(image.filterQuality, FilterQuality.low);
+    }
+  });
+
+  testWidgets('tiles narrower than the column decode at their own width', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _ReaderFakeComicRdApi(lastPage: 0, pageCount: 2);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: wrap(const ReaderPage(chapterId: 7)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final images = tester.widgetList<Image>(find.byType(Image)).toList();
+    expect(images, isNotEmpty);
+    for (final image in images) {
+      expect(image.image, isA<MemoryImage>());
+    }
+  });
+}
+
 class _ReaderFakeComicRdApi extends ComicRdApi {
   _ReaderFakeComicRdApi({
     required this.lastPage,
     required this.pageCount,
+    this.pageWidth = 900,
     this.pageHeight = 1300,
     this.tileHeightsList = const {},
     this.nextChapterIds = const {},
@@ -574,6 +650,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 
   final int lastPage;
   final int pageCount;
+  final int pageWidth;
   final int pageHeight;
   final Map<int, List<int>> tileHeightsList;
   final Map<int, int> nextChapterIds;
@@ -639,7 +716,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
         bridge.PageInfo(
           index: index,
           name: '${index + 1}.png',
-          width: 900,
+          width: pageWidth,
           height: pageHeight,
           tileHeights: Uint32List.fromList(
             tileHeightsList[index] ?? [pageHeight],

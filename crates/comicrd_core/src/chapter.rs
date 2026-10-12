@@ -440,34 +440,31 @@ fn sort_name(path: &Path) -> String {
         .to_string()
 }
 
+/// Natural ("Chapter 2" < "Chapter 10"), case-insensitive ordering.
+///
+/// Allocation-free: digit runs are accumulated into a `u64` as they are
+/// walked and other characters are compared through their lowercase
+/// iterators, so sorting a large library no longer allocates two strings
+/// per compared character.
 pub(crate) fn natural_compare(a: &str, b: &str) -> std::cmp::Ordering {
     let mut a_chars = a.chars().peekable();
     let mut b_chars = b.chars().peekable();
     loop {
-        match (a_chars.peek(), b_chars.peek()) {
+        match (a_chars.peek().copied(), b_chars.peek().copied()) {
             (None, None) => return std::cmp::Ordering::Equal,
             (None, Some(_)) => return std::cmp::Ordering::Less,
             (Some(_), None) => return std::cmp::Ordering::Greater,
-            (Some(&ac), Some(&bc)) => {
+            (Some(ac), Some(bc)) => {
                 if ac.is_ascii_digit() && bc.is_ascii_digit() {
-                    let mut a_num = String::new();
-                    let mut b_num = String::new();
-                    while a_chars.peek().is_some_and(|c| c.is_ascii_digit()) {
-                        a_num.push(a_chars.next().expect("peeked digit"));
-                    }
-                    while b_chars.peek().is_some_and(|c| c.is_ascii_digit()) {
-                        b_num.push(b_chars.next().expect("peeked digit"));
-                    }
-                    let a_val: u64 = a_num.parse().unwrap_or(0);
-                    let b_val: u64 = b_num.parse().unwrap_or(0);
-                    match a_val.cmp(&b_val) {
+                    match take_digit_run(&mut a_chars).cmp(&take_digit_run(&mut b_chars)) {
                         std::cmp::Ordering::Equal => continue,
                         other => return other,
                     }
                 } else {
-                    let ac_lower: String = ac.to_lowercase().collect();
-                    let bc_lower: String = bc.to_lowercase().collect();
-                    match ac_lower.cmp(&bc_lower) {
+                    // Lowercase expansions compared code point by code point:
+                    // the same order as comparing the collected strings,
+                    // without building them.
+                    match ac.to_lowercase().cmp(bc.to_lowercase()) {
                         std::cmp::Ordering::Equal => {
                             a_chars.next();
                             b_chars.next();
@@ -479,6 +476,30 @@ pub(crate) fn natural_compare(a: &str, b: &str) -> std::cmp::Ordering {
             }
         }
     }
+}
+
+/// Consume a run of ASCII digits as a number. A run that overflows `u64`
+/// yields 0, matching the old `parse().unwrap_or(0)`.
+fn take_digit_run(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> u64 {
+    let mut value = Some(0u64);
+    while let Some(c) = chars.next_if(|c| c.is_ascii_digit()) {
+        value = value
+            .and_then(|v| v.checked_mul(10))
+            .and_then(|v| v.checked_add(u64::from(c as u8 - b'0')));
+    }
+    value.unwrap_or(0)
+}
+
+/// Natural sort of paths by `sort_name`, computing each key once. The key
+/// allocates and stats its path, so per-comparison keys would cost
+/// O(n log n) syscalls.
+fn sort_paths_naturally(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut keyed: Vec<(String, PathBuf)> = paths
+        .into_iter()
+        .map(|path| (sort_name(&path), path))
+        .collect();
+    keyed.sort_by(|a, b| natural_compare(&a.0, &b.0));
+    keyed.into_iter().map(|(_, path)| path).collect()
 }
 
 pub(crate) fn discover_chapter_entries_from_comic_dir(
@@ -499,28 +520,30 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
         chapter_index += 1;
     }
 
-    let mut children = WalkDir::new(comic_dir)
-        .min_depth(1)
-        .max_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .map(|e| e.into_path())
-        .collect::<Vec<_>>();
-    children.sort_by(|a, b| natural_compare(&sort_name(a), &sort_name(b)));
+    let children = sort_paths_naturally(
+        WalkDir::new(comic_dir)
+            .min_depth(1)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .map(|e| e.into_path())
+            .collect(),
+    );
 
     for child in children {
         if child.is_dir() {
             let has_images = !image_entries_in_dir(&child).is_empty();
             let mut nested_archives = Vec::new();
 
-            let mut child_entries = WalkDir::new(&child)
-                .min_depth(1)
-                .max_depth(1)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .map(|e| e.into_path())
-                .collect::<Vec<_>>();
-            child_entries.sort_by(|a, b| natural_compare(&sort_name(a), &sort_name(b)));
+            let child_entries = sort_paths_naturally(
+                WalkDir::new(&child)
+                    .min_depth(1)
+                    .max_depth(1)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.into_path())
+                    .collect(),
+            );
 
             for entry in child_entries {
                 if entry.is_file() && is_archive(&entry) {
@@ -1177,6 +1200,45 @@ mod tests {
         assert_eq!(
             natural_compare("Chapter 06.5", "Chapter 07"),
             std::cmp::Ordering::Less
+        );
+    }
+
+    #[test]
+    fn natural_compare_is_case_insensitive_and_treats_overflowing_numbers_as_zero() {
+        assert_eq!(natural_compare("Ä", "ä"), std::cmp::Ordering::Equal);
+        assert_eq!(natural_compare("CHAPTER 2", "chapter 10"), std::cmp::Ordering::Less);
+        assert_eq!(natural_compare("Chapter 010", "Chapter 10"), std::cmp::Ordering::Equal);
+        // Runs past u64 parse as 0 (the old `parse().unwrap_or(0)`).
+        assert_eq!(
+            natural_compare("99999999999999999999999", "1"),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(natural_compare("abc", "abcd"), std::cmp::Ordering::Less);
+        assert_eq!(natural_compare("", ""), std::cmp::Ordering::Equal);
+    }
+
+    #[test]
+    fn sort_paths_naturally_orders_dirs_and_archives_by_stem() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let names = ["Chapter 10", "Chapter 2", "Chapter 06.5.cbz", "Chapter 06"];
+        let mut paths = Vec::new();
+        for name in names {
+            let path = temp.path().join(name);
+            if name.ends_with(".cbz") {
+                std::fs::write(&path, b"").expect("archive");
+            } else {
+                std::fs::create_dir_all(&path).expect("dir");
+            }
+            paths.push(path);
+        }
+
+        let sorted: Vec<String> = sort_paths_naturally(paths)
+            .into_iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(
+            sorted,
+            ["Chapter 2", "Chapter 06", "Chapter 06.5.cbz", "Chapter 10"]
         );
     }
 
