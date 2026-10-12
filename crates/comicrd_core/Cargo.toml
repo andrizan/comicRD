@@ -15,8 +15,11 @@ serde_json = "1.0"
 walkdir = "2.5.0"
 zip = { version = "9.0.2", default-features = false, features = ["deflate"] }
 unrar = "0.5.8"
+# AVIF is decode-only in the app (`avif-native` = dav1d). The `avif`
+# feature is the rav1e encoder and lives in dev-dependencies for the test
+# fixtures only: it pulls 49 crates and ~27 s of cold compile into every
+# release build otherwise.
 image = { version = "0.25.10", default-features = false, features = [
-  "avif",
   "avif-native",
   "png",
   "jpeg",
@@ -27,5 +30,6 @@ image = { version = "0.25.10", default-features = false, features = [
 fast_image_resize = { version = "6.1.0", features = ["image"] }
 
 [dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["avif"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 tempfile = "3.27.0"
