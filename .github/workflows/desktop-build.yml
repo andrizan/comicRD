@@ -8,8 +8,9 @@ on:
       - "v*"
   pull_request:
 
+# Least privilege by default; only the release job writes.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: desktop-build-${{ github.ref }}
@@ -17,7 +18,6 @@ concurrency:
 
 env:
   FLUTTER_VERSION: "3.47.6"
-  APP_NAME: ComicRD
 
 jobs:
   quality:
@@ -28,38 +28,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            clang \
-            cmake \
-            curl \
-            file \
-            git \
-            libdav1d-dev \
-            libgtk-3-dev \
-            ninja-build \
-            pkg-config \
-            unzip \
-            xz-utils
-
-      - name: Fetch Flutter dependencies
-        working-directory: app_flutter
-        run: flutter pub get
 
       - name: Run Rust tests
         run: cargo test
@@ -72,8 +44,10 @@ jobs:
         working-directory: app_flutter
         run: flutter test
 
+  # Keeps the dav1d cache warm from master so tag builds skip the slow
+  # meson build; the Windows job builds it itself if the cache is cold.
   cache-dav1d:
-    name: Cache dav1d (Windows)
+    name: Warm dav1d cache (Windows)
     needs: quality
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     runs-on: windows-latest
@@ -82,50 +56,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Cache dav1d build
-        id: cache-dav1d
-        uses: actions/cache@v6
-        with:
-          path: ${{ runner.temp }}/dav1d-install
-          key: dav1d-1.5.4-windows-x64-v2
-          restore-keys: |
-            dav1d-1.5.4-windows-x64-
-            dav1d-1.5.4-
-
-      - name: Install build tools
-        if: steps.cache-dav1d.outputs.cache-hit != 'true'
-        run: |
-          choco install nasm pkgconfiglite -y
-          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
-            choco install ninja -y
-          }
-          pip install meson
-
-      - name: Build dav1d
-        if: steps.cache-dav1d.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          $vcvarsPath = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
-          cmd /c "call `"$vcvarsPath`" && set" | ForEach-Object {
-            if ($_ -match '^([^=]+)=(.*)$') {
-              [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
-            }
-          }
-          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
-          git clone --depth 1 --branch 1.5.4 https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
-          cd $env:RUNNER_TEMP\dav1d-build
-          meson setup build --prefix=$prefix --buildtype release --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
-          meson compile -C build
-          meson install -C build
-
-      - name: Verify dav1d
-        shell: pwsh
-        run: |
-          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
-          $env:PKG_CONFIG_PATH = "$prefix/lib/pkgconfig"
-          pkg-config --modversion dav1d
-          pkg-config --libs dav1d
+      - name: Restore or build dav1d
+        uses: ./.github/actions/dav1d-windows
 
   build-linux:
     name: Build Linux Bundle
@@ -137,51 +69,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            clang \
-            cmake \
-            file \
-            git \
-            libdav1d-dev \
-            libgtk-3-dev \
-            ninja-build \
-            pkg-config \
-            xz-utils
+      - name: Resolve version and bump pubspec
+        id: version
+        uses: ./.github/actions/release-version
 
       - name: Build Linux release tarball
-        env:
-          FLUTTER_BIN: flutter
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$'; then
-            if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
-              echo "Invalid tag: $GITHUB_REF_NAME. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix."
-              exit 1
-            fi
-            VERSION="manual-${GITHUB_RUN_NUMBER}"
-          fi
-          # Bump pubspec version to match tag before building.
-          BUILD=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/.*+\([0-9]*\).*/\1/')
-          NEW_BUILD=$((BUILD + 1))
-          sed -i "s/^version: .*/version: ${VERSION}+${NEW_BUILD}/" app_flutter/pubspec.yaml
-          ./scripts/package-linux.sh "$VERSION"
+        run: ./scripts/package-linux.sh "${{ steps.version.outputs.version }}"
 
       - name: Upload Linux tarball
         uses: actions/upload-artifact@v7
@@ -200,70 +98,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Restore or build dav1d
+        uses: ./.github/actions/dav1d-windows
 
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+      - name: Install Inno Setup
+        run: choco install innosetup -y
 
-      # dav1d dikompilasi dari source lewat meson — ini salah satu bagian
-      # paling lambat di job Windows. Di-cache berdasarkan versi dav1d,
-      # sehingga run berikutnya bisa langsung skip build selama versi
-      # dav1d (1.5.4) tidak berubah.
-      - name: Cache dav1d build
-        id: cache-dav1d
-        uses: actions/cache@v6
-        with:
-          path: ${{ runner.temp }}/dav1d-install
-          key: dav1d-1.5.4-windows-x64-v2
-          restore-keys: |
-            dav1d-1.5.4-windows-x64-
-            dav1d-1.5.4-
-
-      - name: Install packaging tools
-        run: choco install pkgconfiglite innosetup -y
-
-      - name: Verify dav1d and export PKG_CONFIG_PATH
-        run: |
-          $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
-          $env:PKG_CONFIG_PATH = "$prefix/lib/pkgconfig"
-          pkg-config --exists dav1d
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "pkg-config could not find dav1d"
-            exit 1
-          }
-          pkg-config --modversion dav1d
-          pkg-config --libs dav1d
-          echo "PKG_CONFIG_PATH=$env:PKG_CONFIG_PATH" >> $env:GITHUB_ENV
-        shell: pwsh
-
-      - name: Fetch Flutter dependencies
-        working-directory: app_flutter
-        run: flutter pub get
-
-      - name: Bump pubspec version to match tag
-        shell: pwsh
-        run: |
-          $Version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
-          if ($Version -notmatch '^\d+\.\d+\.\d+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$') {
-            if ($env:GITHUB_REF -like 'refs/tags/*') {
-              Write-Error ("Invalid tag: {0}. Expected vX.Y.Z" -f $env:GITHUB_REF_NAME)
-              exit 1
-            }
-            $Version = "manual-${env:GITHUB_RUN_NUMBER}"
-          }
-          $Content = Get-Content app_flutter\pubspec.yaml -Raw
-          $Match = [regex]::Match($Content, 'version:\s+(\d+\.\d+\.\d+)\+(\d+)')
-          $OldBuild = [int]$Match.Groups[2].Value
-          $NewBuild = $OldBuild + 1
-          $Content = $Content -replace 'version:\s+\d+\.\d+\.\d+\+\d+', "version: ${Version}+${NewBuild}"
-          Set-Content app_flutter\pubspec.yaml $Content -NoNewline
+      - name: Resolve version and bump pubspec
+        id: version
+        uses: ./.github/actions/release-version
 
       - name: Build Windows release
         working-directory: app_flutter
@@ -272,19 +120,16 @@ jobs:
       - name: Archive Windows bundle
         shell: pwsh
         run: |
-          $Version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
-          if ($Version -notmatch '^\d+\.\d+\.\d+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$') {
-            if ($env:GITHUB_REF -like 'refs/tags/*') {
-              Write-Error ("Invalid tag: {0}. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix." -f $env:GITHUB_REF_NAME)
-              exit 1
-            }
-            $Version = "manual-${env:GITHUB_RUN_NUMBER}"
-          }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive `
             -Path app_flutter/build/windows/x64/runner/Release/* `
-            -DestinationPath "dist/comicrd-$Version-windows-x86_64.zip" `
+            -DestinationPath "dist/comicrd-${{ steps.version.outputs.version }}-windows-x86_64.zip" `
             -Force
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /D"AppVersion=${{ steps.version.outputs.version }}" "app_flutter\windows\installer\comicrd-setup.iss"
 
       - name: Upload Windows bundle
         uses: actions/upload-artifact@v7
@@ -292,19 +137,6 @@ jobs:
           name: comicrd-windows-x86_64
           path: dist/comicrd-*-windows-x86_64.zip
           if-no-files-found: error
-
-      - name: Build Windows installer
-        shell: pwsh
-        run: |
-          $Version = "${env:GITHUB_REF_NAME}" -replace '^v', ''
-          if ($Version -notmatch '^\d+\.\d+\.\d+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$') {
-            if ($env:GITHUB_REF -like 'refs/tags/*') {
-              Write-Error ("Invalid tag: {0}. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix." -f $env:GITHUB_REF_NAME)
-              exit 1
-            }
-            $Version = "manual-${env:GITHUB_RUN_NUMBER}"
-          }
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /D"AppVersion=$Version" "app_flutter\windows\installer\comicrd-setup.iss"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v7
@@ -323,63 +155,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup toolchain
+        uses: ./.github/actions/setup-toolchain
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install native AVIF dependencies
-        run: |
-          brew install dav1d pkg-config
-          echo "PKG_CONFIG_PATH=$(brew --prefix dav1d)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
-
-      - name: Fetch Flutter dependencies
-        working-directory: app_flutter
-        run: flutter pub get
-
-      - name: Bump pubspec version to match tag
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$'; then
-            if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
-              echo "Invalid tag: $GITHUB_REF_NAME. Expected vX.Y.Z"
-              exit 1
-            fi
-            VERSION="manual-${GITHUB_RUN_NUMBER}"
-          fi
-          BUILD=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/.*+\([0-9]*\).*/\1/')
-          NEW_BUILD=$((BUILD + 1))
-          sed -i '' "s/^version: .*/version: ${VERSION}+${NEW_BUILD}/" app_flutter/pubspec.yaml
+      - name: Resolve version and bump pubspec
+        id: version
+        uses: ./.github/actions/release-version
 
       - name: Build macOS release
         working-directory: app_flutter
-        run: |
-          flutter pub get
-          flutter build macos --release
+        run: flutter build macos --release
 
       - name: Archive macOS bundle
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$'; then
-            if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
-              echo "Invalid tag: $GITHUB_REF_NAME. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix."
-              exit 1
-            fi
-            VERSION="manual-${GITHUB_RUN_NUMBER}"
-          fi
           mkdir -p dist
           ditto -c -k --sequesterRsrc --keepParent \
             app_flutter/build/macos/Build/Products/Release/ComicRD.app \
-            "dist/comicrd-${VERSION}-macos.zip"
+            "dist/comicrd-${{ steps.version.outputs.version }}-macos.zip"
 
       - name: Upload macOS bundle
         uses: actions/upload-artifact@v7
@@ -396,6 +191,8 @@ jobs:
       - build-macos
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -420,16 +217,11 @@ jobs:
           ls -la release-upload
           test "$(find release-upload -maxdepth 1 -type f | wc -l)" -gt 0
 
-      - name: Resolve release metadata
-        id: release-metadata
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          if echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Resolve version
+        id: version
+        uses: ./.github/actions/release-version
+        with:
+          bump: "false"
 
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v3
@@ -438,13 +230,13 @@ jobs:
           files: release-upload/*
           fail_on_unmatched_files: true
           generate_release_notes: true
-          prerelease: ${{ steps.release-metadata.outputs.prerelease }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
 
       - name: Commit version bump
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          # Read current version from pubspec.yaml.
           CURRENT_VERSION=$(grep '^version:' app_flutter/pubspec.yaml | sed 's/version: \([0-9][0-9.]*\).*/\1/')
           if [ "$CURRENT_VERSION" = "$VERSION" ]; then
             echo "Version already matches tag ($VERSION). Skipping commit."
@@ -466,8 +258,6 @@ jobs:
     needs: release
     if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') && !contains(github.ref_name, '_')
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
 
     steps:
       - name: Resolve version

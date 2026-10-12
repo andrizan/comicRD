@@ -1,0 +1,65 @@
+name: Setup toolchain
+description: >-
+  Flutter and Rust toolchains with their caches, plus the native build
+  dependencies of the current runner OS. Shared by every job so the lists
+  live in one place.
+
+inputs:
+  flutter-version:
+    description: Flutter SDK version to install (ignored when flutter is "false").
+    required: false
+    default: ""
+  flutter:
+    description: Install Flutter and fetch app_flutter dependencies.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Flutter
+      if: inputs.flutter == 'true'
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ inputs.flutter-version }}
+        cache: true
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Rust build
+      uses: Swatinem/rust-cache@v2
+
+    # dav1d (AVIF decode) and GTK (Flutter desktop embedder) are the only
+    # native libraries the workspace links against.
+    - name: Install Linux build dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          clang \
+          cmake \
+          curl \
+          file \
+          git \
+          libdav1d-dev \
+          libgtk-3-dev \
+          ninja-build \
+          pkg-config \
+          unzip \
+          xz-utils
+
+    - name: Install macOS build dependencies
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install dav1d pkg-config
+        echo "PKG_CONFIG_PATH=$(brew --prefix dav1d)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
+
+    - name: Fetch Flutter dependencies
+      if: inputs.flutter == 'true'
+      shell: bash
+      working-directory: app_flutter
+      run: flutter pub get

@@ -1,0 +1,70 @@
+name: dav1d for Windows
+description: >-
+  Restores a static dav1d build from the cache, or builds it with meson when
+  the cache is cold, and exports PKG_CONFIG_PATH so the Rust AVIF decoder
+  links against it. Used both to warm the cache on master and by the Windows
+  release build, so a cold cache can never fail a tag build.
+
+inputs:
+  version:
+    description: dav1d release to build.
+    required: false
+    default: "1.5.4"
+
+runs:
+  using: composite
+  steps:
+    - name: Cache dav1d build
+      id: cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/dav1d-install
+        key: dav1d-${{ inputs.version }}-windows-x64-v2
+
+    # pkg-config is needed on every run (the export step probes with it);
+    # the compilers only when the cache missed.
+    - name: Install pkg-config
+      shell: pwsh
+      run: choco install pkgconfiglite -y
+
+    - name: Install build tools
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        choco install nasm -y
+        if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+          choco install ninja -y
+        }
+        pip install meson
+
+    - name: Build dav1d
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        $vcvarsPath = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+        cmd /c "call `"$vcvarsPath`" && set" | ForEach-Object {
+          if ($_ -match '^([^=]+)=(.*)$') {
+            [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+          }
+        }
+        $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
+        git clone --depth 1 --branch ${{ inputs.version }} https://code.videolan.org/videolan/dav1d.git $env:RUNNER_TEMP\dav1d-build
+        cd $env:RUNNER_TEMP\dav1d-build
+        meson setup build --prefix=$prefix --buildtype release --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
+        meson compile -C build
+        meson install -C build
+
+    - name: Verify dav1d and export PKG_CONFIG_PATH
+      shell: pwsh
+      run: |
+        $prefix = ($env:RUNNER_TEMP -replace '\\', '/') + '/dav1d-install'
+        $env:PKG_CONFIG_PATH = "$prefix/lib/pkgconfig"
+        pkg-config --exists dav1d
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "pkg-config could not find dav1d"
+          exit 1
+        }
+        pkg-config --modversion dav1d
+        pkg-config --libs dav1d
+        echo "PKG_CONFIG_PATH=$env:PKG_CONFIG_PATH" >> $env:GITHUB_ENV

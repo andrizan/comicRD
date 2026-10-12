@@ -1,0 +1,56 @@
+name: Release version
+description: >-
+  Derives the app version from the pushed tag (vX.Y.Z with an optional
+  suffix) or a manual run number, reports whether it is a prerelease, and
+  optionally writes it into app_flutter/pubspec.yaml with a bumped build
+  number. One implementation for Linux, Windows (Git Bash) and macOS.
+
+inputs:
+  bump:
+    description: Write the resolved version into app_flutter/pubspec.yaml.
+    required: false
+    default: "true"
+
+outputs:
+  version:
+    description: Version without the "v" prefix (or manual-<run number>).
+    value: ${{ steps.resolve.outputs.version }}
+  prerelease:
+    description: '"true" unless the version is a plain X.Y.Z.'
+    value: ${{ steps.resolve.outputs.prerelease }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve version
+      id: resolve
+      shell: bash
+      env:
+        BUMP: ${{ inputs.bump }}
+      run: |
+        set -euo pipefail
+        tag_re='^[0-9]+\.[0-9]+\.[0-9]+([A-Za-z][0-9A-Za-z._]*|[-_][0-9A-Za-z][0-9A-Za-z._-]*)?$'
+        stable_re='^[0-9]+\.[0-9]+\.[0-9]+$'
+        VERSION="${GITHUB_REF_NAME#v}"
+        if ! [[ "$VERSION" =~ $tag_re ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "Invalid tag: $GITHUB_REF_NAME. Expected vX.Y.Z, vX.Y.Zsuffix, vX.Y.Z_suffix, or vX.Y.Z-suffix." >&2
+            exit 1
+          fi
+          VERSION="manual-${GITHUB_RUN_NUMBER}"
+        fi
+        if [[ "$VERSION" =~ $stable_re ]]; then
+          PRERELEASE=false
+        else
+          PRERELEASE=true
+        fi
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+        echo "Resolved version $VERSION (prerelease: $PRERELEASE)"
+
+        if [[ "$BUMP" == "true" ]]; then
+          BUILD="$(sed -n 's/^version: .*+\([0-9]*\).*/\1/p' app_flutter/pubspec.yaml)"
+          NEW_BUILD=$((${BUILD:-0} + 1))
+          perl -pi -e "s/^version: .*/version: ${VERSION}+${NEW_BUILD}/" app_flutter/pubspec.yaml
+          grep '^version:' app_flutter/pubspec.yaml
+        fi
