@@ -203,8 +203,12 @@ class ReaderPage extends ConsumerStatefulWidget {
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   static int _activeInstances = 0;
   static bool _scrollToBottomOnRestore = false;
+
+  /// Floating top toolbar: 20 px inset + 56 px pill, plus a 2 px breath.
   static const double _topPadding = 78;
-  static const double _bottomChromeHeight = 48;
+
+  /// Floating page bar: 56 px pill + 24 px inset.
+  static const double _bottomChromeHeight = 80;
   late ScrollController _scroll;
   final _focusNode = FocusNode(debugLabel: 'ReaderPage');
   _TileLayout? _tileLayout;
@@ -217,6 +221,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _initialScrollDone = false;
   bool _fullscreen = false;
   bool _toolbarVisible = true;
+  _ReaderPanel _openPanel = _ReaderPanel.none;
   // Overlay-only version counter (toolbar + page indicator). Bumped instead
   // of calling setState so scroll/page/toolbar updates don't rebuild the
   // page list, and overlay changes don't rebuild it either.
@@ -293,6 +298,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // chapter (the loader below only fetches when this is empty).
     _pageBookmarkedPages.clear();
     _toolbarVisible = true;
+    _openPanel = _ReaderPanel.none;
     _refreshOverlay();
     final oldData = _lastReaderChapterId == oldWidget.chapterId
         ? _lastReaderData
@@ -363,7 +369,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
       },
       child: ColoredBox(
-        color: Colors.black,
+        color: context.appReader.canvas,
         child: reader.when(
           data: (data) {
             _lastReaderData = data;
@@ -402,6 +408,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     valueListenable: _overlayVersion,
                     builder: (_, _, _) => Stack(
                       children: [
+                        // Click-away target: an open panel closes when the
+                        // pages behind it are tapped.
+                        if (_openPanel != _ReaderPanel.none)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: () => _setPanel(_ReaderPanel.none),
+                            ),
+                          ),
                         Positioned(
                           top: 0,
                           left: 0,
@@ -420,87 +435,107 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                 ignoring: !_toolbarVisible,
                                 child: MouseRegion(
                                   onEnter: (_) => _showToolbar(),
-                                  child: _ReferenceReaderToolbar(
+                                  child: _ReaderTopBar(
                                     text: text,
                                     data: data,
-                                    currentPage: _currentPage,
-                                    pageGap: readerSettings.pageGap,
-                                    zoom: readerSettings.zoom,
                                     fullscreen: _fullscreen,
-                                    unlimitedScroll:
-                                        readerSettings.unlimitedScroll,
-                                    forcePortrait: readerSettings.forcePortrait,
-                                    isBookmarked: isBookmarked,
-                                    isFavorited: isFavorited,
+                                    openPanel: _openPanel,
+                                    hasMarks:
+                                        isBookmarked ||
+                                        isFavorited ||
+                                        _pageBookmarkedPages.contains(
+                                          _currentPage,
+                                        ),
                                     onClose: () => _close(data),
-                                    onPreviousPage: () => _jumpBy(-1),
-                                    onNextPage: () => _jumpBy(1),
-                                    onPreviousChapter:
-                                        data.context?.prevChapterId == null
-                                        ? null
-                                        : () => _switchChapter(
-                                            data.context!.prevChapterId!,
-                                          ),
-                                    onNextChapter:
-                                        data.context?.nextChapterId == null
-                                        ? null
-                                        : () => _switchChapter(
-                                            data.context!.nextChapterId!,
-                                          ),
-                                    onGapChanged: (gap) {
-                                      ref
-                                          .read(readerSettingsProvider.notifier)
-                                          .setPageGap(gap);
-                                    },
-                                    onZoomChanged: (zoom) {
-                                      ref
-                                          .read(readerSettingsProvider.notifier)
-                                          .setZoom(zoom);
-                                    },
+                                    onTogglePanel: _togglePanel,
                                     onToggleFullscreen: _toggleFullscreen,
-                                    onToggleUnlimitedScroll: () {
-                                      ref
-                                          .read(readerSettingsProvider.notifier)
-                                          .setUnlimitedScroll(
-                                            !readerSettings.unlimitedScroll,
-                                          );
-                                    },
-                                    onToggleForcePortrait: () {
-                                      ref
-                                          .read(readerSettingsProvider.notifier)
-                                          .setForcePortrait(
-                                            !readerSettings.forcePortrait,
-                                          );
-                                    },
-                                    onToggleBookmark: () => _toggleBookmark(
-                                      chapterSourcePath,
-                                      comicPath,
-                                    ),
-                                    onToggleFavorite: () =>
-                                        _toggleFavorite(comicPath),
-                                    onTogglePageBookmark: _togglePageBookmark,
-                                    isPageBookmarked: _pageBookmarkedPages
-                                        .contains(_currentPage),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
+                        if (_toolbarVisible && _openPanel != _ReaderPanel.none)
+                          Positioned(
+                            top: 92,
+                            right: 24,
+                            child: MouseRegion(
+                              onEnter: (_) => _showToolbar(),
+                              child: _openPanel == _ReaderPanel.display
+                                  ? _ReaderDisplayPanel(
+                                      text: text,
+                                      settings: readerSettings,
+                                      onGapChanged: (gap) {
+                                        ref
+                                            .read(
+                                              readerSettingsProvider.notifier,
+                                            )
+                                            .setPageGap(gap);
+                                      },
+                                      onZoomChanged: (zoom) {
+                                        ref
+                                            .read(
+                                              readerSettingsProvider.notifier,
+                                            )
+                                            .setZoom(zoom);
+                                      },
+                                      onUnlimitedScrollChanged: (value) {
+                                        ref
+                                            .read(
+                                              readerSettingsProvider.notifier,
+                                            )
+                                            .setUnlimitedScroll(value);
+                                      },
+                                      onUnlimitedScrollUpChanged: (value) {
+                                        ref
+                                            .read(
+                                              readerSettingsProvider.notifier,
+                                            )
+                                            .setUnlimitedScrollUp(value);
+                                      },
+                                      onForcePortraitChanged: (value) {
+                                        ref
+                                            .read(
+                                              readerSettingsProvider.notifier,
+                                            )
+                                            .setForcePortrait(value);
+                                      },
+                                    )
+                                  : _ReaderMarkPanel(
+                                      text: text,
+                                      data: data,
+                                      currentPage: _currentPage,
+                                      isPageBookmarked: _pageBookmarkedPages
+                                          .contains(_currentPage),
+                                      isChapterBookmarked: isBookmarked,
+                                      isFavorited: isFavorited,
+                                      onTogglePageBookmark: _togglePageBookmark,
+                                      onToggleChapterBookmark: () =>
+                                          _toggleBookmark(
+                                            chapterSourcePath,
+                                            comicPath,
+                                          ),
+                                      onToggleFavorite: () =>
+                                          _toggleFavorite(comicPath),
+                                    ),
+                            ),
+                          ),
                         Positioned(
-                          top: 12,
-                          right: 12,
+                          top: 20,
+                          right: 24,
                           child: AnimatedOpacity(
                             opacity: _toolbarVisible ? 0 : 1,
                             duration: const Duration(milliseconds: 300),
                             curve: Curves.easeOutCubic,
                             child: IgnorePointer(
                               ignoring: _toolbarVisible,
-                              child: _ReferenceReaderIconButton(
-                                tooltip: text.readerControls,
-                                icon: AppIcons.settings,
-                                onPressed: _showToolbar,
-                                compact: true,
+                              child: _ReaderGlass(
+                                radius: 999,
+                                child: _ReaderIconButton(
+                                  tooltip: text.readerControls,
+                                  icon: AppIcons.sliders,
+                                  onPressed: _showToolbar,
+                                ),
                               ),
                             ),
                           ),
@@ -509,16 +544,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                           left: 0,
                           right: 0,
                           bottom: 0,
-                          // Page indicator stays visible while scrolling:
-                          // only shrinks to its non-hovered look instead of
-                          // hiding with the toolbar.
+                          // Page bar stays visible while scrolling: only
+                          // shrinks to its compact look instead of hiding
+                          // with the toolbar.
                           child: MouseRegion(
                             onEnter: (_) => _showToolbar(),
-                            child: _ReferencePageIndicator(
+                            child: _ReaderPageBar(
+                              text: text,
                               currentPage: _currentPage,
                               pageCount: data.pages.length,
                               pageBookmarkedPages: _pageBookmarkedPages,
+                              expanded: _toolbarVisible,
                               onSelected: _jumpToPage,
+                              onPreviousPage: () => _jumpBy(-1),
+                              onNextPage: () => _jumpBy(1),
+                              onPreviousChapter:
+                                  data.context?.prevChapterId == null
+                                  ? null
+                                  : () => _switchChapter(
+                                      data.context!.prevChapterId!,
+                                    ),
+                              onNextChapter: data.context?.nextChapterId == null
+                                  ? null
+                                  : () => _switchChapter(
+                                      data.context!.nextChapterId!,
+                                    ),
                             ),
                           ),
                         ),
@@ -576,9 +626,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       interactive: true,
       thickness: 12,
       radius: const Radius.circular(999),
-      thumbColor: const Color(0xff747474),
-      trackColor: const Color(0xff050505),
-      trackBorderColor: const Color(0xff050505),
+      thumbColor: const Color(0xff5b5670),
+      trackColor: const Color(0xff0e0d13),
+      trackBorderColor: const Color(0xff0e0d13),
       child: CustomScrollView(
         controller: _scroll,
         scrollCacheExtent: const ScrollCacheExtent.pixels(1500),
@@ -1175,7 +1225,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _handleKey(LogicalKeyboardKey key, ReaderData? data) {
     if (key == LogicalKeyboardKey.escape) {
-      if (_fullscreen) {
+      if (_openPanel != _ReaderPanel.none) {
+        _setPanel(_ReaderPanel.none);
+      } else if (_fullscreen) {
         _toggleFullscreen();
       } else if (data != null) {
         _close(data);
@@ -1427,7 +1479,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _toolbarVisible = false;
+    _openPanel = _ReaderPanel.none;
     _refreshOverlay();
+  }
+
+  void _setPanel(_ReaderPanel panel) {
+    if (_openPanel == panel || !mounted) {
+      return;
+    }
+    _openPanel = panel;
+    _refreshOverlay();
+  }
+
+  void _togglePanel(_ReaderPanel panel) {
+    _setPanel(_openPanel == panel ? _ReaderPanel.none : panel);
   }
 
   Future<void> _toggleFullscreen() async {
@@ -1716,26 +1781,64 @@ class _PagePlaceholder extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Reader chrome: floating glass pills over an always-dark canvas. The
+// palette is fixed (it never follows the app theme) so pages keep the same
+// surround in light and dark mode.
+// ---------------------------------------------------------------------------
+
+enum _ReaderPanel { none, display, mark }
+
+const Color _chromeText = Color(0xFFF2EFFA);
+const Color _chromeMuted = Color(0xFFB4AFC6);
+const Color _chromeAccent = Color(0xFFA294FF);
+const Color _chromeAccentInk = Color(0xFFCFC7FF);
+const Color _chromeAccentSoft = Color(0x33A294FF);
+const Color _chromeAmber = Color(0xFFFFC15A);
+const Color _chromeAmberInk = Color(0xFF2A1D00);
+const Color _chromeAmberSoft = Color(0x24FFC15A);
+const Color _chromeAmberBox = Color(0x38FFC15A);
+const Color _chromeGlass = Color(0xE0181620);
+const Color _chromePanel = Color(0xF51C1926);
+const Color _chromeLine = Color(0x17FFFFFF);
+const Color _chromeFill = Color(0x14FFFFFF);
+const Color _chromeTrack = Color(0x33FFFFFF);
+const Color _chromeRing = Color(0x4DFFFFFF);
+
 class _ReaderGlass extends StatelessWidget {
-  const _ReaderGlass({required this.child, this.border});
+  const _ReaderGlass({
+    required this.child,
+    this.radius = 26,
+    this.padding = EdgeInsets.zero,
+    this.color = _chromeGlass,
+    this.elevated = false,
+  });
 
   final Widget child;
-  final Border? border;
+  final double radius;
+  final EdgeInsetsGeometry padding;
+  final Color color;
+
+  /// The deeper shadow used by the panels.
+  final bool elevated;
 
   @override
   Widget build(BuildContext context) {
     // NOTE: intentionally no BackdropFilter blur here. A fullscreen backdrop
     // blur is re-computed every frame while scrolling and saturates the GPU.
     // A more opaque fill keeps the same look for a fraction of the cost.
-    return DecoratedBox(
+    return Container(
+      padding: padding,
       decoration: BoxDecoration(
-        color: const Color(0xff151922).withValues(alpha: 0.88),
-        border: border,
+        color: color,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _chromeLine),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: elevated ? 0.75 : 0.6),
+            blurRadius: elevated ? 70 : 40,
+            spreadRadius: elevated ? -16 : -12,
+            offset: Offset(0, elevated ? 28 : 16),
           ),
         ],
       ),
@@ -1744,104 +1847,584 @@ class _ReaderGlass extends StatelessWidget {
   }
 }
 
-class _ReferenceReaderToolbar extends StatelessWidget {
-  const _ReferenceReaderToolbar({
+/// A 44 px round icon button on glass.
+class _ReaderIconButton extends StatefulWidget {
+  const _ReaderIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.filled = false,
+    this.active = false,
+    this.iconSize = 18,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  /// Subtle white fill (back / chapter buttons).
+  final bool filled;
+  final bool active;
+  final double iconSize;
+
+  @override
+  State<_ReaderIconButton> createState() => _ReaderIconButtonState();
+}
+
+class _ReaderIconButtonState extends State<_ReaderIconButton> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null;
+    final Color background;
+    if (widget.active) {
+      background = _chromeAccentSoft;
+    } else if (widget.filled) {
+      background = _hovered && enabled ? const Color(0x24FFFFFF) : _chromeFill;
+    } else {
+      background = _hovered && enabled ? _chromeFill : Colors.transparent;
+    }
+    return Tooltip(
+      message: widget.tooltip,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        child: FocusableActionDetector(
+          enabled: enabled,
+          mouseCursor: enabled
+              ? SystemMouseCursors.click
+              : SystemMouseCursors.basic,
+          onShowHoverHighlight: (value) => setState(() => _hovered = value),
+          onShowFocusHighlight: (value) => setState(() => _focused = value),
+          actions: <Type, Action<Intent>>{
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                widget.onPressed?.call();
+                return null;
+              },
+            ),
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onPressed,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: background,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _focused ? _chromeAccent : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: Icon(
+                widget.icon,
+                size: widget.iconSize,
+                color: widget.active
+                    ? _chromeAccentInk
+                    : _chromeText.withValues(alpha: enabled ? 1 : 0.35),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A 44 px labelled toggle on glass (the "Mark" / "Display" buttons).
+class _ReaderTextButton extends StatefulWidget {
+  const _ReaderTextButton({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onPressed,
+    this.showLabel = true,
+    this.dot = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onPressed;
+  final bool showLabel;
+
+  /// Amber dot on the icon: something on this page is already marked.
+  final bool dot;
+
+  @override
+  State<_ReaderTextButton> createState() => _ReaderTextButtonState();
+}
+
+class _ReaderTextButtonState extends State<_ReaderTextButton> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = widget.active ? _chromeAccentInk : _chromeText;
+    final icon = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(widget.icon, size: 18, color: fg),
+        if (widget.dot)
+          Positioned(
+            top: -3,
+            right: -4,
+            child: Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: _chromeAmber,
+                shape: BoxShape.circle,
+                border: Border.all(color: _chromeGlass, width: 2),
+              ),
+            ),
+          ),
+      ],
+    );
+    final body = AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
+      height: 44,
+      padding: EdgeInsets.symmetric(horizontal: widget.showLabel ? 16 : 13),
+      decoration: BoxDecoration(
+        color: widget.active
+            ? _chromeAccentSoft
+            : _hovered
+            ? _chromeFill
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _focused ? _chromeAccent : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          icon,
+          if (widget.showLabel) ...[
+            const SizedBox(width: 8),
+            Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    final pressable = Semantics(
+      button: true,
+      toggled: widget.active,
+      label: widget.label,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowHoverHighlight: (value) => setState(() => _hovered = value),
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onPressed,
+          child: body,
+        ),
+      ),
+    );
+    if (widget.showLabel) return pressable;
+    return Tooltip(message: widget.label, child: pressable);
+  }
+}
+
+/// Top chrome: back + titles on the left, Mark / Display / fullscreen on the
+/// right.
+class _ReaderTopBar extends StatelessWidget {
+  const _ReaderTopBar({
     required this.text,
     required this.data,
-    required this.currentPage,
-    required this.pageGap,
-    required this.zoom,
     required this.fullscreen,
-    required this.unlimitedScroll,
-    required this.forcePortrait,
-    required this.isBookmarked,
-    required this.isFavorited,
+    required this.openPanel,
+    required this.hasMarks,
     required this.onClose,
-    required this.onPreviousPage,
-    required this.onNextPage,
-    required this.onPreviousChapter,
-    required this.onNextChapter,
-    required this.onGapChanged,
-    required this.onZoomChanged,
+    required this.onTogglePanel,
     required this.onToggleFullscreen,
-    required this.onToggleUnlimitedScroll,
-    required this.onToggleForcePortrait,
-    required this.onToggleBookmark,
-    required this.onToggleFavorite,
-    required this.onTogglePageBookmark,
-    required this.isPageBookmarked,
   });
 
   final AppStrings text;
   final ReaderData data;
-  final int currentPage;
-  final double pageGap;
-  final double zoom;
   final bool fullscreen;
-  final bool unlimitedScroll;
-  final bool forcePortrait;
-  final bool isBookmarked;
-  final bool isFavorited;
-  final bool isPageBookmarked;
+  final _ReaderPanel openPanel;
+  final bool hasMarks;
   final VoidCallback onClose;
-  final VoidCallback onPreviousPage;
-  final VoidCallback onNextPage;
-  final VoidCallback? onPreviousChapter;
-  final VoidCallback? onNextChapter;
-  final ValueChanged<double> onGapChanged;
-  final ValueChanged<double> onZoomChanged;
+  final ValueChanged<_ReaderPanel> onTogglePanel;
   final VoidCallback onToggleFullscreen;
-  final VoidCallback onToggleUnlimitedScroll;
-  final VoidCallback onToggleForcePortrait;
-  final VoidCallback onToggleBookmark;
-  final VoidCallback onToggleFavorite;
-  final VoidCallback onTogglePageBookmark;
 
   @override
   Widget build(BuildContext context) {
     final contextData = data.context;
-    final chapterInfo = contextData != null
+    final subtitle = contextData != null
         ? '${contextData.title} (${contextData.chapterPosition}/${contextData.chapterTotal})'
-        : (contextData?.title ?? text.chapter);
-    final subtitle = '$chapterInfo - ${currentPage + 1}/${data.pages.length}';
+        : text.chapter;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showLabels = constraints.maxWidth >= 760;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 540),
+                  child: _ReaderGlass(
+                    padding: const EdgeInsets.fromLTRB(6, 6, 22, 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ReaderIconButton(
+                          tooltip: text.close,
+                          icon: AppIcons.chevronLeft,
+                          iconSize: 20,
+                          filled: true,
+                          onPressed: onClose,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                contextData?.comicTitle ?? text.appName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _chromeText,
+                                  fontSize: 14,
+                                  height: 20 / 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _chromeMuted,
+                                  fontSize: 12.5,
+                                  height: 18 / 12.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              _ReaderGlass(
+                padding: const EdgeInsets.all(6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ReaderTextButton(
+                      label: text.markPanel,
+                      icon: AppIcons.bookmark,
+                      active: openPanel == _ReaderPanel.mark,
+                      showLabel: showLabels,
+                      dot: hasMarks,
+                      onPressed: () => onTogglePanel(_ReaderPanel.mark),
+                    ),
+                    const SizedBox(width: 4),
+                    _ReaderTextButton(
+                      label: text.displayPanel,
+                      icon: AppIcons.sliders,
+                      active: openPanel == _ReaderPanel.display,
+                      showLabel: showLabels,
+                      onPressed: () => onTogglePanel(_ReaderPanel.display),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 24,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      color: const Color(0x24FFFFFF),
+                    ),
+                    _ReaderIconButton(
+                      tooltip: text.fullscreen,
+                      icon: fullscreen ? AppIcons.minimize : AppIcons.maximize,
+                      active: fullscreen,
+                      onPressed: onToggleFullscreen,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The "Display" panel: zoom, page gap, scroll behaviour, key hints.
+class _ReaderDisplayPanel extends StatelessWidget {
+  const _ReaderDisplayPanel({
+    required this.text,
+    required this.settings,
+    required this.onZoomChanged,
+    required this.onGapChanged,
+    required this.onUnlimitedScrollChanged,
+    required this.onUnlimitedScrollUpChanged,
+    required this.onForcePortraitChanged,
+  });
+
+  final AppStrings text;
+  final ReaderSettings settings;
+  final ValueChanged<double> onZoomChanged;
+  final ValueChanged<double> onGapChanged;
+  final ValueChanged<bool> onUnlimitedScrollChanged;
+  final ValueChanged<bool> onUnlimitedScrollUpChanged;
+  final ValueChanged<bool> onForcePortraitChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxWidth = MediaQuery.sizeOf(context).width - 48;
     return _ReaderGlass(
-      border: const Border(bottom: BorderSide(color: Color(0x14ffffff))),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 84, vertical: 10),
-        child: Center(
+      radius: 28,
+      color: _chromePanel,
+      elevated: true,
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        width: math.min(356, maxWidth),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(text.displayPanel, style: _panelTitleStyle),
+            const SizedBox(height: 14),
+            _ReaderSlider(
+              label: text.zoom,
+              valueLabel: '${(settings.zoom * 100).round()}%',
+              value: settings.zoom,
+              min: 0.2,
+              max: 1.5,
+              divisions: 26,
+              onChanged: (value) => onZoomChanged((value * 20).round() / 20),
+            ),
+            _ReaderSlider(
+              label: text.pageGap,
+              valueLabel: '${settings.pageGap.round()} px',
+              value: settings.pageGap,
+              min: 0,
+              max: 80,
+              divisions: 16,
+              onChanged: (value) => onGapChanged((value / 5).round() * 5),
+            ),
+            const _PanelDivider(),
+            _ReaderSwitchRow(
+              title: text.unlimitedScroll,
+              description: text.unlimitedScrollDescription,
+              value: settings.unlimitedScroll,
+              onChanged: onUnlimitedScrollChanged,
+            ),
+            _ReaderSwitchRow(
+              title: text.unlimitedScrollUp,
+              description: text.unlimitedScrollUpDescription,
+              value: settings.unlimitedScrollUp,
+              onChanged: onUnlimitedScrollUpChanged,
+            ),
+            _ReaderSwitchRow(
+              title: text.forcePortrait,
+              description: text.forcePortraitDescription,
+              value: settings.forcePortrait,
+              onChanged: onForcePortraitChanged,
+            ),
+            const _PanelDivider(),
+            Wrap(
+              spacing: 14,
+              runSpacing: 8,
+              children: [
+                _KeyHint(keys: 'Esc', label: text.keyExit),
+                _KeyHint(keys: '↑ ↓', label: text.keyScroll),
+                _KeyHint(keys: '← →', label: text.keySwitchChapter),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+const TextStyle _panelTitleStyle = TextStyle(
+  color: _chromeText,
+  fontSize: 16,
+  height: 24 / 16,
+  fontWeight: FontWeight.w800,
+  letterSpacing: -0.16,
+);
+
+class _PanelDivider extends StatelessWidget {
+  const _PanelDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 1,
+      margin: const EdgeInsets.symmetric(vertical: 14),
+      color: _chromeLine,
+    );
+  }
+}
+
+class _ReaderSlider extends StatelessWidget {
+  const _ReaderSlider({
+    required this.label,
+    required this.valueLabel,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String valueLabel;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: _chromeText,
+                  fontSize: 14,
+                  height: 22 / 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              valueLabel,
+              style: const TextStyle(
+                color: _chromeMuted,
+                fontSize: 14,
+                height: 22 / 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        Material(
+          type: MaterialType.transparency,
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 6,
+              activeTrackColor: _chromeAccent,
+              inactiveTrackColor: _chromeTrack,
+              thumbColor: _chromeText,
+              overlayColor: _chromeAccent.withValues(alpha: 0.24),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+              activeTickMarkColor: Colors.transparent,
+              inactiveTickMarkColor: Colors.transparent,
+              trackShape: const RoundedRectSliderTrackShape(),
+            ),
+            child: SizedBox(
+              height: 44,
+              child: Slider(
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                divisions: divisions,
+                label: valueLabel,
+                semanticFormatterCallback: (_) => '$label $valueLabel',
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReaderSwitchRow extends StatelessWidget {
+  const _ReaderSwitchRow({
+    required this.title,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String description;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      toggled: value,
+      label: title,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(!value),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1748),
+            constraints: const BoxConstraints(minHeight: 56),
             child: Row(
               children: [
-                _ReferenceReaderIconButton(
-                  tooltip: text.close,
-                  icon: AppIcons.close,
-                  onPressed: onClose,
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        contextData?.comicTitle ?? text.appName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        title,
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
+                          color: _chromeText,
+                          fontSize: 14,
+                          height: 22 / 14,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 2),
                       Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.68),
-                          fontSize: 14,
+                        description,
+                        style: const TextStyle(
+                          color: _chromeMuted,
+                          fontSize: 12.5,
+                          height: 18 / 12.5,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -1849,102 +2432,328 @@ class _ReferenceReaderToolbar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    _ReferenceReaderIconButton(
-                      tooltip: text.previousPage,
-                      icon: AppIcons.chevronLeft,
-                      onPressed: onPreviousPage,
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.nextPage,
-                      icon: AppIcons.chevronRight,
-                      onPressed: onNextPage,
-                    ),
-                    const SizedBox(width: 4),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.previousChapter,
-                      icon: AppIcons.chevronFirst,
-                      onPressed: onPreviousChapter,
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.nextChapter,
-                      icon: AppIcons.chevronLast,
-                      onPressed: onNextChapter,
-                    ),
-                    const SizedBox(width: 10),
-                    _ReferenceReaderIconButton(
-                      tooltip: isFavorited
-                          ? text.removeFavorite
-                          : text.addFavorite,
-                      icon: AppIcons.star,
-                      active: isFavorited,
-                      activeColor: context.appReader.star,
-                      onPressed: onToggleFavorite,
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: isBookmarked
-                          ? text.removeBookmark
-                          : text.addBookmark,
-                      icon: AppIcons.folderBookmark,
-                      active: isBookmarked,
-                      activeColor: context.appReader.star,
-                      onPressed: onToggleBookmark,
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: isPageBookmarked
-                          ? text.removePageBookmark
-                          : text.addPageBookmark,
-                      icon: AppIcons.bookmark,
-                      active: isPageBookmarked,
-                      activeColor: const Color(0xffffb020),
-                      onPressed: onTogglePageBookmark,
-                    ),
-                    const SizedBox(width: 10),
-                    _ReaderControlChip(
-                      icon: AppIcons.search,
-                      value: '${(zoom * 100).round()}%',
-                      tooltip: text.zoom,
-                      onDecrease: () => onZoomChanged(
-                        (zoom - 0.1).clamp(0.2, 1.5).toDouble(),
+                _ReaderSwitch(value: value),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The 48×28 toggle drawn on glass (the row above handles the tap).
+class _ReaderSwitch extends StatelessWidget {
+  const _ReaderSwitch({required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        width: 48,
+        height: 28,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: value ? _chromeAccent : _chromeTrack,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: value ? const Color(0xFF1A1530) : _chromeText,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KeyHint extends StatelessWidget {
+  const _KeyHint({required this.keys, required this.label});
+
+  final String keys;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+          decoration: BoxDecoration(
+            color: const Color(0x1AFFFFFF),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            keys,
+            style: const TextStyle(
+              color: _chromeText,
+              fontSize: 12,
+              height: 18 / 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: _chromeMuted,
+            fontSize: 12.5,
+            height: 20 / 12.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The "Mark" panel: page bookmark, chapter bookmark, favorite.
+class _ReaderMarkPanel extends StatelessWidget {
+  const _ReaderMarkPanel({
+    required this.text,
+    required this.data,
+    required this.currentPage,
+    required this.isPageBookmarked,
+    required this.isChapterBookmarked,
+    required this.isFavorited,
+    required this.onTogglePageBookmark,
+    required this.onToggleChapterBookmark,
+    required this.onToggleFavorite,
+  });
+
+  final AppStrings text;
+  final ReaderData data;
+  final int currentPage;
+  final bool isPageBookmarked;
+  final bool isChapterBookmarked;
+  final bool isFavorited;
+  final VoidCallback onTogglePageBookmark;
+  final VoidCallback onToggleChapterBookmark;
+  final VoidCallback onToggleFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxWidth = MediaQuery.sizeOf(context).width - 48;
+    final page = '${currentPage + 1}';
+    final total = '${data.pages.length}';
+    final chapterTitle = data.context?.title ?? text.chapter;
+    final comicTitle = data.context?.comicTitle ?? text.comic;
+    return _ReaderGlass(
+      radius: 28,
+      color: _chromePanel,
+      elevated: true,
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        width: math.min(372, maxWidth),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(child: Text(text.markPanel, style: _panelTitleStyle)),
+                Text(
+                  text.pageOfTemplate
+                      .replaceAll('{page}', page)
+                      .replaceAll('{total}', total),
+                  style: const TextStyle(
+                    color: _chromeMuted,
+                    fontSize: 12.5,
+                    height: 18 / 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _MarkRow(
+              icon: AppIcons.bookmark,
+              title: isPageBookmarked
+                  ? text.removePageBookmark
+                  : text.addPageBookmark,
+              subtitle:
+                  (isPageBookmarked
+                          ? text.pageBookmarkedTemplate
+                          : text.pageNotBookmarkedTemplate)
+                      .replaceAll('{page}', page),
+              active: isPageBookmarked,
+              onPressed: onTogglePageBookmark,
+            ),
+            const SizedBox(height: 6),
+            _MarkRow(
+              icon: AppIcons.folderBookmark,
+              title: isChapterBookmarked
+                  ? text.removeBookmark
+                  : text.addBookmark,
+              subtitle:
+                  (isChapterBookmarked
+                          ? text.chapterBookmarkedTemplate
+                          : text.chapterNotBookmarkedTemplate)
+                      .replaceAll('{chapter}', chapterTitle),
+              active: isChapterBookmarked,
+              onPressed: onToggleChapterBookmark,
+            ),
+            const SizedBox(height: 6),
+            _MarkRow(
+              icon: AppIcons.star,
+              title: isFavorited ? text.removeFavorite : text.addFavorite,
+              subtitle:
+                  (isFavorited
+                          ? text.inFavoritesTemplate
+                          : text.notInFavoritesTemplate)
+                      .replaceAll('{comic}', comicTitle),
+              active: isFavorited,
+              onPressed: onToggleFavorite,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MarkRow extends StatefulWidget {
+  const _MarkRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.active,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool active;
+  final VoidCallback onPressed;
+
+  @override
+  State<_MarkRow> createState() => _MarkRowState();
+}
+
+class _MarkRowState extends State<_MarkRow> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.active;
+    return Semantics(
+      button: true,
+      toggled: active,
+      label: '${widget.title}. ${widget.subtitle}',
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowHoverHighlight: (value) => setState(() => _hovered = value),
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onPressed,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 68),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: active
+                  ? _chromeAmberSoft
+                  : _hovered
+                  ? _chromeFill
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _focused ? _chromeAccent : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: active ? _chromeAmberBox : _chromeFill,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    size: 20,
+                    color: active ? _chromeAmber : _chromeText,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _chromeText,
+                          fontSize: 14,
+                          height: 22 / 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      onIncrease: () => onZoomChanged(
-                        (zoom + 0.1).clamp(0.2, 1.5).toDouble(),
+                      Text(
+                        widget.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _chromeMuted,
+                          fontSize: 12.5,
+                          height: 18 / 12.5,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      onReset: () => onZoomChanged(1),
-                    ),
-                    _ReaderControlChip(
-                      icon: AppIcons.alignCenter,
-                      value: '${pageGap.round()}px',
-                      tooltip: text.gap,
-                      onDecrease: () =>
-                          onGapChanged((pageGap - 5).clamp(0, 80).toDouble()),
-                      onIncrease: () =>
-                          onGapChanged((pageGap + 5).clamp(0, 80).toDouble()),
-                      onReset: () => onGapChanged(20),
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.fullscreen,
-                      icon: fullscreen ? AppIcons.minimize : AppIcons.maximize,
-                      active: fullscreen,
-                      onPressed: onToggleFullscreen,
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.unlimitedScroll,
-                      icon: AppIcons.scroll,
-                      active: unlimitedScroll,
-                      onPressed: onToggleUnlimitedScroll,
-                    ),
-                    _ReferenceReaderIconButton(
-                      tooltip: text.forcePortrait,
-                      icon: AppIcons.portrait,
-                      active: forcePortrait,
-                      onPressed: onToggleForcePortrait,
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: active ? _chromeAmber : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: active
+                        ? null
+                        : Border.all(color: _chromeRing, width: 2),
+                  ),
+                  child: active
+                      ? const Icon(
+                          AppIcons.check,
+                          size: 16,
+                          color: _chromeAmberInk,
+                        )
+                      : null,
                 ),
               ],
             ),
@@ -1955,312 +2764,231 @@ class _ReferenceReaderToolbar extends StatelessWidget {
   }
 }
 
-class _ReferenceReaderIconButton extends StatefulWidget {
-  const _ReferenceReaderIconButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-    this.active = false,
-    this.activeColor,
-    this.compact = false,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool active;
-  final Color? activeColor;
-  final bool compact;
-
-  @override
-  State<_ReferenceReaderIconButton> createState() =>
-      _ReferenceReaderIconButtonState();
-}
-
-class _ReferenceReaderIconButtonState
-    extends State<_ReferenceReaderIconButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null;
-    final size = widget.compact ? 38.0 : 40.0;
-    final activeColor = widget.activeColor;
-    final isActiveColored = widget.active && activeColor != null;
-    final fgOpacity = enabled ? 0.78 : 0.28;
-    final bgOpacity = (widget.active ? 0.14 : (_hovered && enabled ? 0.10 : 0))
-        .toDouble();
-    final borderColor = isActiveColored
-        ? activeColor.withValues(alpha: 0.60)
-        : Colors.white.withValues(alpha: widget.active ? 0.36 : 0.18);
-    final iconColor = isActiveColored
-        ? activeColor.withValues(alpha: enabled ? 1.0 : 0.40)
-        : Colors.white.withValues(alpha: fgOpacity);
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onPressed,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOutCubic,
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: bgOpacity),
-              borderRadius: BorderRadius.circular(widget.compact ? 999 : 8),
-              border: Border.all(color: borderColor),
-            ),
-            child: Icon(
-              widget.icon,
-              size: widget.compact ? 16 : 18,
-              color: iconColor,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReaderControlChip extends StatefulWidget {
-  const _ReaderControlChip({
-    required this.icon,
-    required this.value,
-    required this.tooltip,
-    required this.onDecrease,
-    required this.onIncrease,
-    required this.onReset,
-  });
-
-  final IconData icon;
-  final String value;
-  final String tooltip;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
-  final VoidCallback onReset;
-
-  @override
-  State<_ReaderControlChip> createState() => _ReaderControlChipState();
-}
-
-class _ReaderControlChipState extends State<_ReaderControlChip> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: 36,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: _hovered ? 0.12 : 0.06),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _chipButton(
-                AppIcons.minus,
-                widget.onDecrease,
-                '${widget.tooltip} -',
-              ),
-              GestureDetector(
-                onDoubleTap: widget.onReset,
-                child: SizedBox(
-                  width: 48,
-                  child: Center(
-                    child: Text(
-                      widget.value,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              _chipButton(
-                AppIcons.plus,
-                widget.onIncrease,
-                '${widget.tooltip} +',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _chipButton(
-    IconData icon,
-    VoidCallback onPressed,
-    String semanticsTooltip,
-  ) {
-    return FTappable(
-      semanticsTooltip: semanticsTooltip,
-      behavior: HitTestBehavior.opaque,
-      onPress: onPressed,
-      child: SizedBox(
-        width: 32,
-        height: 36,
-        child: Icon(
-          icon,
-          size: 14,
-          color: Colors.white.withValues(alpha: 0.78),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReferencePageIndicator extends StatefulWidget {
-  const _ReferencePageIndicator({
+/// Bottom chrome: chapter / page buttons around the segmented page track.
+/// Collapses to the bare track while the toolbar is hidden.
+class _ReaderPageBar extends StatefulWidget {
+  const _ReaderPageBar({
+    required this.text,
     required this.currentPage,
     required this.pageCount,
     required this.pageBookmarkedPages,
+    required this.expanded,
     required this.onSelected,
+    required this.onPreviousPage,
+    required this.onNextPage,
+    required this.onPreviousChapter,
+    required this.onNextChapter,
   });
 
+  final AppStrings text;
   final int currentPage;
   final int pageCount;
   final Set<int> pageBookmarkedPages;
+  final bool expanded;
   final ValueChanged<int> onSelected;
+  final VoidCallback onPreviousPage;
+  final VoidCallback onNextPage;
+  final VoidCallback? onPreviousChapter;
+  final VoidCallback? onNextChapter;
 
   @override
-  State<_ReferencePageIndicator> createState() =>
-      _ReferencePageIndicatorState();
+  State<_ReaderPageBar> createState() => _ReaderPageBarState();
 }
 
-class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
-  bool _hovered = false;
+class _ReaderPageBarState extends State<_ReaderPageBar> {
   int? _hoveredPage;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
+    final text = widget.text;
     final count = math.max(1, widget.pageCount);
     final current = widget.currentPage.clamp(0, count - 1);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() {
-        _hovered = false;
-        _hoveredPage = null;
-      }),
-      child: _ReaderGlass(
-        border: const Border(top: BorderSide(color: Color(0x14ffffff))),
-        child: AnimatedContainer(
+    final expanded = widget.expanded;
+    const numberStyle = TextStyle(
+      color: _chromeText,
+      fontSize: 14,
+      fontWeight: FontWeight.w800,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
+    final track = _buildTrack(count, current, expanded);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 0, 24, expanded ? 24 : 16),
+      child: Center(
+        child: AnimatedSize(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          height: _hovered ? 54 : 34,
-          padding: EdgeInsets.symmetric(
-            horizontal: _hovered ? 96 : 100,
-            vertical: _hovered ? 10 : 7,
-          ),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: _hovered ? 36 : 0,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 150),
-                  opacity: _hovered ? 1 : 0,
-                  child: Text(
-                    '${current + 1}',
-                    overflow: TextOverflow.clip,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final hoveredPage = (_hoveredPage ?? current).clamp(
-                      0,
-                      count - 1,
-                    );
-                    return MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      onEnter: (event) => _updateHoveredPage(
-                        event.localPosition.dx,
-                        constraints.maxWidth,
-                        count,
-                      ),
-                      onHover: (event) => _updateHoveredPage(
-                        event.localPosition.dx,
-                        constraints.maxWidth,
-                        count,
-                      ),
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTapDown: (details) {
-                          widget.onSelected(
-                            _pageIndexForDx(
-                              details.localPosition.dx,
-                              constraints.maxWidth,
-                              count,
-                            ),
-                          );
-                        },
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: _PageIndicatorPainter(
-                                  current: current,
-                                  pageCount: count,
-                                  hovered: _hovered,
-                                  pageBookmarkedPages:
-                                      widget.pageBookmarkedPages,
-                                ),
-                              ),
-                            ),
-                            if (_hoveredPage != null)
-                              Positioned(
-                                left: _tooltipLeft(
-                                  constraints.maxWidth,
-                                  count,
-                                  hoveredPage,
-                                ),
-                                top: -10,
-                                child: _PageIndicatorTooltip(
-                                  label: '${hoveredPage + 1}',
-                                ),
-                              ),
-                          ],
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: expanded ? 680 : 420),
+            child: _ReaderGlass(
+              radius: expanded ? 26 : 14,
+              padding: EdgeInsets.all(expanded ? 6 : 4),
+              child: expanded
+                  ? Row(
+                      children: [
+                        _ReaderIconButton(
+                          tooltip: text.previousChapter,
+                          icon: AppIcons.chevronsLeft,
+                          filled: true,
+                          onPressed: widget.onPreviousChapter,
                         ),
+                        const SizedBox(width: 2),
+                        _ReaderIconButton(
+                          tooltip: text.previousPage,
+                          icon: AppIcons.chevronLeft,
+                          onPressed: widget.onPreviousPage,
+                        ),
+                        const SizedBox(width: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 24),
+                          child: Text(
+                            '${current + 1}',
+                            textAlign: TextAlign.right,
+                            style: numberStyle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: track),
+                        const SizedBox(width: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 24),
+                          child: Text(
+                            '$count',
+                            style: numberStyle.copyWith(
+                              color: _chromeMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        _ReaderIconButton(
+                          tooltip: text.nextPage,
+                          icon: AppIcons.chevronRight,
+                          onPressed: widget.onNextPage,
+                        ),
+                        const SizedBox(width: 2),
+                        _ReaderIconButton(
+                          tooltip: text.nextChapter,
+                          icon: AppIcons.chevronsRight,
+                          filled: true,
+                          onPressed: widget.onNextChapter,
+                        ),
+                      ],
+                    )
+                  : track,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrack(int count, int current, bool expanded) {
+    final hoveredPage = (_hoveredPage ?? current).clamp(0, count - 1);
+    String pageLabel(int page) => widget.text.pageOfTemplate
+        .replaceAll('{page}', '${page + 1}')
+        .replaceAll('{total}', '$count');
+    return SizedBox(
+      height: expanded ? 44 : 20,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Semantics(
+            slider: true,
+            value: pageLabel(current),
+            increasedValue: pageLabel(math.min(current + 1, count - 1)),
+            decreasedValue: pageLabel(math.max(current - 1, 0)),
+            onIncrease: widget.onNextPage,
+            onDecrease: widget.onPreviousPage,
+            child: FocusableActionDetector(
+              onShowFocusHighlight: (value) => setState(() => _focused = value),
+              mouseCursor: SystemMouseCursors.click,
+              shortcuts: const <ShortcutActivator, Intent>{
+                SingleActivator(LogicalKeyboardKey.arrowRight): _PageStepIntent(
+                  1,
+                ),
+                SingleActivator(LogicalKeyboardKey.arrowLeft): _PageStepIntent(
+                  -1,
+                ),
+              },
+              actions: <Type, Action<Intent>>{
+                _PageStepIntent: CallbackAction<_PageStepIntent>(
+                  onInvoke: (intent) {
+                    if (intent.delta > 0) {
+                      widget.onNextPage();
+                    } else {
+                      widget.onPreviousPage();
+                    }
+                    return null;
+                  },
+                ),
+              },
+              child: MouseRegion(
+                onEnter: (event) => _updateHoveredPage(
+                  event.localPosition.dx,
+                  constraints.maxWidth,
+                  count,
+                ),
+                onHover: (event) => _updateHoveredPage(
+                  event.localPosition.dx,
+                  constraints.maxWidth,
+                  count,
+                ),
+                onExit: (_) => setState(() => _hoveredPage = null),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (details) {
+                    widget.onSelected(
+                      _pageIndexForDx(
+                        details.localPosition.dx,
+                        constraints.maxWidth,
+                        count,
                       ),
                     );
                   },
-                ),
-              ),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: _hovered ? 36 : 0,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 150),
-                  opacity: _hovered ? 1 : 0,
-                  child: Text(
-                    '$count',
-                    textAlign: TextAlign.right,
-                    overflow: TextOverflow.clip,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _focused
+                                  ? _chromeAccent
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: CustomPaint(
+                            painter: _PageIndicatorPainter(
+                              current: current,
+                              pageCount: count,
+                              hovered: expanded,
+                              pageBookmarkedPages: widget.pageBookmarkedPages,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_hoveredPage != null)
+                        Positioned(
+                          left: _tooltipLeft(
+                            constraints.maxWidth,
+                            count,
+                            hoveredPage,
+                          ),
+                          top: -(_PageIndicatorTooltip.height + 8),
+                          child: _PageIndicatorTooltip(
+                            label: '${hoveredPage + 1}',
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -2292,10 +3020,17 @@ class _ReferencePageIndicatorState extends State<_ReferencePageIndicator> {
   }
 }
 
+class _PageStepIntent extends Intent {
+  const _PageStepIntent(this.delta);
+
+  final int delta;
+}
+
 class _PageIndicatorTooltip extends StatelessWidget {
   const _PageIndicatorTooltip({required this.label});
 
   static const double width = 40;
+  static const double height = 22;
   final String label;
 
   @override
@@ -2303,8 +3038,8 @@ class _PageIndicatorTooltip extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xff222831),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _chromeLine),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.28),
@@ -2315,16 +3050,16 @@ class _PageIndicatorTooltip extends StatelessWidget {
       ),
       child: SizedBox(
         width: width,
-        height: 22,
+        height: height,
         child: Center(
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.clip,
             style: const TextStyle(
-              color: Colors.white,
+              color: _chromeText,
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -2333,6 +3068,8 @@ class _PageIndicatorTooltip extends StatelessWidget {
   }
 }
 
+/// One segment per page: read pages in accent, bookmarked pages amber and
+/// taller (so they read without relying on hue), the current page ringed.
 class _PageIndicatorPainter extends CustomPainter {
   _PageIndicatorPainter({
     required this.current,
@@ -2350,26 +3087,36 @@ class _PageIndicatorPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (pageCount <= 0) return;
     final segmentWidth = size.width / pageCount;
-    final barHeight = hovered ? 12.0 : 4.0;
-    final gap = hovered ? 2.0 : 1.0;
-    final top = (size.height - barHeight) / 2;
-    final filledPaint = Paint()..color = const Color(0xff9aa7b5);
-    final emptyPaint = Paint()..color = Colors.white.withValues(alpha: 0.20);
-    final bookmarkPaint = Paint()..color = const Color(0xffffb020);
-    final radius = Radius.circular(99);
+    final barHeight = hovered ? 8.0 : 4.0;
+    final markedHeight = hovered ? 18.0 : 8.0;
+    final gap = math.min(hovered ? 1.0 : 0.5, segmentWidth * 0.2);
+    final filledPaint = Paint()..color = _chromeAccent;
+    final emptyPaint = Paint()..color = _chromeTrack;
+    final bookmarkPaint = Paint()..color = _chromeAmber;
+    final ringPaint = Paint()
+      ..color = _chromeText
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    const radius = Radius.circular(99);
 
     for (var i = 0; i < pageCount; i++) {
       final left = i * segmentWidth + gap;
       final right = (i + 1) * segmentWidth - gap;
       if (right <= left) continue;
+      final marked = pageBookmarkedPages.contains(i);
+      final height = marked ? markedHeight : barHeight;
+      final top = (size.height - height) / 2;
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTRB(left, top, right, top + barHeight),
+        Rect.fromLTRB(left, top, right, top + height),
         radius,
       );
-      if (pageBookmarkedPages.contains(i)) {
+      if (marked) {
         canvas.drawRRect(rect, bookmarkPaint);
       } else {
         canvas.drawRRect(rect, i <= current ? filledPaint : emptyPaint);
+      }
+      if (i == current && hovered) {
+        canvas.drawRRect(rect.inflate(1.5), ringPaint);
       }
     }
   }

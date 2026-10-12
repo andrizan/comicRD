@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
+import 'package:file_selector/file_selector.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import '../bridge_generated.dart' as bridge;
 import '../routes/path_codec.dart';
 import '../state/api_state.dart';
+import '../state/library_source_actions.dart';
 import '../state/library_state.dart';
 import '../state/scroll_state.dart';
 import '../state/settings_state.dart';
@@ -17,7 +20,7 @@ import '../utils/date_format.dart';
 import '../utils/forui_theme.dart';
 import '../utils/format_size.dart';
 import '../widgets/back_to_top_button.dart';
-import '../widgets/comic_thumbnail_image.dart';
+import '../widgets/soft_ui.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -245,6 +248,9 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       _updateBackToTopVisibility(_activeScrollController());
     });
 
+    final status = sourceStatus.asData?.value;
+    final firstRun = status != null && !status.configured;
+
     return KeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
@@ -255,21 +261,39 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final hPad = constraints.maxWidth < 600
-              ? 16.0
-              : constraints.maxWidth < 900
-              ? 32.0
-              : 48.0;
+          final narrow = constraints.maxWidth < 640;
+          final padLeft = narrow ? 16.0 : 24.0;
+          final padRight = narrow ? 16.0 : 40.0;
+          if (firstRun) {
+            return _WelcomeView(
+              text: text,
+              onPickFolder: _pickLibraryFolder,
+              onImportBackup: () => context.go('/settings'),
+            );
+          }
+          final String? sourceError = switch (sourceStatus) {
+            AsyncData(:final value) => value.error,
+            AsyncError(:final error) => error.toString(),
+            _ => null,
+          };
+          final actions = _CardActions(
+            onToggleFavorite: _toggleFavoriteByPath,
+            onCopyTitle: (title) =>
+                Clipboard.setData(ClipboardData(text: title)),
+            onCopyPath: (path) => Clipboard.setData(ClipboardData(text: path)),
+            onOpenFolder: (path) =>
+                ref.read(comicRdApiProvider).openContainingFolder(path),
+          );
           return Padding(
-            padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 0),
+            padding: EdgeInsets.fromLTRB(padLeft, 28, padRight, 0),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _PanelHeader(
                   text: text,
                   preferences: preferences,
                   comicsState: comicsState,
                   totalSizeBytes: _totalSizeBytes,
-                  historyCount: _historyState.filteredTotal,
                   favoritesCount: favorites.asData?.value.length ?? 0,
                   searchController: _search,
                   onSearchChanged: (value) {
@@ -282,42 +306,18 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                     );
                   },
                   onRefresh: _refreshLibrary,
-                  onSetViewMode: _setViewMode,
-                  onSetSort: _setSort,
                   onSetDisplayMode: _setDisplayMode,
                 ),
-                const SizedBox(height: 8),
-                sourceStatus.when(
-                  data: (status) {
-                    if (status.configured && status.error == null) {
-                      return const SizedBox.shrink();
-                    }
-                    final message = status.configured
-                        ? status.error!
-                        : text.noLibrarySource;
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          message,
-                          style: TextStyle(color: context.appAccent),
-                        ),
-                      ),
-                    );
-                  },
-                  error: (error, _) => Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        error.toString(),
-                        style: TextStyle(color: context.appAccent),
-                      ),
+                if (sourceError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20),
+                    child: _SourceErrorBanner(
+                      text: text,
+                      message: sourceError,
+                      onChangeFolder: () => context.go('/settings'),
                     ),
                   ),
-                  loading: () => const SizedBox.shrink(),
-                ),
+                const SizedBox(height: 24),
                 Expanded(
                   child: Stack(
                     children: [
@@ -337,34 +337,34 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
                           LibraryTab.library => _ComicList(
                             text: text,
                             comics: comicsState.items,
+                            allComics: _rawComics,
                             visibleCount: comicsState.visibleCount,
                             hasMore: comicsState.hasMore,
                             onLoadMore: () => ref
                                 .read(libraryPaginationProvider.notifier)
                                 .loadMore(),
                             displayMode: preferences.displayMode,
+                            viewMode: preferences.viewMode,
+                            sort: preferences.sort,
                             favoritedPaths: favoritedPaths,
                             controller: _libraryScroll,
                             emptyLabel: text.emptyLibrary,
-                            onToggleFavorite: _toggleComicFavorite,
-                            onCopyTitle: _copyComicTitle,
-                            onCopyPath: _copyComicPath,
-                            onOpenFolder: _openContainingFolder,
+                            actions: actions,
+                            onSetViewMode: _setViewMode,
+                            onSetSort: _setSort,
+                            onViewHistory: _showHistoryTab,
                           ),
                           LibraryTab.favorites => _FavoritesList(
                             text: text,
                             favorites: favorites,
                             comics: _rawComics,
                             query: preferences.query,
-                            sortBy: preferences.favoritesSortBy,
-                            sortDir: preferences.favoritesSortDir,
+                            sort: preferences.sort,
                             displayMode: preferences.displayMode,
                             controller: _favoritesScroll,
                             emptyLabel: text.emptyLibrary,
-                            onToggleFavorite: _removeFavorite,
-                            onCopyTitle: _copyFavoriteTitle,
-                            onCopyPath: _copyFavoritePath,
-                            onOpenFolder: _openFavoriteContainingFolder,
+                            actions: actions,
+                            onSetSort: _setSort,
                           ),
                         },
                       ),
@@ -442,6 +442,18 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     );
   }
 
+  Future<void> _showHistoryTab() async {
+    ref
+        .read(libraryPreferencesProvider.notifier)
+        .setSelectedTab(LibraryTab.history);
+    await ref
+        .read(comicRdApiProvider)
+        .setSetting(
+          'library_selected_tab',
+          jsonEncode(encodeLibraryTab(LibraryTab.history)),
+        );
+  }
+
   Future<void> _refreshLibrary() async {
     final selectedTab = ref.read(libraryPreferencesProvider).selectedTab;
     switch (selectedTab) {
@@ -450,6 +462,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         await Future.wait<void>([
           ref.refresh(librarySourceStatusProvider.future),
           ref.refresh(rawLibraryComicsProvider.future),
+          ref.refresh(readingHistoryProvider.future),
         ]);
       case LibraryTab.favorites:
         unawaited(ref.refresh(allFavoritesProvider.future));
@@ -459,66 +472,144 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     }
   }
 
-  Future<void> _toggleComicFavorite(
-    bridge.RawComic comic,
-    bool favorited,
-  ) async {
+  Future<void> _pickLibraryFolder() async {
+    final path = await getDirectoryPath();
+    if (path == null || !mounted) return;
+    await applyLibrarySource(ref, path);
+    if (!mounted) return;
+    // The listing is filesystem-first; the scan fills in chapter counts and
+    // progress in the background while the shelf is already browsable.
+    unawaited(ref.read(comicRdApiProvider).startScanLibraries());
+  }
+
+  Future<void> _toggleFavoriteByPath(String sourcePath, bool favorited) async {
     final api = ref.read(comicRdApiProvider);
     if (favorited) {
-      await api.removeFavorite(comicSourcePath: comic.sourcePath);
+      await api.removeFavorite(comicSourcePath: sourcePath);
     } else {
-      await api.addFavorite(comicSourcePath: comic.sourcePath);
+      await api.addFavorite(comicSourcePath: sourcePath);
     }
     ref.invalidate(allFavoritesProvider);
   }
+}
 
-  Future<void> _copyComicTitle(bridge.RawComic comic) async {
-    await Clipboard.setData(ClipboardData(text: comic.title));
+/// Card callbacks shared by the library grid, list and favorites.
+class _CardActions {
+  const _CardActions({
+    required this.onToggleFavorite,
+    required this.onCopyTitle,
+    required this.onCopyPath,
+    required this.onOpenFolder,
+  });
+
+  final Future<void> Function(String sourcePath, bool favorited)
+  onToggleFavorite;
+  final Future<void> Function(String title) onCopyTitle;
+  final Future<void> Function(String path) onCopyPath;
+  final Future<void> Function(String path) onOpenFolder;
+}
+
+/// What a comic card shows, whether it came from the listing or favorites.
+class _CardInfo {
+  const _CardInfo({
+    required this.title,
+    required this.sourcePath,
+    required this.chapterCount,
+    required this.readCount,
+    required this.inProgressCount,
+    required this.dateModified,
+    required this.sizeBytes,
+    required this.favorited,
+  });
+
+  factory _CardInfo.fromComic(
+    bridge.RawComic comic, {
+    required bool favorited,
+  }) {
+    return _CardInfo(
+      title: comic.title,
+      sourcePath: comic.sourcePath,
+      chapterCount: comic.chapterCount.toInt(),
+      readCount: comic.readChapterCount.toInt(),
+      inProgressCount: comic.inProgressChapterCount.toInt(),
+      dateModified: comic.dateModified.toInt(),
+      sizeBytes: comic.sizeBytes.toInt(),
+      favorited: favorited,
+    );
   }
 
-  Future<void> _copyComicPath(bridge.RawComic comic) async {
-    await Clipboard.setData(ClipboardData(text: comic.sourcePath));
+  factory _CardInfo.fromFavorite(
+    bridge.Favorite favorite,
+    bridge.RawComic? comic,
+  ) {
+    return _CardInfo(
+      title: favorite.comicTitle,
+      sourcePath: favorite.comicSourcePath,
+      chapterCount: comic?.chapterCount.toInt() ?? 0,
+      readCount: comic?.readChapterCount.toInt() ?? 0,
+      inProgressCount: comic?.inProgressChapterCount.toInt() ?? 0,
+      dateModified: comic?.dateModified.toInt() ?? 0,
+      sizeBytes: comic?.sizeBytes.toInt() ?? 0,
+      favorited: true,
+    );
   }
 
-  Future<void> _openContainingFolder(bridge.RawComic comic) async {
-    await ref.read(comicRdApiProvider).openContainingFolder(comic.sourcePath);
+  final String title;
+  final String sourcePath;
+  final int chapterCount;
+  final int readCount;
+  final int inProgressCount;
+  final int dateModified;
+  final int sizeBytes;
+  final bool favorited;
+
+  bool get isNew {
+    if (dateModified <= 0) return false;
+    final modified = DateTime.fromMillisecondsSinceEpoch(dateModified * 1000);
+    final now = DateTime.now();
+    return modified.year == now.year &&
+        modified.month == now.month &&
+        modified.day == now.day;
   }
 
-  Future<void> _removeFavorite(bridge.Favorite favorite) async {
-    await ref
-        .read(comicRdApiProvider)
-        .removeFavorite(comicSourcePath: favorite.comicSourcePath);
-    ref.invalidate(allFavoritesProvider);
+  int get touchedCount =>
+      (readCount + inProgressCount).clamp(0, math.max(chapterCount, 0));
+
+  bool get hasProgress => chapterCount > 0 && touchedCount > 0;
+
+  double get progress => chapterCount <= 0 ? 0 : touchedCount / chapterCount;
+
+  int get percent => (progress * 100).round();
+
+  /// "26 of 30 chapters" once started, otherwise the plain chapter count.
+  String chapterSummary(AppStrings text) {
+    if (chapterCount <= 0) return text.unread;
+    if (!hasProgress) {
+      return text.chaptersCountTemplate.replaceAll('{count}', '$chapterCount');
+    }
+    return text.chaptersReadTemplate
+        .replaceAll('{read}', '$touchedCount')
+        .replaceAll('{total}', '$chapterCount');
   }
 
-  Future<void> _copyFavoriteTitle(bridge.Favorite favorite) async {
-    await Clipboard.setData(ClipboardData(text: favorite.comicTitle));
-  }
-
-  Future<void> _copyFavoritePath(bridge.Favorite favorite) async {
-    await Clipboard.setData(ClipboardData(text: favorite.comicSourcePath));
-  }
-
-  Future<void> _openFavoriteContainingFolder(bridge.Favorite favorite) async {
-    await ref
-        .read(comicRdApiProvider)
-        .openContainingFolder(favorite.comicSourcePath);
+  String progressLabel(AppStrings text) {
+    return text.readingProgressTemplate
+        .replaceAll('{percent}', '$percent')
+        .replaceAll('{read}', '$touchedCount')
+        .replaceAll('{total}', '$chapterCount');
   }
 }
 
-class _PanelHeader extends ConsumerWidget {
+class _PanelHeader extends StatelessWidget {
   const _PanelHeader({
     required this.text,
     required this.preferences,
     required this.comicsState,
     required this.totalSizeBytes,
-    required this.historyCount,
     required this.favoritesCount,
     required this.searchController,
     required this.onSearchChanged,
     required this.onRefresh,
-    required this.onSetViewMode,
-    required this.onSetSort,
     required this.onSetDisplayMode,
   });
 
@@ -526,18 +617,14 @@ class _PanelHeader extends ConsumerWidget {
   final LibraryPreferences preferences;
   final LibraryComicsState comicsState;
   final int totalSizeBytes;
-  final int historyCount;
   final int favoritesCount;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onRefresh;
-  final ValueChanged<LibraryViewMode> onSetViewMode;
-  final void Function(bridge.SortBy sortBy, bridge.SortDir sortDir) onSetSort;
   final ValueChanged<LibraryDisplayMode> onSetDisplayMode;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.theme.colors;
+  Widget build(BuildContext context) {
     final title = switch (preferences.selectedTab) {
       LibraryTab.library => text.library,
       LibraryTab.history => text.history,
@@ -554,53 +641,32 @@ class _PanelHeader extends ConsumerWidget {
         text.favoritesSubtitleTemplate.replaceAll('{count}', '$favoritesCount'),
       ),
     };
-
-    final toolbar = _Toolbar(
-      text: text,
-      preferences: preferences,
-      searchController: searchController,
-      onSearchChanged: onSearchChanged,
-      onRefresh: onRefresh,
-      onSetViewMode: onSetViewMode,
-      onSetSort: onSetSort,
-      onSetDisplayMode: onSetDisplayMode,
-    );
-    final titleColumn = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontFamily: appFontFamily,
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.01,
-            color: colors.foreground,
-          ),
-        ),
-        const SizedBox(height: 4),
-        DefaultTextStyle(
-          style: TextStyle(fontSize: 14, color: colors.mutedForeground),
-          child: subtitle,
-        ),
-      ],
-    );
+    final heading = PageHeading(title: title, subtitle: subtitle);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 800) {
-          return Wrap(
-            spacing: 24,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.start,
-            children: [titleColumn, toolbar],
+        final stacked = constraints.maxWidth < 840;
+        final toolbar = _Toolbar(
+          text: text,
+          preferences: preferences,
+          searchController: searchController,
+          searchWidth: stacked
+              ? math.max(160.0, math.min(320.0, constraints.maxWidth - 108))
+              : 320,
+          onSearchChanged: onSearchChanged,
+          onRefresh: onRefresh,
+          onSetDisplayMode: onSetDisplayMode,
+        );
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [heading, const SizedBox(height: 16), toolbar],
           );
         }
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(child: titleColumn),
+            Expanded(child: heading),
             const SizedBox(width: 24),
             toolbar,
           ],
@@ -627,7 +693,7 @@ class _LibrarySubtitle extends StatelessWidget {
     if (totalSizeBytes <= 0) {
       return Text(base);
     }
-    return Text('$base · ${text.totalSize}: ${formatBytes(totalSizeBytes)}');
+    return Text('$base · ${formatBytes(totalSizeBytes)}');
   }
 }
 
@@ -636,29 +702,23 @@ class _Toolbar extends StatelessWidget {
     required this.text,
     required this.preferences,
     required this.searchController,
+    required this.searchWidth,
     required this.onSearchChanged,
     required this.onRefresh,
-    required this.onSetViewMode,
-    required this.onSetSort,
     required this.onSetDisplayMode,
   });
 
   final AppStrings text;
   final LibraryPreferences preferences;
   final TextEditingController searchController;
+  final double searchWidth;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onRefresh;
-  final ValueChanged<LibraryViewMode> onSetViewMode;
-  final void Function(bridge.SortBy sortBy, bridge.SortDir sortDir) onSetSort;
   final ValueChanged<LibraryDisplayMode> onSetDisplayMode;
 
   @override
   Widget build(BuildContext context) {
-    final isLibrary = preferences.selectedTab == LibraryTab.library;
-    final isFavorites = preferences.selectedTab == LibraryTab.favorites;
     final isHistory = preferences.selectedTab == LibraryTab.history;
-    final (activeSortBy, activeSortDir) = preferences.sort;
-
     return Material(
       type: MaterialType.transparency,
       child: Wrap(
@@ -666,213 +726,127 @@ class _Toolbar extends StatelessWidget {
         runSpacing: 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _SearchBox(
+          SoftSearchField(
             controller: searchController,
-            hint: '${text.search}...',
+            hint: '${text.search}…',
+            width: searchWidth,
             onChanged: onSearchChanged,
           ),
-          if (isLibrary)
-            _FilterSelect<LibraryViewMode>(
-              value: preferences.viewMode,
-              items: {
-                text.all: LibraryViewMode.all,
-                text.unread: LibraryViewMode.unread,
-                text.progress: LibraryViewMode.reading,
-              },
-              onChanged: onSetViewMode,
-            ),
+          SoftIconButton(
+            icon: AppIcons.refresh,
+            tooltip: text.refresh,
+            onPressed: onRefresh,
+          ),
           if (!isHistory)
-            _ViewToggles(
-              text: text,
-              displayMode: preferences.displayMode,
+            SoftSegmented<LibraryDisplayMode>(
+              value: preferences.displayMode,
               onChanged: onSetDisplayMode,
-            ),
-          FTooltip(
-            tipBuilder: (context, _) => Text(text.refresh),
-            child: FButton.icon(
-              variant: .outline,
-              onPress: onRefresh,
-              child: const Icon(AppIcons.refresh),
-            ),
-          ),
-          if (isLibrary || isFavorites) ...[
-            Container(
-              width: 1,
-              height: 24,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              color: context.theme.colors.border,
-            ),
-            _FilterSelect<bridge.SortBy>(
-              value: activeSortBy,
-              items: {
-                text.name: bridge.SortBy.name,
-                text.folderDate: bridge.SortBy.folderDate,
-              },
-              onChanged: (sortBy) => onSetSort(sortBy, activeSortDir),
-            ),
-            _SortDirToggle(
-              text: text,
-              sortDir: activeSortDir,
-              onChanged: (sortDir) => onSetSort(activeSortBy, sortDir),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SearchBox extends StatelessWidget {
-  const _SearchBox({
-    required this.controller,
-    required this.hint,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Container(
-      width: 240,
-      height: 38,
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ValueListenableBuilder<TextEditingValue>(
-        valueListenable: controller,
-        builder: (context, value, _) => TextField(
-          controller: controller,
-          onChanged: onChanged,
-          style: TextStyle(fontSize: 13, color: colors.foreground),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(fontSize: 13, color: colors.mutedForeground),
-            prefixIcon: Icon(
-              AppIcons.search,
-              size: 18,
-              color: colors.mutedForeground,
-            ),
-            suffixIcon: value.text.isEmpty
-                ? null
-                : IconButton(
-                    icon: Icon(
-                      AppIcons.close,
-                      size: 16,
-                      color: colors.mutedForeground,
-                    ),
-                    tooltip: hint,
-                    onPressed: () {
-                      controller.clear();
-                      onChanged('');
-                    },
-                  ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterSelect<T> extends StatelessWidget {
-  const _FilterSelect({
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final T value;
-  final Map<String, T> items;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isDense: true,
-          icon: Icon(
-            AppIcons.chevronDown,
-            size: 14,
-            color: colors.mutedForeground,
-          ),
-          dropdownColor: colors.card,
-          style: TextStyle(fontSize: 13, color: colors.foreground),
-          borderRadius: BorderRadius.circular(8),
-          items: items.entries
-              .map(
-                (entry) => DropdownMenuItem<T>(
-                  value: entry.value,
-                  child: Text(
-                    entry.key,
-                    style: TextStyle(fontSize: 13, color: colors.foreground),
-                  ),
+              segments: [
+                SoftSegment(
+                  value: LibraryDisplayMode.grid,
+                  icon: AppIcons.gridView,
+                  tooltip: text.grid,
                 ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) onChanged(value);
-          },
-        ),
+                SoftSegment(
+                  value: LibraryDisplayMode.list,
+                  icon: AppIcons.list,
+                  tooltip: text.list,
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }
 }
 
-class _ViewToggles extends StatelessWidget {
-  const _ViewToggles({
+typedef _LibrarySort = (bridge.SortBy, bridge.SortDir);
+
+/// "Sort: Name A–Z" popover with the four library sort orders.
+Widget _librarySortMenu({
+  required AppStrings text,
+  required _LibrarySort sort,
+  required void Function(bridge.SortBy sortBy, bridge.SortDir sortDir)
+  onChanged,
+}) {
+  return SoftSortMenu<_LibrarySort>(
+    prefix: text.sortLabel,
+    value: sort,
+    onChanged: (value) => onChanged(value.$1, value.$2),
+    options: [
+      SoftSortOption(
+        value: (bridge.SortBy.name, bridge.SortDir.asc),
+        label: '${text.name} A–Z',
+      ),
+      SoftSortOption(
+        value: (bridge.SortBy.name, bridge.SortDir.desc),
+        label: '${text.name} Z–A',
+      ),
+      SoftSortOption(
+        value: (bridge.SortBy.folderDate, bridge.SortDir.desc),
+        label: '${text.folderDate} ↓',
+      ),
+      SoftSortOption(
+        value: (bridge.SortBy.folderDate, bridge.SortDir.asc),
+        label: '${text.folderDate} ↑',
+      ),
+    ],
+  );
+}
+
+/// Shown above the list when the configured folder cannot be read.
+class _SourceErrorBanner extends StatelessWidget {
+  const _SourceErrorBanner({
     required this.text,
-    required this.displayMode,
-    required this.onChanged,
+    required this.message,
+    required this.onChangeFolder,
   });
 
   final AppStrings text;
-  final LibraryDisplayMode displayMode;
-  final ValueChanged<LibraryDisplayMode> onChanged;
+  final String message;
+  final VoidCallback onChangeFolder;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
+    final reader = context.appReader;
+    return SoftCard(
+      radius: AppShape.radiusMedium,
+      padding: const EdgeInsets.all(14),
+      child: Wrap(
+        spacing: 14,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _ViewToggleButton(
-            icon: AppIcons.gridView,
-            selected: displayMode == LibraryDisplayMode.grid,
-            tooltip: text.grid,
-            onTap: () => onChanged(LibraryDisplayMode.grid),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: reader.badgeNew,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(
+              AppIcons.circleAlert,
+              size: 20,
+              color: reader.badgeNewForeground,
+            ),
           ),
-          _ViewToggleButton(
-            icon: AppIcons.list,
-            selected: displayMode == LibraryDisplayMode.list,
-            tooltip: text.list,
-            onTap: () => onChanged(LibraryDisplayMode.list),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 14,
+                height: 22 / 14,
+                fontWeight: FontWeight.w600,
+                color: colors.foreground,
+              ),
+            ),
+          ),
+          SoftButton(
+            label: text.changeFolder,
+            icon: AppIcons.folderOpen,
+            onPressed: onChangeFolder,
           ),
         ],
       ),
@@ -880,129 +854,101 @@ class _ViewToggles extends StatelessWidget {
   }
 }
 
-class _SortDirToggle extends StatelessWidget {
-  const _SortDirToggle({
-    required this.text,
-    required this.sortDir,
-    required this.onChanged,
-  });
-
-  final AppStrings text;
-  final bridge.SortDir sortDir;
-  final ValueChanged<bridge.SortDir> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    final isAsc = sortDir == bridge.SortDir.asc;
-    return Tooltip(
-      message: text.sortDirection,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () =>
-              onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
-          child: Container(
-            height: 38,
-            width: 38,
-            decoration: BoxDecoration(
-              color: colors.card,
-              border: Border.all(color: colors.border),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              isAsc ? AppIcons.sortUp : AppIcons.sortDown,
-              size: 16,
-              color: colors.foreground,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ViewToggleButton extends StatelessWidget {
-  const _ViewToggleButton({
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Tooltip(
-      message: tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 34,
-            height: 30,
-            decoration: BoxDecoration(
-              color: selected ? colors.secondary : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: selected ? colors.primary : colors.mutedForeground,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// ---------------------------------------------------------------------------
+// Library tab: continue-reading shelf, filter chips, grid / row cards.
+// ---------------------------------------------------------------------------
 
 class _ComicList extends ConsumerWidget {
   const _ComicList({
     required this.text,
     required this.comics,
+    required this.allComics,
     required this.visibleCount,
     required this.hasMore,
     required this.onLoadMore,
     required this.displayMode,
+    required this.viewMode,
+    required this.sort,
     required this.favoritedPaths,
     required this.controller,
     required this.emptyLabel,
-    required this.onToggleFavorite,
-    required this.onCopyTitle,
-    required this.onCopyPath,
-    required this.onOpenFolder,
+    required this.actions,
+    required this.onSetViewMode,
+    required this.onSetSort,
+    required this.onViewHistory,
   });
 
   final AppStrings text;
   final List<bridge.RawComic> comics;
+  final List<bridge.RawComic> allComics;
   final int visibleCount;
   final bool hasMore;
   final VoidCallback onLoadMore;
   final LibraryDisplayMode displayMode;
+  final LibraryViewMode viewMode;
+  final (bridge.SortBy, bridge.SortDir) sort;
   final Set<String> favoritedPaths;
   final ScrollController controller;
   final String emptyLabel;
-  final Future<void> Function(bridge.RawComic comic, bool favorited)
-  onToggleFavorite;
-  final Future<void> Function(bridge.RawComic comic) onCopyTitle;
-  final Future<void> Function(bridge.RawComic comic) onCopyPath;
-  final Future<void> Function(bridge.RawComic comic) onOpenFolder;
+  final _CardActions actions;
+  final ValueChanged<LibraryViewMode> onSetViewMode;
+  final void Function(bridge.SortBy sortBy, bridge.SortDir sortDir) onSetSort;
+  final VoidCallback onViewHistory;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final raw = ref.watch(rawLibraryComicsProvider);
+    final history = ref.watch(readingHistoryProvider).asData?.value;
+    final resumable = history == null
+        ? const <bridge.ReadingHistoryEntry>[]
+        : history.where((entry) => !entry.isRead).toList();
+    var readingCount = 0;
+    var unreadCount = 0;
+    for (final comic in allComics) {
+      if (comic.inProgressChapterCount > 0) readingCount++;
+      if (comic.readChapterCount == 0 && comic.inProgressChapterCount == 0) {
+        unreadCount++;
+      }
+    }
+
     return raw.when(
       data: (_) {
-        if (visibleCount == 0) {
-          return _EmptyState(label: emptyLabel);
-        }
+        final filterRow = Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SoftChip(
+                    label: text.all,
+                    count: allComics.length,
+                    selected: viewMode == LibraryViewMode.all,
+                    onPressed: () => onSetViewMode(LibraryViewMode.all),
+                  ),
+                  SoftChip(
+                    label: text.reading,
+                    count: readingCount,
+                    selected: viewMode == LibraryViewMode.reading,
+                    onPressed: () => onSetViewMode(LibraryViewMode.reading),
+                  ),
+                  SoftChip(
+                    label: text.unread,
+                    count: unreadCount,
+                    selected: viewMode == LibraryViewMode.unread,
+                    onPressed: () => onSetViewMode(LibraryViewMode.unread),
+                  ),
+                ],
+              ),
+              _librarySortMenu(text: text, sort: sort, onChanged: onSetSort),
+            ],
+          ),
+        );
         return NotificationListener<ScrollNotification>(
           onNotification: (notification) {
             if (hasMore &&
@@ -1012,63 +958,67 @@ class _ComicList extends ConsumerWidget {
             }
             return false;
           },
-          child: displayMode == LibraryDisplayMode.grid
-              ? GridView.builder(
-                  controller: controller,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 180,
-                    mainAxisExtent: 290,
-                    crossAxisSpacing: 20,
-                    mainAxisSpacing: 20,
+          child: CustomScrollView(
+            controller: controller,
+            slivers: [
+              if (resumable.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 32),
+                    child: _ContinueShelf(
+                      text: text,
+                      entries: resumable,
+                      onViewHistory: onViewHistory,
+                    ),
                   ),
+                ),
+              SliverToBoxAdapter(child: filterRow),
+              if (visibleCount == 0)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: SoftEmptyState(
+                    message: emptyLabel,
+                    icon: AppIcons.library,
+                  ),
+                )
+              else if (displayMode == LibraryDisplayMode.grid)
+                _CoverGrid(
                   itemCount: visibleCount,
                   itemBuilder: (context, index) {
                     final comic = comics[index];
-                    final favorited = favoritedPaths.contains(comic.sourcePath);
-                    return _ComicCard(
+                    return _GridCard(
                       text: text,
-                      comic: comic,
-                      favorited: favorited,
-                      displayMode: LibraryDisplayMode.grid,
-                      onOpen: () => context.go(
-                        '/comic/${encodeRoutePath(comic.sourcePath)}',
+                      info: _CardInfo.fromComic(
+                        comic,
+                        favorited: favoritedPaths.contains(comic.sourcePath),
                       ),
-                      onToggleFavorite: () =>
-                          onToggleFavorite(comic, favorited),
-                      onCopyTitle: () => onCopyTitle(comic),
-                      onCopyPath: () => onCopyPath(comic),
-                      onOpenFolder: () => onOpenFolder(comic),
+                      actions: actions,
                     );
                   },
                 )
-              : ListView.separated(
-                  controller: controller,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              else
+                SliverList.separated(
                   itemCount: visibleCount,
-                  separatorBuilder: (_, _) => const SizedBox(height: 16),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final comic = comics[index];
-                    final favorited = favoritedPaths.contains(comic.sourcePath);
-                    return _ComicCard(
+                    return _RowCard(
                       text: text,
-                      comic: comic,
-                      favorited: favorited,
-                      displayMode: LibraryDisplayMode.list,
-                      onOpen: () => context.go(
-                        '/comic/${encodeRoutePath(comic.sourcePath)}',
+                      info: _CardInfo.fromComic(
+                        comic,
+                        favorited: favoritedPaths.contains(comic.sourcePath),
                       ),
-                      onToggleFavorite: () =>
-                          onToggleFavorite(comic, favorited),
-                      onCopyTitle: () => onCopyTitle(comic),
-                      onCopyPath: () => onCopyPath(comic),
-                      onOpenFolder: () => onOpenFolder(comic),
+                      actions: actions,
                     );
                   },
                 ),
+              const SliverToBoxAdapter(child: SizedBox(height: 56)),
+            ],
+          ),
         );
       },
-      error: (error, _) => _ErrorState(message: error.toString()),
+      error: (error, _) =>
+          SoftEmptyState(message: error.toString(), isError: true),
       loading: () => const Align(
         alignment: Alignment.center,
         child: FCircularProgress.loader(),
@@ -1077,493 +1027,594 @@ class _ComicList extends ConsumerWidget {
   }
 }
 
-class _HoverCard extends StatefulWidget {
-  const _HoverCard({required this.child, required this.onTap});
+/// A 2:3 cover grid whose row height follows the column width so the
+/// covers keep their aspect ratio at any window size.
+class _CoverGrid extends StatelessWidget {
+  const _CoverGrid({required this.itemCount, required this.itemBuilder});
 
-  final Widget child;
-  final VoidCallback onTap;
+  static const double _maxTileWidth = 200;
+  static const double _minTileWidth = 150;
+  static const double _columnGap = 24;
+  static const double _rowGap = 32;
+
+  /// Two title lines (20 each), the gap above them and the caption line.
+  static const double _captionHeight = 12 + 40 + 2 + 18;
+
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
 
   @override
-  State<_HoverCard> createState() => _HoverCardState();
+  Widget build(BuildContext context) {
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.crossAxisExtent;
+        var columns = ((width + _columnGap) / (_maxTileWidth + _columnGap))
+            .floor();
+        columns = columns.clamp(1, 12);
+        var tileWidth = (width - (columns - 1) * _columnGap) / columns;
+        if (tileWidth < _minTileWidth && columns > 1) {
+          columns -= 1;
+          tileWidth = (width - (columns - 1) * _columnGap) / columns;
+        }
+        final extent = tileWidth * 1.5 + _captionHeight;
+        return SliverGrid(
+          delegate: SliverChildBuilderDelegate(
+            itemBuilder,
+            childCount: itemCount,
+          ),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: _columnGap,
+            mainAxisSpacing: _rowGap,
+            mainAxisExtent: extent,
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _HoverCardState extends State<_HoverCard> {
+class _GridCard extends StatefulWidget {
+  const _GridCard({
+    required this.text,
+    required this.info,
+    required this.actions,
+  });
+
+  final AppStrings text;
+  final _CardInfo info;
+  final _CardActions actions;
+
+  @override
+  State<_GridCard> createState() => _GridCardState();
+}
+
+class _GridCardState extends State<_GridCard> {
   bool _hovered = false;
+  bool _focused = false;
+
+  void _open() {
+    context.go('/comic/${encodeRoutePath(widget.info.sourcePath)}');
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onTap,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: colors.card,
-            border: Border.all(
-              color: _hovered ? colors.primary : colors.border,
-            ),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: colors.foreground.withValues(
-                  alpha: _hovered ? 0.1 : 0.04,
+    final reader = context.appReader;
+    final info = widget.info;
+    final text = widget.text;
+    final active = _hovered || _focused;
+    final showControls = active || info.favorited;
+
+    return Semantics(
+      button: true,
+      label: info.title,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowHoverHighlight: (value) => setState(() => _hovered = value),
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              _open();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _open,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 2 / 3,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutCubic,
+                  transform: Matrix4.translationValues(0, active ? -2 : 0, 0),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppShape.radiusMedium),
+                    border: Border.all(
+                      color: active ? colors.primary : Colors.transparent,
+                      width: 1.5,
+                    ),
+                    boxShadow: AppShape.cardShadow(reader),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      AppShape.radiusMedium - 1.5,
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CoverThumbnail(sourcePath: info.sourcePath, radius: 0),
+                        if (info.isNew)
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: SoftBadge(
+                              label: text.newBadge,
+                              tone: SoftBadgeTone.amber,
+                            ),
+                          ),
+                        if (showControls)
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: _CoverStarButton(
+                              text: text,
+                              favorited: info.favorited,
+                              onPressed: () => widget.actions.onToggleFavorite(
+                                info.sourcePath,
+                                info.favorited,
+                              ),
+                            ),
+                          ),
+                        if (active)
+                          Positioned(
+                            right: 4,
+                            bottom: info.hasProgress ? 22 : 4,
+                            child: _CardContextMenu(
+                              text: text,
+                              onCover: true,
+                              onCopyTitle: () =>
+                                  widget.actions.onCopyTitle(info.title),
+                              onCopyPath: () =>
+                                  widget.actions.onCopyPath(info.sourcePath),
+                              onOpenFolder: () =>
+                                  widget.actions.onOpenFolder(info.sourcePath),
+                            ),
+                          ),
+                        if (info.hasProgress)
+                          Positioned(
+                            left: 14,
+                            right: 14,
+                            bottom: 14,
+                            child: SoftProgressBar(
+                              value: info.progress,
+                              height: 5,
+                              color: Colors.white,
+                              trackColor: Colors.white.withValues(alpha: 0.4),
+                              semanticLabel: info.progressLabel(text),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-                blurRadius: _hovered ? 20 : 12,
-                offset: Offset(0, _hovered ? 8 : 4),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 40,
+                child: Text(
+                  info.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 20 / 14,
+                    fontWeight: FontWeight.w700,
+                    color: colors.foreground,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                info.chapterSummary(text),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 18 / 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: colors.mutedForeground,
+                ),
               ),
             ],
           ),
-          child: widget.child,
         ),
       ),
     );
   }
 }
 
-class _ComicCard extends StatelessWidget {
-  const _ComicCard({
+/// Amber on the cover scrim is 4.38:1, so the star reads in both themes.
+const Color _coverStarColor = Color(0xFFFFC15A);
+
+class _CoverStarButton extends StatelessWidget {
+  const _CoverStarButton({
     required this.text,
-    required this.comic,
     required this.favorited,
-    required this.displayMode,
-    required this.onOpen,
-    required this.onToggleFavorite,
-    required this.onCopyTitle,
-    required this.onCopyPath,
-    required this.onOpenFolder,
+    required this.onPressed,
   });
 
   final AppStrings text;
-  final bridge.RawComic comic;
   final bool favorited;
-  final LibraryDisplayMode displayMode;
-  final VoidCallback onOpen;
-  final VoidCallback onToggleFavorite;
-  final VoidCallback onCopyTitle;
-  final VoidCallback onCopyPath;
-  final VoidCallback onOpenFolder;
+  final VoidCallback onPressed;
 
-  bool get _isNew {
-    if (comic.dateModified <= 0) return false;
-    final modified = DateTime.fromMillisecondsSinceEpoch(
-      comic.dateModified.toInt() * 1000,
+  @override
+  Widget build(BuildContext context) {
+    final reader = context.appReader;
+    final tooltip = favorited ? text.removeFavorite : text.addFavorite;
+    return FTooltip(
+      tipBuilder: (context, _) => Text(tooltip),
+      child: Semantics(
+        button: true,
+        toggled: favorited,
+        label: tooltip,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPressed,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: reader.scrim,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    AppIcons.star,
+                    size: 16,
+                    color: favorited ? _coverStarColor : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
-    final now = DateTime.now();
-    return modified.year == now.year &&
-        modified.month == now.month &&
-        modified.day == now.day;
   }
+}
 
-  double get _progress {
-    if (comic.chapterCount <= 0) return 0;
-    final completed = comic.readChapterCount + comic.inProgressChapterCount;
-    return (completed / comic.chapterCount).clamp(0.0, 1.0);
-  }
+/// The row ("Daftar") card: cover 80×120, title + meta, progress, actions.
+class _RowCard extends StatelessWidget {
+  const _RowCard({
+    required this.text,
+    required this.info,
+    required this.actions,
+  });
 
-  String get _progressTooltip {
-    final total = comic.chapterCount.toInt();
-    if (total <= 0) return text.unread;
-    final read =
-        (comic.readChapterCount.toInt() + comic.inProgressChapterCount.toInt())
-            .clamp(0, total);
-    final percent = ((read / total) * 100).round();
-    return text.readingProgressTemplate
-        .replaceAll('{percent}', '$percent')
-        .replaceAll('{read}', '$read')
-        .replaceAll('{total}', '$total');
-  }
-
-  String get _chapterLabel {
-    if (comic.chapterCount <= 0) return text.unread;
-    return '${text.chapterCountLabel} ${comic.chapterCount}';
-  }
+  final AppStrings text;
+  final _CardInfo info;
+  final _CardActions actions;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    final isGrid = displayMode == LibraryDisplayMode.grid;
-
-    Widget cardContent = isGrid
-        ? _buildGridContent(context, colors)
-        : _buildListContent(context, colors);
-
-    return _HoverCard(onTap: onOpen, child: cardContent);
-  }
-
-  Widget _buildGridContent(BuildContext context, FColors colors) {
-    return Column(
+    final reader = context.appReader;
+    final metaStyle = TextStyle(
+      fontSize: 13,
+      height: 20 / 13,
+      fontWeight: FontWeight.w500,
+      color: colors.mutedForeground,
+    );
+    final progressBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: _CoverArea(
-            text: text,
-            sourcePath: comic.sourcePath,
-            isGrid: true,
-            isNew: _isNew,
-            favorited: favorited,
-            onToggleFavorite: onToggleFavorite,
-            contextMenu: _CardContextMenu(
-              text: text,
-              onCopyTitle: onCopyTitle,
-              onCopyPath: onCopyPath,
-              onOpenFolder: onOpenFolder,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              info.hasProgress ? '${info.percent}%' : text.unread,
+              style: info.hasProgress
+                  ? TextStyle(
+                      fontSize: 14,
+                      height: 20 / 14,
+                      fontWeight: FontWeight.w800,
+                      color: colors.secondaryForeground,
+                    )
+                  : TextStyle(
+                      fontSize: 13,
+                      height: 20 / 13,
+                      fontWeight: FontWeight.w600,
+                      color: colors.mutedForeground,
+                    ),
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            const Spacer(),
+            if (info.hasProgress)
               Text(
-                comic.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                info.chapterSummary(text),
                 style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: colors.foreground,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _chapterLabel,
-                style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12.5,
+                  height: 18 / 12.5,
                   fontWeight: FontWeight.w500,
-                  color: _isNew ? colors.primary : colors.mutedForeground,
+                  color: colors.mutedForeground,
                 ),
               ),
-              const SizedBox(height: 2),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    comic.dateModified > 0
-                        ? formatModifiedDate(comic.dateModified.toInt())
-                        : '',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: colors.mutedForeground,
+          ],
+        ),
+        const SizedBox(height: 8),
+        SoftProgressBar(
+          value: info.progress,
+          semanticLabel: info.progressLabel(text),
+        ),
+      ],
+    );
+
+    return HoverCard(
+      padding: const EdgeInsets.all(12),
+      semanticLabel: info.title,
+      onTap: () => context.go('/comic/${encodeRoutePath(info.sourcePath)}'),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 760;
+          return Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppShape.radiusControl),
+                  boxShadow: AppShape.controlShadow(reader),
+                ),
+                child: CoverThumbnail(
+                  sourcePath: info.sourcePath,
+                  width: 80,
+                  height: 120,
+                  radius: AppShape.radiusControl,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            info.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              height: 24 / 16,
+                              fontWeight: FontWeight.w700,
+                              color: colors.foreground,
+                            ),
+                          ),
+                        ),
+                        if (info.isNew) ...[
+                          const SizedBox(width: 10),
+                          SoftBadge(
+                            label: text.newBadge,
+                            tone: SoftBadgeTone.amber,
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
-                  Text(
-                    formatBytes(comic.sizeBytes.toInt()),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: colors.mutedForeground,
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 2,
+                      children: [
+                        Text(
+                          info.chapterCount > 0
+                              ? text.chaptersCountTemplate.replaceAll(
+                                  '{count}',
+                                  '${info.chapterCount}',
+                                )
+                              : text.unread,
+                          style: metaStyle,
+                        ),
+                        if (info.dateModified > 0)
+                          Text(
+                            formatModifiedDate(info.dateModified),
+                            style: metaStyle,
+                          ),
+                        if (info.sizeBytes > 0)
+                          Text(formatBytes(info.sizeBytes), style: metaStyle),
+                      ],
                     ),
+                    if (!wide) ...[const SizedBox(height: 12), progressBlock],
+                  ],
+                ),
+              ),
+              if (wide) ...[
+                const SizedBox(width: 24),
+                SizedBox(width: 280, child: progressBlock),
+              ],
+              const SizedBox(width: 12),
+              SoftIconButton(
+                icon: AppIcons.star,
+                tooltip: info.favorited
+                    ? text.removeFavorite
+                    : text.addFavorite,
+                iconSize: 20,
+                round: true,
+                outline: false,
+                selected: info.favorited,
+                color: info.favorited ? reader.star : colors.mutedForeground,
+                onPressed: () =>
+                    actions.onToggleFavorite(info.sourcePath, info.favorited),
+              ),
+              const SizedBox(width: 4),
+              _CardContextMenu(
+                text: text,
+                onCover: false,
+                onCopyTitle: () => actions.onCopyTitle(info.title),
+                onCopyPath: () => actions.onCopyPath(info.sourcePath),
+                onOpenFolder: () => actions.onOpenFolder(info.sourcePath),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// "Continue Reading": the last unfinished chapters, one row of cards.
+class _ContinueShelf extends StatelessWidget {
+  const _ContinueShelf({
+    required this.text,
+    required this.entries,
+    required this.onViewHistory,
+  });
+
+  final AppStrings text;
+  final List<bridge.ReadingHistoryEntry> entries;
+  final VoidCallback onViewHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: SectionHeading(title: text.continueReadingSection)),
+            SoftButton(
+              label: text.viewHistory,
+              icon: AppIcons.chevronRight,
+              variant: SoftButtonVariant.text,
+              onPressed: onViewHistory,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const minCardWidth = 300.0;
+            const gap = 16.0;
+            final columns =
+                ((constraints.maxWidth + gap) / (minCardWidth + gap))
+                    .floor()
+                    .clamp(1, 4);
+            final shown = entries.take(columns).toList();
+            return Row(
+              children: [
+                for (var i = 0; i < shown.length; i++) ...[
+                  if (i > 0) const SizedBox(width: gap),
+                  Expanded(
+                    child: _ContinueCard(text: text, entry: shown[i]),
                   ),
                 ],
-              ),
-              const SizedBox(height: 10),
-              _ProgressBar(progress: _progress, tooltip: _progressTooltip),
-            ],
-          ),
+                for (var i = shown.length; i < columns; i++) ...[
+                  const SizedBox(width: gap),
+                  const Expanded(child: SizedBox.shrink()),
+                ],
+              ],
+            );
+          },
         ),
       ],
     );
   }
-
-  Widget _buildListContent(BuildContext context, FColors colors) {
-    return SizedBox(
-      height: 136,
-      child: Row(
-        children: [
-          _CoverArea(
-            text: text,
-            sourcePath: comic.sourcePath,
-            isGrid: false,
-            isNew: _isNew,
-            favorited: favorited,
-            onToggleFavorite: onToggleFavorite,
-            showFavorite: false,
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    comic.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colors.foreground,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text(
-                        _chapterLabel,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _isNew
-                              ? colors.primary
-                              : colors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        comic.dateModified > 0
-                            ? formatModifiedDate(comic.dateModified.toInt())
-                            : '',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        formatBytes(comic.sizeBytes.toInt()),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _ProgressBar(progress: _progress, tooltip: _progressTooltip),
-                ],
-              ),
-            ),
-          ),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _FavoriteButton(
-                    favorited: favorited,
-                    onToggle: onToggleFavorite,
-                    isGrid: false,
-                    tooltip: favorited ? text.removeFavorite : text.addFavorite,
-                  ),
-                  const SizedBox(width: 4),
-                  _CardContextMenu(
-                    text: text,
-                    onCopyTitle: onCopyTitle,
-                    onCopyPath: onCopyPath,
-                    onOpenFolder: onOpenFolder,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-class _CoverArea extends ConsumerWidget {
-  const _CoverArea({
-    required this.text,
-    required this.sourcePath,
-    required this.isGrid,
-    required this.isNew,
-    required this.favorited,
-    required this.onToggleFavorite,
-    this.showFavorite = true,
-    this.contextMenu,
-  });
+class _ContinueCard extends StatelessWidget {
+  const _ContinueCard({required this.text, required this.entry});
 
   final AppStrings text;
-  final String sourcePath;
-  final bool isGrid;
-  final bool isNew;
-  final bool favorited;
-  final VoidCallback onToggleFavorite;
-  final bool showFavorite;
-  final Widget? contextMenu;
+  final bridge.ReadingHistoryEntry entry;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    final thumbnail = ref.watch(
-      comicThumbnailProvider((
-        sourcePath: sourcePath,
-        maxWidth: 200,
-        maxHeight: 300,
-      )),
-    );
-    final borderRadius = isGrid
-        ? const BorderRadius.vertical(top: Radius.circular(14))
-        : const BorderRadius.horizontal(left: Radius.circular(14));
-    final cover = Container(
-      width: isGrid ? double.infinity : 110,
-      height: isGrid ? double.infinity : 136,
-      decoration: BoxDecoration(
-        color: colors.muted,
-        borderRadius: borderRadius,
-      ),
-      child: Stack(
-        alignment: Alignment.center,
+    final total = entry.totalPages.toInt();
+    final page = total <= 0 ? 0 : (entry.lastPage.toInt() + 1).clamp(1, total);
+    final progress = total <= 0 ? 0.0 : page / total;
+    final meta = total <= 0
+        ? entry.chapterTitle
+        : text.chapterPageTemplate
+              .replaceAll('{chapter}', entry.chapterTitle)
+              .replaceAll('{page}', '$page')
+              .replaceAll('{total}', '$total');
+    return HoverCard(
+      padding: const EdgeInsets.all(14),
+      semanticLabel: '${entry.comicTitle}. $meta',
+      onTap: () =>
+          context.go('/comic/${encodeRoutePath(entry.comicSourcePath)}'),
+      child: Row(
         children: [
-          thumbnail.when(
-            data: (bytes) {
-              if (bytes == null) {
-                return Icon(
-                  AppIcons.library,
-                  size: 28,
-                  color: colors.mutedForeground,
-                );
-              }
-              return Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: borderRadius,
-                  child: Image(
-                    image: ComicThumbnailImage(
-                      sourcePath: sourcePath,
-                      maxWidth: 200,
-                      maxHeight: 300,
-                      bytes: bytes,
-                    ),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              );
-            },
-            loading: () =>
-                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
-            error: (_, _) =>
-                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
+          CoverThumbnail(
+            sourcePath: entry.comicSourcePath,
+            width: 64,
+            height: 92,
+            radius: 14,
+            fallbackIconSize: 20,
           ),
-          if (isNew)
-            Positioned(
-              top: 10,
-              left: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: context.appReader.progress,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  text.newBadge.toUpperCase(),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  entry.comicTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 15,
+                    height: 22 / 15,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    color: colors.primaryForeground,
+                    color: colors.foreground,
                   ),
                 ),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  meta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 20 / 13,
+                    fontWeight: FontWeight.w500,
+                    color: colors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SoftProgressBar(value: progress),
+              ],
             ),
-          if (showFavorite)
-            Positioned(
-              top: isGrid ? 8 : null,
-              right: isGrid ? 8 : 12,
-              bottom: isGrid ? null : 12,
-              child: _FavoriteButton(
-                favorited: favorited,
-                onToggle: onToggleFavorite,
-                isGrid: isGrid,
-                tooltip: favorited ? text.removeFavorite : text.addFavorite,
-              ),
-            ),
-          if (contextMenu != null && isGrid)
-            Positioned(right: 8, bottom: 8, child: contextMenu!),
+          ),
+          const SizedBox(width: 16),
+          SoftIconButton(
+            icon: AppIcons.play,
+            tooltip: '${text.continueReading}: ${entry.comicTitle}',
+            primary: true,
+            round: true,
+            onPressed: () => context.go('/reader/${entry.chapterId}'),
+          ),
         ],
       ),
     );
-    return cover;
   }
 }
 
-class _FavoriteButton extends StatelessWidget {
-  const _FavoriteButton({
-    required this.favorited,
-    required this.onToggle,
-    required this.isGrid,
-    required this.tooltip,
-  });
-
-  final bool favorited;
-  final VoidCallback onToggle;
-  final bool isGrid;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Tooltip(
-      message: tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onToggle,
-          child: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: isGrid
-                  ? Colors.black.withValues(alpha: 0.35)
-                  : colors.secondary,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              AppIcons.star,
-              size: 14,
-              color: favorited
-                  ? context.appReader.star
-                  : (isGrid
-                        ? Colors.white.withValues(alpha: 0.9)
-                        : colors.mutedForeground),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.progress, required this.tooltip});
-
-  final double progress;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 100),
-      child: Container(
-        width: double.infinity,
-        height: 5,
-        decoration: BoxDecoration(
-          color: context.appReader.progressTrack,
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: FractionallySizedBox(
-          alignment: Alignment.centerLeft,
-          widthFactor: progress,
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.appReader.progress,
-              borderRadius: BorderRadius.circular(5),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// ---------------------------------------------------------------------------
+// History tab.
+// ---------------------------------------------------------------------------
 
 class _HistoryList extends ConsumerWidget {
   const _HistoryList({
@@ -1589,11 +1640,8 @@ class _HistoryList extends ConsumerWidget {
     final history = ref.watch(readingHistoryProvider);
     return history.when(
       data: (entries) {
-        if (entries.isEmpty) {
-          return _EmptyState(label: emptyLabel);
-        }
-        if (visibleCount == 0) {
-          return _EmptyState(label: emptyLabel);
+        if (entries.isEmpty || visibleCount == 0) {
+          return SoftEmptyState(message: emptyLabel, icon: AppIcons.clock);
         }
         return NotificationListener<ScrollNotification>(
           onNotification: (notification) {
@@ -1606,23 +1654,17 @@ class _HistoryList extends ConsumerWidget {
           },
           child: ListView.separated(
             controller: controller,
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.only(bottom: 56),
             itemCount: visibleCount,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
-              final item = items[index];
-              return _HistoryItem(
-                text: text,
-                item: item,
-                onOpen: () => context.go(
-                  '/comic/${encodeRoutePath(item.comicSourcePath)}',
-                ),
-              );
+              return _HistoryRow(text: text, item: items[index]);
             },
           ),
         );
       },
-      error: (error, _) => _ErrorState(message: error.toString()),
+      error: (error, _) =>
+          SoftEmptyState(message: error.toString(), isError: true),
       loading: () => const Align(
         alignment: Alignment.center,
         child: FCircularProgress.loader(),
@@ -1631,204 +1673,165 @@ class _HistoryList extends ConsumerWidget {
   }
 }
 
-class _HistoryItem extends StatelessWidget {
-  const _HistoryItem({
-    required this.text,
-    required this.item,
-    required this.onOpen,
-  });
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({required this.text, required this.item});
 
   final AppStrings text;
   final bridge.ReadingHistoryEntry item;
-  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    final textColumn = Column(
+    final reader = context.appReader;
+    final total = item.totalPages.toInt();
+    final finished = item.isRead;
+    final page = total <= 0
+        ? 0
+        : finished
+        ? total
+        : (item.lastPage.toInt() + 1).clamp(1, total);
+    final progress = finished ? 1.0 : (total <= 0 ? 0.0 : page / total);
+    final lastRead = item.updatedAt > 0
+        ? formatModifiedDate(item.updatedAt.toInt())
+        : '';
+
+    final progressBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          item.comicTitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: colors.foreground,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          item.chapterTitle,
-          style: TextStyle(fontSize: 13, color: colors.mutedForeground),
-        ),
-        Builder(
-          builder: (_) {
-            final lastRead = formatModifiedDate(item.updatedAt.toInt());
-            if (lastRead.isEmpty) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '${text.lastRead}: $lastRead',
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              finished ? text.finished : '${(progress * 100).round()}%',
+              style: TextStyle(
+                fontSize: 14,
+                height: 20 / 14,
+                fontWeight: FontWeight.w800,
+                color: finished ? reader.success : colors.secondaryForeground,
+              ),
+            ),
+            const Spacer(),
+            if (total > 0)
+              Text(
+                text.pageOfTemplate
+                    .replaceAll('{page}', '$page')
+                    .replaceAll('{total}', '$total'),
                 style: TextStyle(
-                  fontSize: 11,
-                  color: colors.mutedForeground.withValues(alpha: 0.75),
+                  fontSize: 12.5,
+                  height: 18 / 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: colors.mutedForeground,
                 ),
               ),
-            );
-          },
+          ],
+        ),
+        const SizedBox(height: 8),
+        SoftProgressBar(
+          value: progress,
+          color: finished ? reader.success : null,
+          semanticLabel: text.readingProgress,
         ),
       ],
     );
-    final continueButton = OutlinedButton(
+    final action = SoftButton(
+      label: finished ? text.readAgain : text.continueReading,
+      icon: finished ? AppIcons.restart : AppIcons.play,
+      variant: finished ? SoftButtonVariant.outline : SoftButtonVariant.soft,
       onPressed: () => context.go('/reader/${item.chapterId}'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: colors.primary,
-        side: BorderSide(color: colors.primary),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-      ),
-      child: Text(text.continueReading),
     );
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onOpen,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.card,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: colors.foreground.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+    return HoverCard(
+      padding: const EdgeInsets.all(12),
+      semanticLabel: '${item.comicTitle}. ${item.chapterTitle}',
+      onTap: () =>
+          context.go('/comic/${encodeRoutePath(item.comicSourcePath)}'),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 760;
+          return Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppShape.radiusControl),
+                  boxShadow: AppShape.controlShadow(reader),
+                ),
+                child: CoverThumbnail(
+                  sourcePath: item.comicSourcePath,
+                  width: 80,
+                  height: 120,
+                  radius: AppShape.radiusControl,
+                ),
               ),
-            ],
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth < 380) {
-                return Column(
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _HistoryCover(
-                      sourcePath: item.comicSourcePath,
-                      isNarrow: true,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          textColumn,
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: continueButton,
-                          ),
-                        ],
+                    Text(
+                      item.comicTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        height: 24 / 16,
+                        fontWeight: FontWeight.w700,
+                        color: colors.foreground,
                       ),
                     ),
-                  ],
-                );
-              }
-              return SizedBox(
-                height: 136,
-                child: Row(
-                  children: [
-                    _HistoryCover(
-                      sourcePath: item.comicSourcePath,
-                      isNarrow: false,
+                    const SizedBox(height: 4),
+                    Text(
+                      item.chapterTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 22 / 14,
+                        fontWeight: FontWeight.w600,
+                        color: colors.foreground,
+                      ),
                     ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [textColumn],
+                    if (lastRead.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${text.lastRead}: $lastRead',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 18 / 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: colors.mutedForeground,
                         ),
                       ),
-                    ),
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: continueButton,
-                      ),
-                    ),
+                    ],
+                    if (!wide) ...[
+                      const SizedBox(height: 12),
+                      progressBlock,
+                      const SizedBox(height: 12),
+                      Align(alignment: Alignment.centerRight, child: action),
+                    ],
                   ],
                 ),
-              );
-            },
-          ),
-        ),
+              ),
+              if (wide) ...[
+                const SizedBox(width: 24),
+                SizedBox(width: 260, child: progressBlock),
+                const SizedBox(width: 20),
+                action,
+                const SizedBox(width: 4),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _HistoryCover extends ConsumerWidget {
-  const _HistoryCover({required this.sourcePath, required this.isNarrow});
-
-  final String sourcePath;
-  final bool isNarrow;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.theme.colors;
-    final thumbnail = ref.watch(
-      comicThumbnailProvider((
-        sourcePath: sourcePath,
-        maxWidth: 200,
-        maxHeight: 300,
-      )),
-    );
-    final borderRadius = isNarrow
-        ? const BorderRadius.vertical(top: Radius.circular(14))
-        : const BorderRadius.horizontal(left: Radius.circular(14));
-
-    return SizedBox(
-      width: isNarrow ? double.infinity : 110,
-      height: isNarrow ? 150 : double.infinity,
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: colors.muted),
-        child: ClipRRect(
-          borderRadius: borderRadius,
-          child: thumbnail.when(
-            data: (bytes) {
-              if (bytes == null) {
-                return Icon(
-                  AppIcons.library,
-                  size: 28,
-                  color: colors.mutedForeground,
-                );
-              }
-              return Image(
-                image: ComicThumbnailImage(
-                  sourcePath: sourcePath,
-                  maxWidth: 200,
-                  maxHeight: 300,
-                  bytes: bytes,
-                ),
-                fit: BoxFit.cover,
-              );
-            },
-            loading: () =>
-                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
-            error: (_, _) =>
-                Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// ---------------------------------------------------------------------------
+// Favorites tab.
+// ---------------------------------------------------------------------------
 
 class _FavoritesList extends StatelessWidget {
   const _FavoritesList({
@@ -1836,30 +1839,24 @@ class _FavoritesList extends StatelessWidget {
     required this.favorites,
     required this.comics,
     required this.query,
-    required this.sortBy,
-    required this.sortDir,
+    required this.sort,
     required this.displayMode,
     required this.controller,
     required this.emptyLabel,
-    required this.onToggleFavorite,
-    required this.onCopyTitle,
-    required this.onCopyPath,
-    required this.onOpenFolder,
+    required this.actions,
+    required this.onSetSort,
   });
 
   final AppStrings text;
   final AsyncValue<List<bridge.Favorite>> favorites;
   final List<bridge.RawComic> comics;
   final String query;
-  final bridge.SortBy sortBy;
-  final bridge.SortDir sortDir;
+  final (bridge.SortBy, bridge.SortDir) sort;
   final LibraryDisplayMode displayMode;
   final ScrollController controller;
   final String emptyLabel;
-  final Future<void> Function(bridge.Favorite favorite) onToggleFavorite;
-  final Future<void> Function(bridge.Favorite favorite) onCopyTitle;
-  final Future<void> Function(bridge.Favorite favorite) onCopyPath;
-  final Future<void> Function(bridge.Favorite favorite) onOpenFolder;
+  final _CardActions actions;
+  final void Function(bridge.SortBy sortBy, bridge.SortDir sortDir) onSetSort;
 
   @override
   Widget build(BuildContext context) {
@@ -1867,9 +1864,10 @@ class _FavoritesList extends StatelessWidget {
     for (final c in comics) {
       comicByPath[c.sourcePath] = c;
     }
+    final (sortBy, sortDir) = sort;
     return favorites.when(
       data: (items) {
-        var sorted = List<bridge.Favorite>.from(items);
+        final sorted = List<bridge.Favorite>.from(items);
         sorted.sort((a, b) {
           final cmp = switch (sortBy) {
             bridge.SortBy.name => a.comicTitle.toLowerCase().compareTo(
@@ -1894,64 +1892,64 @@ class _FavoritesList extends StatelessWidget {
                         ),
                   )
                   .toList();
-        if (filtered.isEmpty) {
-          return _EmptyState(label: emptyLabel);
-        }
-        return NotificationListener<ScrollNotification>(
-          onNotification: (_) => false,
-          child: displayMode == LibraryDisplayMode.grid
-              ? GridView.builder(
-                  controller: controller,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 180,
-                    mainAxisExtent: 290,
-                    crossAxisSpacing: 20,
-                    mainAxisSpacing: 20,
+        return CustomScrollView(
+          controller: controller,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _librarySortMenu(
+                    text: text,
+                    sort: sort,
+                    onChanged: onSetSort,
                   ),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final item = filtered[index];
-                    return _FavoriteCard(
-                      text: text,
-                      favorite: item,
-                      comic: comicByPath[item.comicSourcePath],
-                      displayMode: LibraryDisplayMode.grid,
-                      onOpen: () => context.go(
-                        '/comic/${encodeRoutePath(item.comicSourcePath)}',
-                      ),
-                      onToggleFavorite: () => onToggleFavorite(item),
-                      onCopyTitle: () => onCopyTitle(item),
-                      onCopyPath: () => onCopyPath(item),
-                      onOpenFolder: () => onOpenFolder(item),
-                    );
-                  },
-                )
-              : ListView.separated(
-                  controller: controller,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    final item = filtered[index];
-                    return _FavoriteCard(
-                      text: text,
-                      favorite: item,
-                      comic: comicByPath[item.comicSourcePath],
-                      displayMode: LibraryDisplayMode.list,
-                      onOpen: () => context.go(
-                        '/comic/${encodeRoutePath(item.comicSourcePath)}',
-                      ),
-                      onToggleFavorite: () => onToggleFavorite(item),
-                      onCopyTitle: () => onCopyTitle(item),
-                      onCopyPath: () => onCopyPath(item),
-                      onOpenFolder: () => onOpenFolder(item),
-                    );
-                  },
                 ),
+              ),
+            ),
+            if (filtered.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: SoftEmptyState(message: emptyLabel, icon: AppIcons.star),
+              )
+            else if (displayMode == LibraryDisplayMode.grid)
+              _CoverGrid(
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final item = filtered[index];
+                  return _GridCard(
+                    text: text,
+                    info: _CardInfo.fromFavorite(
+                      item,
+                      comicByPath[item.comicSourcePath],
+                    ),
+                    actions: actions,
+                  );
+                },
+              )
+            else
+              SliverList.separated(
+                itemCount: filtered.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final item = filtered[index];
+                  return _RowCard(
+                    text: text,
+                    info: _CardInfo.fromFavorite(
+                      item,
+                      comicByPath[item.comicSourcePath],
+                    ),
+                    actions: actions,
+                  );
+                },
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 56)),
+          ],
         );
       },
-      error: (error, _) => _ErrorState(message: error.toString()),
+      error: (error, _) =>
+          SoftEmptyState(message: error.toString(), isError: true),
       loading: () => const Align(
         alignment: Alignment.center,
         child: FCircularProgress.loader(),
@@ -1960,248 +1958,33 @@ class _FavoritesList extends StatelessWidget {
   }
 }
 
-class _FavoriteCard extends StatelessWidget {
-  const _FavoriteCard({
-    required this.text,
-    required this.favorite,
-    this.comic,
-    required this.displayMode,
-    required this.onOpen,
-    required this.onToggleFavorite,
-    required this.onCopyTitle,
-    required this.onCopyPath,
-    required this.onOpenFolder,
-  });
-
-  final AppStrings text;
-  final bridge.Favorite favorite;
-  final bridge.RawComic? comic;
-  final LibraryDisplayMode displayMode;
-  final VoidCallback onOpen;
-  final VoidCallback onToggleFavorite;
-  final VoidCallback onCopyTitle;
-  final VoidCallback onCopyPath;
-  final VoidCallback onOpenFolder;
-
-  double get _progress {
-    if (comic == null || comic!.chapterCount <= 0) return 0;
-    final completed = comic!.readChapterCount + comic!.inProgressChapterCount;
-    return (completed / comic!.chapterCount).clamp(0.0, 1.0);
-  }
-
-  String get _progressTooltip {
-    final total = comic?.chapterCount.toInt() ?? 0;
-    if (comic == null || total <= 0) return text.unread;
-    final read =
-        (comic!.readChapterCount.toInt() +
-                comic!.inProgressChapterCount.toInt())
-            .clamp(0, total);
-    final percent = ((read / total) * 100).round();
-    return text.readingProgressTemplate
-        .replaceAll('{percent}', '$percent')
-        .replaceAll('{read}', '$read')
-        .replaceAll('{total}', '$total');
-  }
-
-  String get _chapterLabel {
-    if (comic == null || comic!.chapterCount <= 0) return text.unread;
-    return '${text.chapterCountLabel} ${comic!.chapterCount}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    final isGrid = displayMode == LibraryDisplayMode.grid;
-
-    Widget cardContent = isGrid
-        ? _buildGridContent(context, colors)
-        : _buildListContent(context, colors);
-
-    return _HoverCard(onTap: onOpen, child: cardContent);
-  }
-
-  Widget _buildGridContent(BuildContext context, FColors colors) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _CoverArea(
-            text: text,
-            sourcePath: favorite.comicSourcePath,
-            isGrid: true,
-            isNew: false,
-            favorited: true,
-            onToggleFavorite: onToggleFavorite,
-            showFavorite: true,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                favorite.comicTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: colors.foreground,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _chapterLabel,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: colors.mutedForeground,
-                ),
-              ),
-              if (comic != null) ...[
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      comic!.dateModified > 0
-                          ? formatModifiedDate(comic!.dateModified.toInt())
-                          : '',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: colors.mutedForeground,
-                      ),
-                    ),
-                    Text(
-                      formatBytes(comic!.sizeBytes.toInt()),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: colors.mutedForeground,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _ProgressBar(progress: _progress, tooltip: _progressTooltip),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildListContent(BuildContext context, FColors colors) {
-    return SizedBox(
-      height: 136,
-      child: Row(
-        children: [
-          _CoverArea(
-            text: text,
-            sourcePath: favorite.comicSourcePath,
-            isGrid: false,
-            isNew: false,
-            favorited: true,
-            onToggleFavorite: onToggleFavorite,
-            showFavorite: false,
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    favorite.comicTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colors.foreground,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text(
-                        _chapterLabel,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                      if (comic != null) ...[
-                        const SizedBox(width: 12),
-                        Text(
-                          comic!.dateModified > 0
-                              ? formatModifiedDate(comic!.dateModified.toInt())
-                              : '',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.mutedForeground,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          formatBytes(comic!.sizeBytes.toInt()),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (comic != null) ...[
-                    const SizedBox(height: 12),
-                    _ProgressBar(
-                      progress: _progress,
-                      tooltip: _progressTooltip,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: _FavoriteButton(
-                favorited: true,
-                onToggle: onToggleFavorite,
-                isGrid: false,
-                tooltip: text.removeFavorite,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ---------------------------------------------------------------------------
+// Shared bits.
+// ---------------------------------------------------------------------------
 
 class _CardContextMenu extends StatelessWidget {
   const _CardContextMenu({
     required this.text,
+    required this.onCover,
     required this.onCopyTitle,
     required this.onCopyPath,
     required this.onOpenFolder,
   });
 
   final AppStrings text;
+
+  /// Drawn over cover art (scrim circle) instead of on a surface.
+  final bool onCover;
   final VoidCallback onCopyTitle;
   final VoidCallback onCopyPath;
   final VoidCallback onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
+    final reader = context.appReader;
     return FPopoverMenu(
-      menuAnchor: .bottomEnd,
-      childAnchor: .topEnd,
+      menuAnchor: .topEnd,
+      childAnchor: .bottomEnd,
       menu: [
         FItemGroup(
           children: [
@@ -2223,49 +2006,346 @@ class _CardContextMenu extends StatelessWidget {
           ],
         ),
       ],
-      builder: (_, controller, _) => Tooltip(
-        message: text.menu,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: controller.toggle,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.35),
-                shape: BoxShape.circle,
+      builder: (context, controller, _) {
+        if (!onCover) {
+          return SoftIconButton(
+            icon: AppIcons.more,
+            tooltip: text.menu,
+            iconSize: 20,
+            round: true,
+            outline: false,
+            onPressed: controller.toggle,
+          );
+        }
+        return FTooltip(
+          tipBuilder: (context, _) => Text(text.menu),
+          child: Semantics(
+            button: true,
+            label: text.menu,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: controller.toggle,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: reader.scrim,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        AppIcons.more,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              child: const Icon(AppIcons.more, size: 14, color: Colors.white),
             ),
           ),
-        ),
+        );
+      },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// First run: no library folder configured yet.
+// ---------------------------------------------------------------------------
+
+class _WelcomeView extends StatelessWidget {
+  const _WelcomeView({
+    required this.text,
+    required this.onPickFolder,
+    required this.onImportBackup,
+  });
+
+  final AppStrings text;
+  final VoidCallback onPickFolder;
+  final VoidCallback onImportBackup;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1000;
+        final narrow = constraints.maxWidth < 640;
+        final pad = narrow ? 16.0 : 48.0;
+        final intro = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 36,
+              padding: const EdgeInsets.fromLTRB(12, 0, 14, 0),
+              decoration: BoxDecoration(
+                color: colors.secondary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    AppIcons.offline,
+                    size: 16,
+                    color: colors.secondaryForeground,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    text.worksOffline,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: colors.secondaryForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              text.welcomeTitle,
+              style: TextStyle(
+                fontSize: narrow ? 34 : 46,
+                height: narrow ? 42 / 34 : 54 / 46,
+                fontWeight: FontWeight.w800,
+                letterSpacing: narrow ? -1.0 : -1.6,
+                color: colors.foreground,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Text(
+                text.welcomeBody,
+                style: TextStyle(
+                  fontSize: 17,
+                  height: 28 / 17,
+                  fontWeight: FontWeight.w500,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 24,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SoftButton(
+                  label: text.pickComicFolder,
+                  icon: AppIcons.folderOpen,
+                  variant: SoftButtonVariant.primary,
+                  height: 56,
+                  onPressed: onPickFolder,
+                ),
+                SoftButton(
+                  label: text.haveBackupImport,
+                  variant: SoftButtonVariant.text,
+                  onPressed: onImportBackup,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Text(
+                    text.supported,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                ),
+                for (final format in [
+                  text.imageFolder,
+                  'CBZ',
+                  'ZIP',
+                  'CBR',
+                  'RAR',
+                ])
+                  SoftPill(label: format),
+              ],
+            ),
+          ],
+        );
+        final example = _FolderStructureCard(text: text);
+        final content = wide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(flex: 11, child: intro),
+                  const SizedBox(width: 56),
+                  Expanded(flex: 9, child: example),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [intro, const SizedBox(height: 40), example],
+              );
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(pad, 40, pad, 72),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1120),
+              child: content,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FolderStructureCard extends StatelessWidget {
+  const _FolderStructureCard({required this.text});
+
+  final AppStrings text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    final reader = context.appReader;
+    return SoftCard(
+      radius: 32,
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            text.folderStructureTitle,
+            style: TextStyle(
+              fontSize: 16,
+              height: 24 / 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.16,
+              color: colors.foreground,
+            ),
+          ),
+          const SizedBox(height: 20),
+          _TreeRow(
+            depth: 0,
+            icon: AppIcons.folder,
+            iconColor: colors.secondaryForeground,
+            label: text.library,
+            bold: true,
+            highlighted: true,
+            tag: SoftBadge(label: text.libraryFolderTag),
+          ),
+          _TreeRow(
+            depth: 1,
+            icon: AppIcons.folder,
+            iconColor: colors.secondaryForeground,
+            label: 'Penjaga Senja',
+            tag: SoftBadge(label: text.oneTitleTag, tone: SoftBadgeTone.accent),
+          ),
+          _TreeRow(
+            depth: 2,
+            icon: AppIcons.folder,
+            iconColor: reader.badgeNewForeground,
+            label: 'Chapter 01',
+            tag: SoftBadge(label: text.chapterTag, tone: SoftBadgeTone.amber),
+          ),
+          _TreeRow(
+            depth: 2,
+            icon: AppIcons.folder,
+            iconColor: reader.badgeNewForeground,
+            label: 'Chapter 02',
+            tag: SoftBadge(label: text.chapterTag, tone: SoftBadgeTone.amber),
+          ),
+          _TreeRow(
+            depth: 2,
+            icon: AppIcons.fileArchive,
+            iconColor: reader.badgeNewForeground,
+            label: 'Chapter 03.cbz',
+            tag: SoftBadge(label: text.chapterTag, tone: SoftBadgeTone.amber),
+          ),
+          _TreeRow(
+            depth: 1,
+            icon: AppIcons.fileArchive,
+            iconColor: colors.secondaryForeground,
+            label: 'Kota di Bawah Hujan.cbz',
+            tag: SoftBadge(label: text.oneTitleTag, tone: SoftBadgeTone.accent),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            text.folderStructureNote,
+            style: TextStyle(
+              fontSize: 13,
+              height: 20 / 13,
+              fontWeight: FontWeight.w500,
+              color: colors.mutedForeground,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.label});
+class _TreeRow extends StatelessWidget {
+  const _TreeRow({
+    required this.depth,
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.tag,
+    this.bold = false,
+    this.highlighted = false,
+  });
 
+  final int depth;
+  final IconData icon;
+  final Color iconColor;
   final String label;
+  final Widget tag;
+  final bool bold;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: Text(label, style: context.appBodyStrongStyle));
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(message, style: TextStyle(color: context.appAccent)),
+    final colors = context.theme.colors;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: EdgeInsets.fromLTRB(12 + depth * 24.0, 6, 12, 6),
+      decoration: BoxDecoration(
+        color: highlighted ? colors.muted : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: iconColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+                color: colors.foreground,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          tag,
+        ],
+      ),
     );
   }
 }

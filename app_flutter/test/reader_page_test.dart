@@ -56,7 +56,9 @@ void main() {
       api.renderedPageIndices.toSet(),
       isNot({for (var index = 0; index < api.pageCount; index++) index}),
     );
-    expect(find.textContaining('Chapter 28 (28/33) - 28/33'), findsOneWidget);
+    expect(find.textContaining('Chapter 28 (28/33)'), findsOneWidget);
+    expect(find.text('28'), findsOneWidget);
+    expect(find.text('33'), findsOneWidget);
     expect(api.prefetchedWindows, contains(equals([25, 26, 27, 28, 29])));
     expect(api.evictedWindows, contains(equals([25, 26, 27, 28, 29])));
   });
@@ -471,6 +473,9 @@ void main() {
       contains('/library/Kaichou wa Maid-sama!'),
     );
 
+    // The chapter bookmark lives in the "Mark" panel.
+    await tester.tap(find.text('Mark'));
+    await tester.pump();
     await tester.tap(find.byIcon(AppIcons.folderBookmark).first);
     await tester.pump();
 

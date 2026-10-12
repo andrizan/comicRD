@@ -18,7 +18,7 @@ import '../utils/date_format.dart';
 import '../utils/forui_theme.dart';
 import '../utils/format_size.dart';
 import '../widgets/back_to_top_button.dart';
-import '../widgets/comic_thumbnail_image.dart';
+import '../widgets/soft_ui.dart';
 
 class ComicPage extends ConsumerStatefulWidget {
   const ComicPage({super.key, required this.comicPath});
@@ -34,6 +34,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
   late final ScrollController _scroll;
   late final TextEditingController _search;
   late final FocusNode _focusNode;
+  final _headerKey = GlobalKey();
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lastAutoScrollSignature;
@@ -115,6 +116,11 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     final favoritedAsync = ref.watch(comicFavoritedProvider(widget.comicPath));
     final bookmarkedChapterPaths =
         chapterBookmarks.asData?.value.toSet() ?? const <String>{};
+    final lastOpened = ref.watch(lastOpenedChapterProvider)[widget.comicPath];
+    final currentChapterPath = _currentChapterPath(
+      chaptersRaw.asData?.value,
+      lastOpened,
+    );
     final title = widget.comicPath.split(RegExp(r'[/\\]')).last;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateBackToTopVisibility();
@@ -141,94 +147,197 @@ class _ComicPageState extends ConsumerState<ComicPage> {
           _scrollBy(-300);
         }
       },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(48, 32, 48, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _BackButton(text: text, onBack: () => context.go('/')),
-            const SizedBox(height: 20),
-            _ComicHero(
-              text: text,
-              comicPath: widget.comicPath,
-              title: title.isEmpty ? text.comic : title,
-              stats: stats,
-              history: history,
-              favorited: favoritedAsync.asData?.value ?? false,
-              onContinueReading: _continueReading,
-              onStartFromBeginning: _startFromBeginning,
-              onToggleFavorite: _toggleFavorite,
-              onOpenFolder: _openContainingFolder,
-            ),
-            const SizedBox(height: 24),
-            _ChapterSectionHeader(
-              text: text,
-              preferences: preferences,
-              searchController: _search,
-              onSearchChanged: (value) {
-                _searchDebounce?.cancel();
-                _searchDebounce = Timer(
-                  const Duration(milliseconds: 300),
-                  () => ref
-                      .read(comicPreferencesProvider.notifier)
-                      .setQuery(widget.comicPath, value),
-                );
-              },
-              onSetSort: _setSort,
-              onSetTab: (tab) => ref
-                  .read(comicPreferencesProvider.notifier)
-                  .setSelectedTab(widget.comicPath, tab),
-              onRefresh: _refreshChapters,
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: chapters.when(
-                      data: (items) {
-                        _restoreLastOpenedChapter();
-                        return _ChapterList(
-                          text: text,
-                          chapters: items,
-                          bookmarkedChapterPaths: bookmarkedChapterPaths,
-                          controller: _scroll,
-                          emptyLabel: text.emptyLibrary,
-                          onOpen: _openChapter,
-                          onToggleBookmark: _toggleBookmark,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 640;
+          // Two columns as soon as the 300 px cover and a 480 px info column
+          // fit (the design's flex bases); below that the cover sits beside
+          // the title so the chapter list still starts above the fold.
+          final wide = constraints.maxWidth >= 820;
+          final padLeft = narrow ? 16.0 : 24.0;
+          final padRight = narrow ? 16.0 : 40.0;
+          final actions = _CoverActions(
+            text: text,
+            continueChapterTitle: stats.continueChapterTitle,
+            favorited: favoritedAsync.asData?.value ?? false,
+            stacked: !wide,
+            onContinueReading: _continueReading,
+            onStartFromBeginning: _startFromBeginning,
+            onToggleFavorite: _toggleFavorite,
+            onOpenFolder: _openContainingFolder,
+            onCopyTitle: () => _copy(title),
+            onCopyPath: () => _copy(widget.comicPath),
+          );
+          final header = _ComicHeader(
+            text: text,
+            title: title.isEmpty ? text.comic : title,
+            comicPath: widget.comicPath,
+            stats: stats,
+            compact: !wide,
+            onCopyPath: () => _copy(widget.comicPath),
+          );
+          final scrollView = CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  key: _headerKey,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (wide)
+                      header
+                    else ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: narrow ? 104 : 140,
+                            child: _CoverArt(comicPath: widget.comicPath),
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(child: header),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      actions,
+                    ],
+                    const SizedBox(height: 28),
+                    _ProgressCard(text: text, stats: stats, history: history),
+                    const SizedBox(height: 28),
+                    _ChapterSectionHeader(
+                      text: text,
+                      preferences: preferences,
+                      chapterCount: chaptersRaw.asData?.value.length ?? 0,
+                      bookmarkCount: bookmarkedChapterPaths.length,
+                      searchController: _search,
+                      onSearchChanged: (value) {
+                        _searchDebounce?.cancel();
+                        _searchDebounce = Timer(
+                          const Duration(milliseconds: 300),
+                          () => ref
+                              .read(comicPreferencesProvider.notifier)
+                              .setQuery(widget.comicPath, value),
                         );
                       },
-                      error: (error, _) => Align(
-                        alignment: Alignment.center,
-                        child: Text(
-                          error.toString(),
-                          style: TextStyle(color: context.appAccent),
+                      onSetSort: _setSort,
+                      onSetTab: (tab) => ref
+                          .read(comicPreferencesProvider.notifier)
+                          .setSelectedTab(widget.comicPath, tab),
+                      onRefresh: _refreshChapters,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+              chapters.when(
+                data: (items) {
+                  _restoreLastOpenedChapter();
+                  return _ChapterSliver(
+                    text: text,
+                    chapters: items,
+                    bookmarkedChapterPaths: bookmarkedChapterPaths,
+                    currentChapterPath: currentChapterPath,
+                    emptyLabel: text.emptyLibrary,
+                    onOpen: _openChapter,
+                    onToggleBookmark: _toggleBookmark,
+                  );
+                },
+                error: (error, _) => SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: SoftEmptyState(
+                    message: error.toString(),
+                    isError: true,
+                  ),
+                ),
+                loading: () => const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: FCircularProgress.loader()),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 56)),
+            ],
+          );
+          final body = wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 300,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.only(bottom: 56),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _CoverArt(comicPath: widget.comicPath),
+                            const SizedBox(height: 20),
+                            actions,
+                          ],
                         ),
                       ),
-                      loading: () => const Align(
-                        alignment: Alignment.center,
-                        child: FCircularProgress.loader(),
-                      ),
                     ),
+                    const SizedBox(width: 40),
+                    Expanded(child: scrollView),
+                  ],
+                )
+              : scrollView;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(padLeft, 20, padRight, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SoftButton(
+                  label: text.backToLibrary,
+                  icon: AppIcons.chevronLeft,
+                  pill: true,
+                  onPressed: () => context.go('/'),
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(child: body),
+                      if (_showBackToTop)
+                        Positioned(
+                          right: 20,
+                          bottom: 20,
+                          child: BackToTopButton(
+                            key: const ValueKey('chapter-back-to-top-button'),
+                            visible: true,
+                            tooltip: text.backToTop,
+                            onPressed: _scrollToTop,
+                          ),
+                        ),
+                    ],
                   ),
-                  if (_showBackToTop)
-                    Positioned(
-                      right: 20,
-                      bottom: 20,
-                      child: BackToTopButton(
-                        key: const ValueKey('chapter-back-to-top-button'),
-                        visible: true,
-                        tooltip: text.backToTop,
-                        onPressed: _scrollToTop,
-                      ),
-                    ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  /// The chapter the reader would resume: the latest in-progress one, or
+  /// the chapter last opened from this page.
+  String? _currentChapterPath(
+    List<bridge.RawChapter>? items,
+    String? lastOpened,
+  ) {
+    if (items == null) return lastOpened;
+    bridge.RawChapter? best;
+    for (final chapter in items) {
+      if (chapter.isRead || chapter.lastPage <= 0) continue;
+      if (best == null || chapter.progressUpdatedAt > best.progressUpdatedAt) {
+        best = chapter;
+      }
+    }
+    return best?.sourcePath ?? lastOpened;
+  }
+
+  Future<void> _copy(String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
   }
 
   Future<void> _refreshChapters() async {
@@ -403,6 +512,16 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     if (mounted) context.go('/reader/$chapterId');
   }
 
+  /// Scroll offset of the first chapter row: everything above the list
+  /// scrolls with it, so measure the header instead of assuming a height.
+  double _listTopOffset() {
+    final box = _headerKey.currentContext?.findRenderObject();
+    final headerHeight = box is RenderBox && box.hasSize
+        ? box.size.height
+        : 0.0;
+    return headerHeight + _chapterListInset;
+  }
+
   void _scrollToChapter(String chapterSourcePath) {
     final chaptersRaw = ref.read(comicChaptersProvider(widget.comicPath));
     final chapterBookmarks = ref.read(
@@ -427,7 +546,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     _lastAutoScrollSignature = signature;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
-      final offset = (index * _chapterListItemExtent).toDouble();
+      final offset = _listTopOffset() + index * _chapterListItemExtent;
       _scroll.animateTo(
         offset.clamp(0, _scroll.position.maxScrollExtent),
         duration: const Duration(milliseconds: 220),
@@ -456,88 +575,300 @@ String _encodeChapterSortBy(ChapterSortBy sortBy) {
   };
 }
 
-const double _chapterListItemExtent = 70;
+/// Row height (68) plus the 4 px gap below it.
+const double _chapterListItemExtent = 72;
+
+/// Padding inside the chapter list card.
+const double _chapterListInset = 8;
+
+bool _isModifiedToday(int secondsSinceEpoch) {
+  if (secondsSinceEpoch <= 0) return false;
+  final modified = DateTime.fromMillisecondsSinceEpoch(
+    secondsSinceEpoch * 1000,
+  );
+  final now = DateTime.now();
+  return modified.year == now.year &&
+      modified.month == now.month &&
+      modified.day == now.day;
+}
 
 // ---------------------------------------------------------------------------
-// Back button
+// Cover art and the primary actions
 // ---------------------------------------------------------------------------
 
-class _BackButton extends StatelessWidget {
-  const _BackButton({required this.text, required this.onBack});
+class _CoverArt extends StatelessWidget {
+  const _CoverArt({required this.comicPath});
 
-  final AppStrings text;
-  final VoidCallback onBack;
+  final String comicPath;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onBack,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: colors.card,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(AppIcons.back, size: 16, color: colors.foreground),
-              const SizedBox(width: 8),
-              Text(
-                text.backToLibrary,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: colors.foreground,
-                ),
-              ),
-            ],
-          ),
+    return AspectRatio(
+      aspectRatio: 2 / 3,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppShape.radiusLarge),
+          boxShadow: AppShape.cardShadow(context.appReader),
+        ),
+        child: CoverThumbnail(
+          sourcePath: comicPath,
+          radius: AppShape.radiusLarge,
+          maxWidth: 260,
+          maxHeight: 400,
+          fallbackIconSize: 48,
         ),
       ),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Comic hero — cover, title, info, metadata, actions
-// ---------------------------------------------------------------------------
-
-class _ComicHero extends StatelessWidget {
-  const _ComicHero({
+/// Continue / start / favorite / folder / more. Stacked under the cover in
+/// the two-column layout, a wrapping row in the narrow one.
+class _CoverActions extends StatelessWidget {
+  const _CoverActions({
     required this.text,
-    required this.comicPath,
-    required this.title,
-    required this.stats,
-    required this.history,
+    required this.continueChapterTitle,
     required this.favorited,
+    required this.stacked,
     required this.onContinueReading,
     required this.onStartFromBeginning,
     required this.onToggleFavorite,
     required this.onOpenFolder,
+    required this.onCopyTitle,
+    required this.onCopyPath,
   });
 
   final AppStrings text;
-  final String comicPath;
-  final String title;
-  final ComicStats stats;
-  final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
+  final String? continueChapterTitle;
   final bool favorited;
+  final bool stacked;
   final VoidCallback onContinueReading;
   final VoidCallback onStartFromBeginning;
   final void Function(bool favorited) onToggleFavorite;
   final VoidCallback onOpenFolder;
+  final VoidCallback onCopyTitle;
+  final VoidCallback onCopyPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final reader = context.appReader;
+    final continueLabel = continueChapterTitle != null
+        ? '${text.continueReading} $continueChapterTitle'
+        : text.continueReading;
+    final continueButton = SoftButton(
+      label: continueLabel,
+      icon: AppIcons.play,
+      variant: SoftButtonVariant.primary,
+      height: 52,
+      expand: !stacked,
+      onPressed: onContinueReading,
+    );
+    final startButton = SoftButton(
+      label: text.startFromBeginning,
+      variant: SoftButtonVariant.soft,
+      height: stacked ? 52 : 48,
+      expand: !stacked,
+      onPressed: onStartFromBeginning,
+    );
+    final favoriteButton = SoftButton(
+      label: favorited ? text.removeFavorite : text.addFavorite,
+      icon: AppIcons.star,
+      iconColor: favorited ? reader.star : null,
+      toggled: favorited,
+      expand: !stacked,
+      onPressed: () => onToggleFavorite(favorited),
+    );
+    final folderButton = SoftButton(
+      label: text.openFolder,
+      icon: AppIcons.folderOpen,
+      expand: !stacked,
+      onPressed: onOpenFolder,
+    );
+    final moreButton = FPopoverMenu(
+      menuAnchor: .topEnd,
+      childAnchor: .bottomEnd,
+      menu: [
+        FItemGroup(
+          children: [
+            FItem(
+              prefix: const Icon(AppIcons.copyTitle, size: 16),
+              title: Text(text.copyTitle),
+              onPress: onCopyTitle,
+            ),
+            FItem(
+              prefix: const Icon(AppIcons.copyPath, size: 16),
+              title: Text(text.copyPath),
+              onPress: onCopyPath,
+            ),
+          ],
+        ),
+      ],
+      builder: (context, controller, _) => SoftIconButton(
+        icon: AppIcons.more,
+        tooltip: text.moreActions,
+        onPressed: controller.toggle,
+      ),
+    );
+    if (stacked) {
+      return Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          continueButton,
+          startButton,
+          favoriteButton,
+          folderButton,
+          moreButton,
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        continueButton,
+        const SizedBox(height: 10),
+        startButton,
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: favoriteButton),
+            const SizedBox(width: 10),
+            Expanded(child: folderButton),
+            const SizedBox(width: 10),
+            moreButton,
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Header — title, fact pills, path chip
+// ---------------------------------------------------------------------------
+
+class _ComicHeader extends StatelessWidget {
+  const _ComicHeader({
+    required this.text,
+    required this.title,
+    required this.comicPath,
+    required this.stats,
+    required this.compact,
+    required this.onCopyPath,
+  });
+
+  final AppStrings text;
+  final String title;
+  final String comicPath;
+  final ComicStats stats;
+  final bool compact;
+  final VoidCallback onCopyPath;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    final progressPercent = stats.chapterCount > 0
-        ? ((stats.effectiveReadCount / stats.chapterCount) * 100).round()
-        : 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SelectableText(
+          title,
+          maxLines: 2,
+          style: TextStyle(
+            fontSize: compact ? 28 : 38,
+            height: compact ? 36 / 28 : 46 / 38,
+            fontWeight: FontWeight.w800,
+            letterSpacing: compact ? -0.84 : -1.14,
+            color: colors.foreground,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            SoftPill(
+              label: text.chaptersCountTemplate.replaceAll(
+                '{count}',
+                '${stats.chapterCount}',
+              ),
+            ),
+            if (stats.totalSize > 0)
+              SoftPill(label: formatBytes(stats.totalSize)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            height: AppShape.controlHeight,
+            padding: const EdgeInsets.only(left: 16),
+            decoration: BoxDecoration(
+              color: colors.muted,
+              borderRadius: BorderRadius.circular(AppShape.radiusControl),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    comicPath,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontFamilyFallback: const [
+                        'Menlo',
+                        'Consolas',
+                        'DejaVu Sans Mono',
+                        'Courier New',
+                      ],
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                ),
+                SoftIconButton(
+                  icon: AppIcons.copyPath,
+                  tooltip: text.copyPath,
+                  iconSize: 16,
+                  outline: false,
+                  onPressed: onCopyPath,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
+// ---------------------------------------------------------------------------
+// Progress card
+// ---------------------------------------------------------------------------
+
+class _ProgressCard extends StatelessWidget {
+  const _ProgressCard({
+    required this.text,
+    required this.stats,
+    required this.history,
+  });
+
+  final AppStrings text;
+  final ComicStats stats;
+  final AsyncValue<List<bridge.ReadingHistoryEntry>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    final progress = stats.chapterCount > 0
+        ? (stats.effectiveReadCount / stats.chapterCount).clamp(0.0, 1.0)
+        : 0.0;
+    final percent = (progress * 100).round();
     final lastEntry = history.asData?.value.fold<bridge.ReadingHistoryEntry?>(
       null,
       (latest, entry) {
@@ -546,339 +877,109 @@ class _ComicHero extends StatelessWidget {
       },
     );
     final lastReadText = lastEntry != null
-        ? text.lastReadTemplate
-              .replaceAll('{chapter}', lastEntry.chapterTitle)
-              .replaceAll(
-                '{date}',
-                formatModifiedDate(lastEntry.updatedAt.toInt()),
-              )
-        : '-';
+        ? '${lastEntry.chapterTitle} · ${formatModifiedDate(lastEntry.updatedAt.toInt())}'
+        : '–';
+    final labelStyle = TextStyle(
+      fontSize: 13,
+      height: 20 / 13,
+      fontWeight: FontWeight.w600,
+      color: colors.mutedForeground,
+    );
 
-    final continueLabel = stats.continueChapterTitle != null
-        ? '${text.continueReading} ${stats.continueChapterTitle}'
-        : text.continueReading;
-
-    return Row(
+    final percentBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _ComicCover(comicPath: comicPath),
-        const SizedBox(width: 20),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SelectableText(
-                title,
-                maxLines: 2,
-                style: TextStyle(
-                  fontFamily: appFontFamily,
-                  fontSize: 24,
-                  height: 1.15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.02,
-                  color: colors.foreground,
-                ),
-              ),
-              const SizedBox(height: 6),
-              _InfoBar(
-                text: text,
-                totalSize: stats.totalSize,
-                chapterCount: stats.chapterCount,
-              ),
-              const SizedBox(height: 14),
-              _MetadataRow(label: '${text.directoryPath}:', value: comicPath),
-              const SizedBox(height: 8),
-              _MetadataRow(label: '${text.lastRead}:', value: lastReadText),
-              const SizedBox(height: 8),
-              _MetadataRow(
-                label: '${text.readingProgress}:',
-                value: text.readingProgressTemplate
-                    .replaceAll('{percent}', '$progressPercent')
-                    .replaceAll('{read}', '${stats.effectiveReadCount}')
-                    .replaceAll('{total}', '${stats.chapterCount}'),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _PrimaryActionButton(
-                    label: continueLabel,
-                    onPressed: onContinueReading,
-                  ),
-                  _OutlineActionButton(
-                    label: text.startFromBeginning,
-                    onPressed: onStartFromBeginning,
-                  ),
-                  _OutlineActionButton(
-                    label: favorited ? text.removeFavorite : text.addFavorite,
-                    icon: AppIcons.star,
-                    iconColor: favorited ? context.appReader.star : null,
-                    onPressed: () => onToggleFavorite(favorited),
-                  ),
-                  _OutlineActionButton(
-                    label: text.openFolder,
-                    icon: AppIcons.folderOpen,
-                    onPressed: onOpenFolder,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ComicCover extends ConsumerWidget {
-  const _ComicCover({required this.comicPath});
-
-  final String comicPath;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.theme.colors;
-    final thumbnail = ref.watch(
-      comicThumbnailProvider((
-        sourcePath: comicPath,
-        maxWidth: 260,
-        maxHeight: 400,
-      )),
-    );
-
-    return Container(
-      width: 170,
-      height: 240,
-      decoration: BoxDecoration(
-        color: colors.muted,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: thumbnail.when(
-        data: (bytes) {
-          if (bytes == null) {
-            return Icon(
-              AppIcons.library,
-              size: 48,
-              color: colors.mutedForeground,
-            );
-          }
-          return Image(
-            image: ComicThumbnailImage(
-              sourcePath: comicPath,
-              maxWidth: 260,
-              maxHeight: 400,
-              bytes: bytes,
-            ),
-            fit: BoxFit.cover,
-          );
-        },
-        loading: () =>
-            Icon(AppIcons.library, size: 48, color: colors.mutedForeground),
-        error: (_, _) =>
-            Icon(AppIcons.library, size: 48, color: colors.mutedForeground),
-      ),
-    );
-  }
-}
-
-class _PrimaryActionButton extends StatelessWidget {
-  const _PrimaryActionButton({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.primary,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.primaryForeground,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OutlineActionButton extends StatelessWidget {
-  const _OutlineActionButton({
-    required this.label,
-    required this.onPressed,
-    this.icon,
-    this.iconColor,
-  });
-
-  final String label;
-  final VoidCallback onPressed;
-  final IconData? icon;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.card,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(
-                    icon,
-                    size: 16,
-                    color: iconColor ?? colors.mutedForeground,
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.foreground,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoBar extends StatelessWidget {
-  const _InfoBar({
-    required this.text,
-    required this.totalSize,
-    required this.chapterCount,
-  });
-
-  final AppStrings text;
-  final int totalSize;
-  final int chapterCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Wrap(
-        spacing: 14,
-        runSpacing: 2,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          _InfoItem(icon: AppIcons.folderOpen, value: formatBytes(totalSize)),
-          _InfoItem(
-            icon: AppIcons.download,
-            value: '$chapterCount ${text.totalChapters}',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoItem extends StatelessWidget {
-  const _InfoItem({required this.icon, required this.value});
-
-  final IconData icon;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: colors.mutedForeground),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: colors.foreground,
-            ),
+        Text(text.readingProgress, style: labelStyle),
+        Text(
+          '$percent%',
+          style: TextStyle(
+            fontSize: 36,
+            height: 44 / 36,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.08,
+            color: colors.secondaryForeground,
           ),
         ),
       ],
     );
-  }
-}
-
-class _MetadataRow extends StatelessWidget {
-  const _MetadataRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return SelectableText.rich(
-      TextSpan(
-        style: TextStyle(fontSize: 14, color: colors.foreground),
-        children: [
-          TextSpan(
-            text: label,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+    final barBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SoftProgressBar(
+          value: progress,
+          height: 10,
+          semanticLabel: text.readingProgress,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          text.chaptersDoneTemplate
+              .replaceAll('{read}', '${stats.effectiveReadCount}')
+              .replaceAll('{total}', '${stats.chapterCount}'),
+          style: TextStyle(
+            fontSize: 13,
+            height: 20 / 13,
+            fontWeight: FontWeight.w500,
+            color: colors.mutedForeground,
           ),
-          const TextSpan(text: ' '),
-          TextSpan(
-            text: value,
-            style: TextStyle(color: colors.mutedForeground),
+        ),
+      ],
+    );
+    final lastReadBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(text.lastRead, style: labelStyle),
+        Text(
+          lastReadText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 15,
+            height: 24 / 15,
+            fontWeight: FontWeight.w700,
+            color: colors.foreground,
           ),
-        ],
+        ),
+      ],
+    );
+
+    return SoftCard(
+      padding: const EdgeInsets.fromLTRB(26, 22, 26, 22),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 560) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                percentBlock,
+                const SizedBox(height: 16),
+                barBlock,
+                const SizedBox(height: 16),
+                lastReadBlock,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 110),
+                child: percentBlock,
+              ),
+              const SizedBox(width: 24),
+              Expanded(child: barBlock),
+              const SizedBox(width: 24),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: lastReadBlock,
+              ),
+            ],
+          );
+        },
       ),
-      maxLines: 1,
     );
   }
 }
@@ -887,10 +988,14 @@ class _MetadataRow extends StatelessWidget {
 // Chapter section header — tabs, search, sort
 // ---------------------------------------------------------------------------
 
+typedef _ChapterSort = (ChapterSortBy, bridge.SortDir);
+
 class _ChapterSectionHeader extends StatelessWidget {
   const _ChapterSectionHeader({
     required this.text,
     required this.preferences,
+    required this.chapterCount,
+    required this.bookmarkCount,
     required this.searchController,
     required this.onSearchChanged,
     required this.onSetSort,
@@ -900,6 +1005,8 @@ class _ChapterSectionHeader extends StatelessWidget {
 
   final AppStrings text;
   final ComicPreferences preferences;
+  final int chapterCount;
+  final int bookmarkCount;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
   final void Function(ChapterSortBy sortBy, bridge.SortDir sortDir) onSetSort;
@@ -909,337 +1016,100 @@ class _ChapterSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    final filterControls = <Widget>[
-      _SortSelect<ChapterSortBy>(
-        value: preferences.sortBy,
-        items: {
-          text.chapter: ChapterSortBy.chapterIndex,
-          text.name: ChapterSortBy.name,
-          text.folderDate: ChapterSortBy.folderDate,
-        },
-        onChanged: (sortBy) => onSetSort(sortBy, preferences.sortDir),
-      ),
-      const SizedBox(width: 8),
-      _SortDirToggle(
-        text: text,
-        sortDir: preferences.sortDir,
-        onChanged: (sortDir) => onSetSort(preferences.sortBy, sortDir),
-      ),
-      const SizedBox(width: 8),
-      Container(width: 1, height: 24, color: colors.border),
-      const SizedBox(width: 8),
-      _ChapterSearchBox(
-        controller: searchController,
-        hint: text.filterChapters,
-        onChanged: onSearchChanged,
-      ),
-      const SizedBox(width: 8),
-      Container(width: 1, height: 24, color: colors.border),
-      const SizedBox(width: 8),
-      IconButton(
-        icon: Icon(AppIcons.refresh, size: 18),
-        tooltip: text.refresh,
-        color: colors.mutedForeground,
-        onPressed: onRefresh,
-      ),
-    ];
-
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-        decoration: BoxDecoration(
-          color: colors.card,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 900;
-            if (isCompact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _ChapterTabs(
-                    text: text,
-                    selectedTab: preferences.selectedTab,
-                    onSetTab: onSetTab,
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: filterControls,
-                  ),
-                ],
-              );
-            }
-            return Row(
-              children: [
-                _ChapterTabs(
-                  text: text,
-                  selectedTab: preferences.selectedTab,
-                  onSetTab: onSetTab,
-                ),
-                const Spacer(),
-                ...filterControls,
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _ChapterTabs extends StatelessWidget {
-  const _ChapterTabs({
-    required this.text,
-    required this.selectedTab,
-    required this.onSetTab,
-  });
-
-  final AppStrings text;
-  final ChapterTab selectedTab;
-  final ValueChanged<ChapterTab> onSetTab;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    final controls = Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _ChapterTab(
-          label: text.allChapters,
-          selected: selectedTab == ChapterTab.all,
-          onTap: () => onSetTab(ChapterTab.all),
-        ),
-        const SizedBox(width: 20),
-        _ChapterTab(
-          label: text.bookmarkChapters,
-          selected: selectedTab == ChapterTab.bookmarks,
-          onTap: () => onSetTab(ChapterTab.bookmarks),
-        ),
-      ],
-    );
-  }
-}
-
-class _ChapterTab extends StatefulWidget {
-  const _ChapterTab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_ChapterTab> createState() => _ChapterTabState();
-}
-
-class _ChapterTabState extends State<_ChapterTab> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              widget.label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: widget.selected
-                    ? colors.foreground
-                    : colors.mutedForeground,
-              ),
+        SoftSegmented<ChapterTab>(
+          value: preferences.selectedTab,
+          onChanged: onSetTab,
+          segments: [
+            SoftSegment(
+              value: ChapterTab.all,
+              label: text.all,
+              count: chapterCount,
             ),
-            const SizedBox(height: 6),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              height: 3,
-              width: 24,
-              decoration: BoxDecoration(
-                color: widget.selected || _hovered
-                    ? colors.primary
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
-              ),
+            SoftSegment(
+              value: ChapterTab.bookmarks,
+              label: text.bookmarkChapters,
+              count: bookmarkCount,
             ),
           ],
         ),
+        SoftSearchField(
+          controller: searchController,
+          hint: text.filterChapters,
+          width: 220,
+          onChanged: onSearchChanged,
+        ),
+        SoftSortMenu<_ChapterSort>(
+          prefix: text.sortLabel,
+          value: (preferences.sortBy, preferences.sortDir),
+          onChanged: (value) => onSetSort(value.$1, value.$2),
+          options: [
+            SoftSortOption(
+              value: (ChapterSortBy.chapterIndex, bridge.SortDir.asc),
+              label: '${text.chapter} ↑',
+            ),
+            SoftSortOption(
+              value: (ChapterSortBy.chapterIndex, bridge.SortDir.desc),
+              label: '${text.chapter} ↓',
+            ),
+            SoftSortOption(
+              value: (ChapterSortBy.name, bridge.SortDir.asc),
+              label: '${text.name} A–Z',
+            ),
+            SoftSortOption(
+              value: (ChapterSortBy.name, bridge.SortDir.desc),
+              label: '${text.name} Z–A',
+            ),
+            SoftSortOption(
+              value: (ChapterSortBy.folderDate, bridge.SortDir.desc),
+              label: '${text.folderDate} ↓',
+            ),
+            SoftSortOption(
+              value: (ChapterSortBy.folderDate, bridge.SortDir.asc),
+              label: '${text.folderDate} ↑',
+            ),
+          ],
+        ),
+        SoftIconButton(
+          icon: AppIcons.refresh,
+          tooltip: text.refresh,
+          onPressed: onRefresh,
+        ),
+      ],
+    );
+    final heading = Text(
+      text.chapter,
+      style: TextStyle(
+        fontSize: 22,
+        height: 30 / 22,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.44,
+        color: colors.foreground,
       ),
     );
-  }
-}
-
-class _ChapterSearchBox extends StatelessWidget {
-  const _ChapterSearchBox({
-    required this.controller,
-    required this.hint,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        width: 220,
-        height: 38,
-        decoration: BoxDecoration(
-          color: colors.background,
-          border: Border.all(color: colors.border),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: ValueListenableBuilder<TextEditingValue>(
-          valueListenable: controller,
-          builder: (context, value, _) => TextField(
-            controller: controller,
-            onChanged: onChanged,
-            style: TextStyle(fontSize: 13, color: colors.foreground),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: TextStyle(fontSize: 13, color: colors.mutedForeground),
-              prefixIcon: Icon(
-                AppIcons.search,
-                size: 18,
-                color: colors.mutedForeground,
-              ),
-              suffixIcon: value.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: Icon(
-                        AppIcons.close,
-                        size: 16,
-                        color: colors.mutedForeground,
-                      ),
-                      tooltip: hint,
-                      onPressed: () {
-                        controller.clear();
-                        onChanged('');
-                      },
-                    ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [heading, const SizedBox(height: 12), controls],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            heading,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Align(alignment: Alignment.centerRight, child: controls),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SortSelect<T> extends StatelessWidget {
-  const _SortSelect({
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final T value;
-  final Map<String, T> items;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isDense: true,
-          icon: Icon(
-            AppIcons.chevronDown,
-            size: 14,
-            color: colors.mutedForeground,
-          ),
-          dropdownColor: colors.card,
-          style: TextStyle(fontSize: 13, color: colors.foreground),
-          borderRadius: BorderRadius.circular(10),
-          items: items.entries
-              .map(
-                (entry) => DropdownMenuItem<T>(
-                  value: entry.value,
-                  child: Text(
-                    entry.key,
-                    style: TextStyle(fontSize: 13, color: colors.foreground),
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) onChanged(value);
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _SortDirToggle extends StatelessWidget {
-  const _SortDirToggle({
-    required this.text,
-    required this.sortDir,
-    required this.onChanged,
-  });
-
-  final AppStrings text;
-  final bridge.SortDir sortDir;
-  final ValueChanged<bridge.SortDir> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    final isAsc = sortDir == bridge.SortDir.asc;
-    return Tooltip(
-      message: text.sortDirection,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () =>
-              onChanged(isAsc ? bridge.SortDir.desc : bridge.SortDir.asc),
-          child: Container(
-            height: 38,
-            width: 38,
-            decoration: BoxDecoration(
-              color: colors.background,
-              border: Border.all(color: colors.border),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              isAsc ? AppIcons.sortUp : AppIcons.sortDown,
-              size: 16,
-              color: colors.foreground,
-            ),
-          ),
-        ),
-      ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1248,12 +1118,14 @@ class _SortDirToggle extends StatelessWidget {
 // Chapter list
 // ---------------------------------------------------------------------------
 
-class _ChapterList extends StatelessWidget {
-  const _ChapterList({
+/// The chapter rows inside one white card; rows stay virtualized because a
+/// comic can hold hundreds of chapters.
+class _ChapterSliver extends StatelessWidget {
+  const _ChapterSliver({
     required this.text,
     required this.chapters,
     required this.bookmarkedChapterPaths,
-    required this.controller,
+    required this.currentChapterPath,
     required this.emptyLabel,
     required this.onOpen,
     required this.onToggleBookmark,
@@ -1262,7 +1134,7 @@ class _ChapterList extends StatelessWidget {
   final AppStrings text;
   final List<bridge.RawChapter> chapters;
   final Set<String> bookmarkedChapterPaths;
-  final ScrollController controller;
+  final String? currentChapterPath;
   final String emptyLabel;
   final Future<void> Function(bridge.RawChapter chapter) onOpen;
   final Future<void> Function(bridge.RawChapter chapter, bool isBookmarked)
@@ -1271,182 +1143,279 @@ class _ChapterList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (chapters.isEmpty) {
-      return Align(
-        alignment: Alignment.center,
-        child: Text(emptyLabel, style: context.appBodyStrongStyle),
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: SoftEmptyState(message: emptyLabel, icon: AppIcons.library),
       );
     }
-    return ListView.builder(
-      controller: controller,
-      padding: const EdgeInsets.only(bottom: 32),
-      itemExtent: _chapterListItemExtent,
-      itemCount: chapters.length,
-      itemBuilder: (context, index) {
-        final chapter = chapters[index];
-        final isBookmarked = bookmarkedChapterPaths.contains(
-          chapter.sourcePath,
-        );
-        return _ChapterListRow(
-          chapter: chapter,
-          isBookmarked: isBookmarked,
-          text: text,
-          onOpen: () => onOpen(chapter),
-          onToggleBookmark: () => onToggleBookmark(chapter, isBookmarked),
-        );
-      },
-    );
-  }
-}
-
-class _ChapterListRow extends StatefulWidget {
-  const _ChapterListRow({
-    required this.chapter,
-    required this.isBookmarked,
-    required this.text,
-    required this.onOpen,
-    required this.onToggleBookmark,
-  });
-
-  final bridge.RawChapter chapter;
-  final bool isBookmarked;
-  final AppStrings text;
-  final VoidCallback onOpen;
-  final VoidCallback onToggleBookmark;
-
-  @override
-  State<_ChapterListRow> createState() => _ChapterListRowState();
-}
-
-class _ChapterListRowState extends State<_ChapterListRow> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onOpen,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            height: _chapterListItemExtent,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: _hovered ? colors.card : Colors.transparent,
-              border: Border(bottom: BorderSide(color: colors.border)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _statusColor(context),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        widget.chapter.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: colors.foreground,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${widget.text.downloaded}: ${formatModifiedDate(widget.chapter.dateModified.toInt())}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (widget.chapter.isRead)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Icon(
-                      AppIcons.check,
-                      size: 18,
-                      color: context.appAccent,
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _BookmarkButton(
-                    bookmarked: widget.isBookmarked,
-                    onToggle: widget.onToggleBookmark,
-                    tooltip: widget.isBookmarked
-                        ? widget.text.removeBookmark
-                        : widget.text.addBookmark,
-                  ),
-                ),
-                Text(
-                  formatBytes(widget.chapter.sizeBytes.toInt()),
-                  style: TextStyle(fontSize: 13, color: colors.mutedForeground),
-                ),
-              ],
-            ),
-          ),
+    final reader = context.appReader;
+    return DecoratedSliver(
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(AppShape.radiusLarge),
+        boxShadow: AppShape.cardShadow(reader),
+      ),
+      sliver: SliverPadding(
+        padding: const EdgeInsets.fromLTRB(
+          _chapterListInset,
+          _chapterListInset,
+          _chapterListInset,
+          _chapterListInset - 4,
+        ),
+        sliver: SliverFixedExtentList(
+          itemExtent: _chapterListItemExtent,
+          delegate: SliverChildBuilderDelegate((context, index) {
+            final chapter = chapters[index];
+            final isBookmarked = bookmarkedChapterPaths.contains(
+              chapter.sourcePath,
+            );
+            return _ChapterRow(
+              text: text,
+              chapter: chapter,
+              isBookmarked: isBookmarked,
+              isCurrent: chapter.sourcePath == currentChapterPath,
+              onOpen: () => onOpen(chapter),
+              onToggleBookmark: () => onToggleBookmark(chapter, isBookmarked),
+            );
+          }, childCount: chapters.length),
         ),
       ),
     );
   }
-
-  Color _statusColor(BuildContext context) {
-    if (widget.chapter.isRead) {
-      return context.theme.colors.mutedForeground.withValues(alpha: 0.4);
-    }
-    if (widget.chapter.lastPage > 0) {
-      return context.appAccent.withValues(alpha: 0.6);
-    }
-    return context.appAccent;
-  }
 }
 
-class _BookmarkButton extends StatelessWidget {
-  const _BookmarkButton({
-    required this.bookmarked,
-    required this.onToggle,
-    required this.tooltip,
+class _ChapterRow extends StatefulWidget {
+  const _ChapterRow({
+    required this.text,
+    required this.chapter,
+    required this.isBookmarked,
+    required this.isCurrent,
+    required this.onOpen,
+    required this.onToggleBookmark,
   });
 
-  final bool bookmarked;
-  final VoidCallback onToggle;
-  final String tooltip;
+  final AppStrings text;
+  final bridge.RawChapter chapter;
+  final bool isBookmarked;
+
+  /// The row the reader would resume; it gets the soft fill and a button.
+  final bool isCurrent;
+  final VoidCallback onOpen;
+  final VoidCallback onToggleBookmark;
+
+  @override
+  State<_ChapterRow> createState() => _ChapterRowState();
+}
+
+class _ChapterRowState extends State<_ChapterRow> {
+  bool _hovered = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return Tooltip(
-      message: tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+    final reader = context.appReader;
+    final text = widget.text;
+    final chapter = widget.chapter;
+    final current = widget.isCurrent;
+    final inProgress = chapter.lastPage > 0 && !chapter.isRead;
+    final total = chapter.totalPages > 0
+        ? chapter.totalPages.toInt()
+        : chapter.pageCount.toInt();
+    final page = total <= 0
+        ? 0
+        : (chapter.lastPage.toInt() + 1).clamp(1, total);
+    final number = chapter.chapterIndex > 0 ? '${chapter.chapterIndex}' : '·';
+    final metaParts = <String>[
+      if (chapter.pageCount > 0)
+        text.pagesCountTemplate.replaceAll('{count}', '${chapter.pageCount}'),
+      if (chapter.dateModified > 0)
+        formatModifiedDate(chapter.dateModified.toInt()),
+      if (chapter.sizeBytes > 0) formatBytes(chapter.sizeBytes.toInt()),
+    ];
+
+    final Widget status;
+    if (inProgress) {
+      status = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text.pageOfTemplate
+                    .replaceAll('{page}', '$page')
+                    .replaceAll('{total}', '$total'),
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 18 / 13,
+                  fontWeight: FontWeight.w700,
+                  color: colors.secondaryForeground,
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: 96,
+                child: SoftProgressBar(
+                  value: total <= 0 ? 0 : page / total,
+                  trackColor: current ? colors.card : null,
+                ),
+              ),
+            ],
+          ),
+          if (current) ...[
+            const SizedBox(width: 14),
+            SoftButton(
+              label: text.continueReading,
+              variant: SoftButtonVariant.primary,
+              onPressed: widget.onOpen,
+            ),
+          ],
+        ],
+      );
+    } else if (chapter.isRead) {
+      status = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(AppIcons.check, size: 16, color: reader.success),
+          const SizedBox(width: 6),
+          Text(
+            text.finished,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: reader.success,
+            ),
+          ),
+        ],
+      );
+    } else if (_isModifiedToday(chapter.dateModified.toInt())) {
+      status = SoftBadge(label: text.newBadge, tone: SoftBadgeTone.amber);
+    } else {
+      status = Text(
+        text.unread,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: colors.mutedForeground,
+        ),
+      );
+    }
+
+    final fill = current
+        ? colors.secondary
+        : (_hovered || _focused)
+        ? colors.muted
+        : Colors.transparent;
+
+    return Semantics(
+      button: true,
+      label: chapter.title,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowHoverHighlight: (value) => setState(() => _hovered = value),
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onOpen();
+              return null;
+            },
+          ),
+        },
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: onToggle,
-          child: Icon(
-            AppIcons.folderBookmark,
-            size: 16,
-            color: bookmarked
-                ? context.appReader.star
-                : colors.mutedForeground.withValues(alpha: 0.3),
+          onTap: widget.onOpen,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              height: _chapterListItemExtent - 4,
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: BorderRadius.circular(AppShape.radiusMedium),
+                border: Border.all(
+                  color: _focused ? colors.primary : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: current ? colors.card : colors.muted,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      number,
+                      style: TextStyle(
+                        fontSize: number.length > 3 ? 12 : 15,
+                        fontWeight: FontWeight.w800,
+                        color: current
+                            ? colors.secondaryForeground
+                            : colors.mutedForeground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          chapter.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            height: 22 / 15,
+                            fontWeight: FontWeight.w700,
+                            color: colors.foreground,
+                          ),
+                        ),
+                        if (metaParts.isNotEmpty)
+                          Text(
+                            metaParts.join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 18 / 12.5,
+                              fontWeight: FontWeight.w500,
+                              color: colors.mutedForeground,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  status,
+                  const SizedBox(width: 4),
+                  SoftIconButton(
+                    icon: AppIcons.bookmark,
+                    tooltip: widget.isBookmarked
+                        ? text.removeBookmark
+                        : text.addBookmark,
+                    iconSize: 18,
+                    round: true,
+                    outline: false,
+                    selected: widget.isBookmarked,
+                    color: widget.isBookmarked
+                        ? reader.star
+                        : colors.mutedForeground,
+                    onPressed: widget.onToggleBookmark,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

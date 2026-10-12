@@ -22,14 +22,24 @@ void main() {
     expect(find.text('ComicRD'), findsOneWidget);
   });
 
-  testWidgets('shows missing library source without waiting for comics', (
+  testWidgets('shows the first-run screen without waiting for comics', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
     await tester.pumpWidget(_testApp(api: const _MissingSourceApi()));
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('No Library Source Configured'), findsOneWidget);
+    expect(
+      find.text('Read comics from a folder on your computer.'),
+      findsOneWidget,
+    );
+    expect(find.text('Choose Comic Folder'), findsOneWidget);
+    expect(find.text('Not Configured'), findsOneWidget);
     expect(find.byType(FCircularProgress), findsNothing);
   });
 

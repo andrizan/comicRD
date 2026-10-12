@@ -7,6 +7,7 @@ import 'package:forui/forui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'bridge_generated.dart' as bridge;
 import 'pages/comic_page.dart';
 import 'pages/library_page.dart';
 import 'pages/reader_page.dart';
@@ -17,6 +18,7 @@ import 'state/library_state.dart';
 import 'state/settings_data_state.dart';
 import 'state/settings_state.dart';
 import 'utils/forui_theme.dart';
+import 'widgets/soft_ui.dart';
 
 final _router = GoRouter(
   routes: [
@@ -50,19 +52,6 @@ final _router = GoRouter(
 );
 
 enum SidebarTab { library, history, favorites, settings }
-
-final sidebarTabProvider = NotifierProvider<SidebarTabNotifier, SidebarTab>(
-  SidebarTabNotifier.new,
-);
-
-class SidebarTabNotifier extends Notifier<SidebarTab> {
-  @override
-  SidebarTab build() => SidebarTab.library;
-
-  void set(SidebarTab tab) {
-    state = tab;
-  }
-}
 
 class ComicRdApp extends ConsumerWidget {
   const ComicRdApp({super.key});
@@ -111,6 +100,7 @@ ThemeData _materialTheme(FThemeData f, ComicReaderColors readerColors) {
       secondaryContainer: f.colors.secondary,
       onSecondaryContainer: f.colors.secondaryForeground,
     ),
+    scaffoldBackgroundColor: f.colors.background,
     fontFamily: appFontFamily,
     extensions: [readerColors],
   );
@@ -166,11 +156,20 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
     });
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
-    final selectedTab = ref.watch(sidebarTabProvider);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _syncSidebarTabWithRoute();
-    });
+    // The selected nav item follows the route and the library tab directly,
+    // so a tab change made inside a page (e.g. "View History") is reflected
+    // without a second source of truth.
+    final libraryTab = ref.watch(
+      libraryPreferencesProvider.select((p) => p.selectedTab),
+    );
+    final location = GoRouterState.of(context).uri.path;
+    final selectedTab = location == '/settings'
+        ? SidebarTab.settings
+        : switch (libraryTab) {
+            LibraryTab.library => SidebarTab.library,
+            LibraryTab.history => SidebarTab.history,
+            LibraryTab.favorites => SidebarTab.favorites,
+          };
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -206,37 +205,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
                   favoriteCount: _favoriteCount,
                   onSelectTab: _setSelectedTab,
                 ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      _TopBar(
-                        text: text,
-                        themeMode: settings.themeMode,
-                        locale: settings.localeCode,
-                        onThemeChanged: (mode) async {
-                          ref
-                              .read(appSettingsProvider.notifier)
-                              .setThemeMode(mode);
-                          await ref
-                              .read(comicRdApiProvider)
-                              .setSetting(
-                                'app_theme',
-                                jsonEncode(themeModeToSetting(mode)),
-                              );
-                        },
-                        onLocaleChanged: (locale) async {
-                          ref
-                              .read(appSettingsProvider.notifier)
-                              .setLocale(locale);
-                          await ref
-                              .read(comicRdApiProvider)
-                              .setSetting('app_locale', jsonEncode(locale));
-                        },
-                      ),
-                      Expanded(child: widget.child),
-                    ],
-                  ),
-                ),
+                Expanded(child: widget.child),
               ],
             ),
           ),
@@ -245,72 +214,41 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
     );
   }
 
-  void _syncSidebarTabWithRoute() {
-    if (!mounted) return;
-    final location = GoRouterState.of(context).uri.path;
-    final libraryTab = ref.read(libraryPreferencesProvider).selectedTab;
-    SidebarTab nextTab;
-    if (location == '/settings') {
-      nextTab = SidebarTab.settings;
-    } else {
-      nextTab = switch (libraryTab) {
-        LibraryTab.library => SidebarTab.library,
-        LibraryTab.history => SidebarTab.history,
-        LibraryTab.favorites => SidebarTab.favorites,
-      };
-    }
-    if (ref.read(sidebarTabProvider) != nextTab) {
-      ref.read(sidebarTabProvider.notifier).set(nextTab);
-    }
-  }
-
   Future<void> _setSelectedTab(SidebarTab selectedTab) async {
-    ref.read(sidebarTabProvider.notifier).set(selectedTab);
-    switch (selectedTab) {
-      case SidebarTab.library:
-        ref
-            .read(libraryPreferencesProvider.notifier)
-            .setSelectedTab(LibraryTab.library);
-        await ref
-            .read(comicRdApiProvider)
-            .setSetting(
-              'library_selected_tab',
-              jsonEncode(encodeLibraryTab(LibraryTab.library)),
-            );
-        if (mounted) context.go('/');
-      case SidebarTab.history:
-        ref
-            .read(libraryPreferencesProvider.notifier)
-            .setSelectedTab(LibraryTab.history);
-        await ref
-            .read(comicRdApiProvider)
-            .setSetting(
-              'library_selected_tab',
-              jsonEncode(encodeLibraryTab(LibraryTab.history)),
-            );
-        if (mounted) context.go('/');
-      case SidebarTab.favorites:
-        ref
-            .read(libraryPreferencesProvider.notifier)
-            .setSelectedTab(LibraryTab.favorites);
-        await ref
-            .read(comicRdApiProvider)
-            .setSetting(
-              'library_selected_tab',
-              jsonEncode(encodeLibraryTab(LibraryTab.favorites)),
-            );
-        if (mounted) context.go('/');
-      case SidebarTab.settings:
-        if (mounted) context.go('/settings');
+    if (selectedTab == SidebarTab.settings) {
+      context.go('/settings');
+      return;
     }
+    final libraryTab = switch (selectedTab) {
+      SidebarTab.library => LibraryTab.library,
+      SidebarTab.history => LibraryTab.history,
+      SidebarTab.favorites => LibraryTab.favorites,
+      SidebarTab.settings => LibraryTab.library,
+    };
+    ref.read(libraryPreferencesProvider.notifier).setSelectedTab(libraryTab);
+    context.go('/');
+    await ref
+        .read(comicRdApiProvider)
+        .setSetting(
+          'library_selected_tab',
+          jsonEncode(encodeLibraryTab(libraryTab)),
+        );
   }
 
-  void _onThemeShortcut() {
+  Future<void> _onThemeShortcut() async {
     ref.read(appSettingsProvider.notifier).toggleTheme();
+    final mode = ref.read(appSettingsProvider).themeMode;
+    await ref
+        .read(comicRdApiProvider)
+        .setSetting('app_theme', jsonEncode(themeModeToSetting(mode)));
   }
 
-  void _onLocaleShortcut() {
+  Future<void> _onLocaleShortcut() async {
     ref.read(appSettingsProvider.notifier).toggleLocale();
+    final locale = ref.read(appSettingsProvider).localeCode;
+    await ref
+        .read(comicRdApiProvider)
+        .setSetting('app_locale', jsonEncode(locale));
   }
 }
 
@@ -333,134 +271,106 @@ class _Sidebar extends StatefulWidget {
   final int favoriteCount;
   final ValueChanged<SidebarTab> onSelectTab;
 
+  static const double expandedWidth = 264;
+  static const double collapsedWidth = 76;
+
   @override
   State<_Sidebar> createState() => _SidebarState();
 }
 
 class _SidebarState extends State<_Sidebar> {
   // Hover state lives at the sidebar level so it survives any rebuild of the
-  // shell (e.g. settings hydration, count updates) and is not coupled to
-  // individual nav item widgets that may be re-created during parent
-  // reconciliation. This prevents the cursor-above-but-hover-cleared bug.
-  int? _hoveredIndex;
+  // shell (settings hydration, count updates) and is not coupled to nav item
+  // widgets that may be re-created during parent reconciliation.
+  SidebarTab? _hovered;
 
-  void _setHovered(int? index) {
-    if (_hoveredIndex == index) return;
-    setState(() => _hoveredIndex = index);
+  void _setHovered(SidebarTab? tab) {
+    if (_hovered == tab) return;
+    setState(() => _hovered = tab);
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.theme.colors;
+    final collapsed = widget.collapsed;
+    final reader = context.appReader;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 240),
       curve: Curves.easeInOutCubic,
       clipBehavior: Clip.hardEdge,
-      width: widget.collapsed ? 72.0 : 260.0,
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border(right: BorderSide(color: colors.border)),
-      ),
+      decoration: BoxDecoration(color: context.theme.colors.background),
+      width: collapsed ? _Sidebar.collapsedWidth : _Sidebar.expandedWidth,
       padding: EdgeInsets.fromLTRB(
-        widget.collapsed ? 8 : 16,
-        24,
-        widget.collapsed ? 8 : 16,
+        collapsed ? 12 : 24,
+        28,
+        collapsed ? 12 : 16,
         24,
       ),
       child: Column(
-        crossAxisAlignment: widget.collapsed
+        crossAxisAlignment: collapsed
             ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
+            : CrossAxisAlignment.stretch,
         children: [
           _SidebarBrand(
-            collapsed: widget.collapsed,
+            collapsed: collapsed,
             onToggleCollapse: widget.onToggleCollapse,
             text: widget.text,
           ),
-          const SizedBox(height: 32),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            alignment: Alignment.topLeft,
-            curve: Curves.easeOutCubic,
-            child: widget.collapsed
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.only(left: 12, bottom: 12),
-                    child: Text(
-                      widget.text.menu.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.6,
-                        color: colors.mutedForeground,
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 28),
           _SidebarNavItem(
-            index: 0,
-            collapsed: widget.collapsed,
+            tab: SidebarTab.library,
+            collapsed: collapsed,
             icon: AppIcons.library,
             label: widget.text.library,
             count: widget.libraryCount,
             selected: widget.selectedTab == SidebarTab.library,
-            hovered: _hoveredIndex == 0,
+            hovered: _hovered == SidebarTab.library,
             onHoverChanged: _setHovered,
             onTap: () => widget.onSelectTab(SidebarTab.library),
           ),
           const SizedBox(height: 4),
           _SidebarNavItem(
-            index: 1,
-            collapsed: widget.collapsed,
-            icon: AppIcons.history,
+            tab: SidebarTab.history,
+            collapsed: collapsed,
+            icon: AppIcons.clock,
             label: widget.text.history,
             selected: widget.selectedTab == SidebarTab.history,
-            hovered: _hoveredIndex == 1,
+            hovered: _hovered == SidebarTab.history,
             onHoverChanged: _setHovered,
             onTap: () => widget.onSelectTab(SidebarTab.history),
           ),
           const SizedBox(height: 4),
           _SidebarNavItem(
-            index: 2,
-            collapsed: widget.collapsed,
+            tab: SidebarTab.favorites,
+            collapsed: collapsed,
             icon: AppIcons.star,
             label: widget.text.favorites,
             count: widget.favoriteCount,
             selected: widget.selectedTab == SidebarTab.favorites,
-            hovered: _hoveredIndex == 2,
+            hovered: _hovered == SidebarTab.favorites,
             onHoverChanged: _setHovered,
             onTap: () => widget.onSelectTab(SidebarTab.favorites),
           ),
-          const Spacer(),
-          const SizedBox(height: 4),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            alignment: Alignment.topLeft,
-            curve: Curves.easeOutCubic,
-            child: widget.collapsed
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.only(left: 12, bottom: 12),
-                    child: Text(
-                      widget.text.settings.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.6,
-                        color: colors.mutedForeground,
-                      ),
-                    ),
-                  ),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 12,
+              horizontal: collapsed ? 4 : 8,
+            ),
+            child: Container(height: 1, color: reader.line),
           ),
           _SidebarNavItem(
-            index: 3,
-            collapsed: widget.collapsed,
+            tab: SidebarTab.settings,
+            collapsed: collapsed,
             icon: AppIcons.settings,
             label: widget.text.settings,
             selected: widget.selectedTab == SidebarTab.settings,
-            hovered: _hoveredIndex == 3,
+            hovered: _hovered == SidebarTab.settings,
             onHoverChanged: _setHovered,
+            onTap: () => widget.onSelectTab(SidebarTab.settings),
+          ),
+          const Spacer(),
+          _SidebarStatusCard(
+            collapsed: collapsed,
+            text: widget.text,
             onTap: () => widget.onSelectTab(SidebarTab.settings),
           ),
         ],
@@ -483,52 +393,125 @@ class _SidebarBrand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    return Row(
-      mainAxisAlignment: collapsed
-          ? MainAxisAlignment.center
-          : MainAxisAlignment.start,
-      children: [
-        MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            onTap: onToggleCollapse,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.transparent,
-              ),
-              child: Icon(
-                AppIcons.menu,
-                size: 24,
-                color: colors.mutedForeground,
-              ),
+    if (collapsed) {
+      return FTooltip(
+        tipBuilder: (context, _) => Text(text.menu),
+        child: Semantics(
+          button: true,
+          label: text.menu,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: onToggleCollapse,
+              child: const _BrandMark(),
             ),
           ),
         ),
-        if (!collapsed) ...[
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Row(
+        children: [
+          const _BrandMark(),
           const SizedBox(width: 12),
-          Flexible(
+          Expanded(
             child: Text(
               text.appName,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontFamily: appFontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 17,
+                fontSize: 19,
+                height: 26 / 19,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.38,
                 color: colors.foreground,
               ),
             ),
           ),
+          SoftIconButton(
+            icon: AppIcons.panelLeft,
+            tooltip: text.menu,
+            size: 36,
+            iconSize: 18,
+            outline: false,
+            onPressed: onToggleCollapse,
+          ),
         ],
-      ],
+      ),
     );
   }
 }
 
-class _SidebarNavItem extends StatelessWidget {
+/// The app mark: a violet tile holding a white comic page with panels.
+class _BrandMark extends StatelessWidget {
+  const _BrandMark();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.theme.colors;
+    return ExcludeSemantics(
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: colors.primary,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              left: 11,
+              top: 8,
+              child: Container(
+                width: 18,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(3.5),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 14,
+              top: 11,
+              child: _panel(12, 7, const Color(0xFF3D3564)),
+            ),
+            Positioned(
+              left: 14,
+              top: 20,
+              child: _panel(5, 9, const Color(0xFFFFB547)),
+            ),
+            Positioned(
+              left: 21,
+              top: 20,
+              child: _panel(5, 4, const Color(0xFFB6ABFF)),
+            ),
+            Positioned(
+              left: 21,
+              top: 25,
+              child: _panel(5, 4, const Color(0xFF221F2C)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _panel(double width, double height, Color color) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(1.5),
+      ),
+    );
+  }
+}
+
+class _SidebarNavItem extends StatefulWidget {
   const _SidebarNavItem({
-    required this.index,
+    required this.tab,
     required this.collapsed,
     required this.icon,
     required this.label,
@@ -539,284 +522,289 @@ class _SidebarNavItem extends StatelessWidget {
     this.count,
   });
 
-  final int index;
+  final SidebarTab tab;
   final bool collapsed;
   final IconData icon;
   final String label;
   final int? count;
   final bool selected;
   final bool hovered;
-  final ValueChanged<int?> onHoverChanged;
+  final ValueChanged<SidebarTab?> onHoverChanged;
   final VoidCallback onTap;
+
+  @override
+  State<_SidebarNavItem> createState() => _SidebarNavItemState();
+}
+
+class _SidebarNavItemState extends State<_SidebarNavItem> {
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
-    // MouseRegion lives around the whole row so the hover state is owned by
-    // the sidebar, not by this widget. This guarantees the hover highlight
-    // persists even when the shell rebuilds (settings hydration, count
-    // changes, etc.) which used to reset the cursor-on-but-not-hovered
-    // visual on the nav items.
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      opaque: true,
-      onEnter: (_) => onHoverChanged(index),
-      onExit: (_) {
-        if (hovered) onHoverChanged(null);
-      },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          clipBehavior: Clip.hardEdge,
-          decoration: BoxDecoration(
-            color: selected
-                ? colors.secondary
-                : hovered
-                ? colors.secondary.withValues(alpha: 0.55)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final hasSpace = constraints.maxWidth > 100;
-              return Row(
-                mainAxisAlignment: !hasSpace
-                    ? MainAxisAlignment.center
-                    : MainAxisAlignment.start,
-                children: [
-                  if (selected && hasSpace)
-                    Container(
-                      width: 3,
-                      height: 18,
-                      margin: const EdgeInsets.only(right: 9),
+    final selected = widget.selected;
+    final fg = selected ? colors.secondaryForeground : colors.mutedForeground;
+    final item = AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      height: AppShape.controlHeight,
+      width: widget.collapsed ? AppShape.controlHeight : null,
+      padding: widget.collapsed
+          ? EdgeInsets.zero
+          : const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: selected
+            ? colors.secondary
+            : widget.hovered
+            ? colors.secondary.withValues(alpha: 0.55)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _focused ? colors.primary : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: widget.collapsed
+          ? Icon(widget.icon, size: 20, color: fg)
+          : Stack(
+              clipBehavior: Clip.none,
+              children: [
+                if (selected)
+                  Positioned(
+                    left: -10,
+                    top: 8,
+                    bottom: 8,
+                    child: Container(
+                      width: 4,
                       decoration: BoxDecoration(
                         color: colors.primary,
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(999),
                       ),
-                    )
-                  else if (hasSpace)
-                    const SizedBox(width: 12),
-                  Icon(
-                    icon,
-                    size: 20,
-                    color: selected ? colors.primary : colors.mutedForeground,
+                    ),
                   ),
-                  if (hasSpace) ...[
+                Row(
+                  children: [
+                    Icon(widget.icon, size: 20, color: fg),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        label,
+                        widget.label,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: selected ? colors.primary : colors.foreground,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: fg,
                         ),
                       ),
                     ),
-                    if (count != null && count! > 0)
+                    if (widget.count != null && widget.count! > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
+                          horizontal: 9,
+                          vertical: 1,
                         ),
                         decoration: BoxDecoration(
-                          color: colors.secondary,
-                          borderRadius: BorderRadius.circular(20),
+                          color: colors.card,
+                          borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          '$count',
+                          '${widget.count}',
                           style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: colors.primary,
+                            fontSize: 12,
+                            height: 20 / 12,
+                            fontWeight: FontWeight.w700,
+                            color: fg,
                           ),
                         ),
                       ),
                   ],
-                ],
-              );
+                ),
+              ],
+            ),
+    );
+    final body = Semantics(
+      button: true,
+      selected: selected,
+      label: widget.count != null && widget.count! > 0
+          ? '${widget.label} ${widget.count}'
+          : widget.label,
+      child: FocusableActionDetector(
+        mouseCursor: SystemMouseCursors.click,
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        onShowHoverHighlight: (value) =>
+            widget.onHoverChanged(value ? widget.tab : null),
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
             },
           ),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: item,
         ),
       ),
+    );
+    if (!widget.collapsed) return body;
+    return FTooltip(
+      tipBuilder: (context, _) => Text(widget.label),
+      child: body,
     );
   }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({
+/// The "local library" card at the foot of the sidebar: folder, path and
+/// connection state. Tapping it opens Settings.
+class _SidebarStatusCard extends ConsumerWidget {
+  const _SidebarStatusCard({
+    required this.collapsed,
     required this.text,
-    required this.themeMode,
-    required this.locale,
-    required this.onThemeChanged,
-    required this.onLocaleChanged,
+    required this.onTap,
   });
 
+  final bool collapsed;
   final AppStrings text;
-  final ThemeMode themeMode;
-  final String locale;
-  final ValueChanged<ThemeMode> onThemeChanged;
-  final ValueChanged<String> onLocaleChanged;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 52,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.theme.colors;
+    final reader = context.appReader;
+    final status = ref.watch(librarySourceStatusProvider).asData?.value;
+    final (String label, Color tone) = _describe(status, colors, reader);
+    final path = status == null || status.path.isEmpty
+        ? text.localLibrary
+        : status.path;
+
+    final iconBox = Container(
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
-        color: context.theme.colors.background,
-        border: Border(bottom: BorderSide(color: context.theme.colors.border)),
+        color: colors.secondary,
+        borderRadius: BorderRadius.circular(13),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _ThemeMenuButton(
-                text: text,
-                themeMode: themeMode,
-                onChanged: onThemeChanged,
+      child: Icon(AppIcons.folder, size: 20, color: colors.secondaryForeground),
+    );
+    final dot = Container(
+      width: 7,
+      height: 7,
+      decoration: BoxDecoration(color: tone, shape: BoxShape.circle),
+    );
+
+    final Widget card;
+    if (collapsed) {
+      card = FTooltip(
+        tipBuilder: (context, _) => Text('$path · $label'),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            iconBox,
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: colors.background,
+                  shape: BoxShape.circle,
+                ),
+                child: dot,
               ),
-              const SizedBox(width: 8),
-              _LocaleMenuButton(
-                text: text,
-                locale: locale,
-                onChanged: onLocaleChanged,
+            ),
+          ],
+        ),
+      );
+    } else {
+      card = Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: BorderRadius.circular(AppShape.radiusMedium),
+          boxShadow: AppShape.controlShadow(reader),
+        ),
+        child: Row(
+          children: [
+            iconBox,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    text.localLibrary,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 20 / 13,
+                      fontWeight: FontWeight.w700,
+                      color: colors.foreground,
+                    ),
+                  ),
+                  Text(
+                    path,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 18 / 12,
+                      fontWeight: FontWeight.w500,
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                  if (label.isNotEmpty)
+                    Row(
+                      children: [
+                        dot,
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            label,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 18 / 12,
+                              fontWeight: FontWeight.w600,
+                              color: tone,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Semantics(
+      button: true,
+      label: '${text.localLibrary}: $path. $label',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: card,
         ),
       ),
     );
   }
-}
 
-class _ThemeMenuButton extends StatelessWidget {
-  const _ThemeMenuButton({
-    required this.text,
-    required this.themeMode,
-    required this.onChanged,
-  });
-
-  final AppStrings text;
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = switch (themeMode) {
-      ThemeMode.dark => AppIcons.moon,
-      ThemeMode.light => AppIcons.sun,
-      ThemeMode.system => AppIcons.monitor,
-    };
-    final activeColor = context.appAccent;
-    return FPopoverMenu(
-      menuAnchor: .bottomEnd,
-      childAnchor: .topEnd,
-      menu: [
-        FItemGroup(
-          children: [
-            FItem(
-              prefix: Icon(
-                AppIcons.monitor,
-                color: themeMode == ThemeMode.system ? activeColor : null,
-              ),
-              title: Text(text.themeSystem),
-              suffix: themeMode == ThemeMode.system
-                  ? Icon(AppIcons.check, size: 16, color: activeColor)
-                  : null,
-              selected: themeMode == ThemeMode.system,
-              onPress: () => onChanged(ThemeMode.system),
-            ),
-            FItem(
-              prefix: Icon(
-                AppIcons.sun,
-                color: themeMode == ThemeMode.light ? activeColor : null,
-              ),
-              title: Text(text.themeLight),
-              suffix: themeMode == ThemeMode.light
-                  ? Icon(AppIcons.check, size: 16, color: activeColor)
-                  : null,
-              selected: themeMode == ThemeMode.light,
-              onPress: () => onChanged(ThemeMode.light),
-            ),
-            FItem(
-              prefix: Icon(
-                AppIcons.moon,
-                color: themeMode == ThemeMode.dark ? activeColor : null,
-              ),
-              title: Text(text.themeDark),
-              suffix: themeMode == ThemeMode.dark
-                  ? Icon(AppIcons.check, size: 16, color: activeColor)
-                  : null,
-              selected: themeMode == ThemeMode.dark,
-              onPress: () => onChanged(ThemeMode.dark),
-            ),
-          ],
-        ),
-      ],
-      builder: (_, controller, _) => FButton.icon(
-        variant: .ghost,
-        onPress: controller.toggle,
-        child: Icon(icon),
-      ),
-    );
-  }
-}
-
-class _LocaleMenuButton extends StatelessWidget {
-  const _LocaleMenuButton({
-    required this.text,
-    required this.locale,
-    required this.onChanged,
-  });
-
-  final AppStrings text;
-  final String locale;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeColor = context.appAccent;
-    return FPopoverMenu(
-      menuAnchor: .bottomEnd,
-      childAnchor: .topEnd,
-      menu: [
-        FItemGroup(
-          children: [
-            FItem(
-              prefix: const Text('🇺🇸'),
-              title: Text(text.english),
-              suffix: locale == 'en'
-                  ? Icon(AppIcons.check, size: 16, color: activeColor)
-                  : null,
-              selected: locale == 'en',
-              onPress: () => onChanged('en'),
-            ),
-            FItem(
-              prefix: const Text('🇮🇩'),
-              title: Text(text.indonesian),
-              suffix: locale == 'id'
-                  ? Icon(AppIcons.check, size: 16, color: activeColor)
-                  : null,
-              selected: locale == 'id',
-              onPress: () => onChanged('id'),
-            ),
-          ],
-        ),
-      ],
-      builder: (_, controller, _) => FButton.icon(
-        variant: .ghost,
-        onPress: controller.toggle,
-        child: const Icon(AppIcons.languages),
-      ),
-    );
+  (String, Color) _describe(
+    bridge.LibrarySourceStatus? status,
+    FColors colors,
+    ComicReaderColors reader,
+  ) {
+    if (status == null) return ('', colors.mutedForeground);
+    if (!status.configured) return (text.notConfigured, colors.mutedForeground);
+    if (status.error != null) return (text.unavailable, colors.destructive);
+    return (text.connected, reader.success);
   }
 }
 

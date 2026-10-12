@@ -350,6 +350,57 @@ class AppStrings {
     required this.unlimitedScrollDescription,
     required this.unlimitedScrollUpDescription,
     required this.settingsDescription,
+    // Soft redesign
+    required this.continueReadingSection,
+    required this.viewHistory,
+    required this.sortLabel,
+    required this.chaptersCountTemplate,
+    required this.chaptersReadTemplate,
+    required this.chaptersDoneTemplate,
+    required this.pageOfTemplate,
+    required this.chapterPageTemplate,
+    required this.finished,
+    required this.readAgain,
+    required this.localLibrary,
+    required this.connected,
+    required this.notConfigured,
+    required this.unavailable,
+    required this.pickComicFolder,
+    required this.changeFolder,
+    required this.worksOffline,
+    required this.welcomeTitle,
+    required this.welcomeBody,
+    required this.haveBackupImport,
+    required this.supported,
+    required this.imageFolder,
+    required this.folderStructureTitle,
+    required this.folderStructureNote,
+    required this.libraryFolderTag,
+    required this.oneTitleTag,
+    required this.chapterTag,
+    required this.markPanel,
+    required this.displayPanel,
+    required this.pageBookmarkedTemplate,
+    required this.pageNotBookmarkedTemplate,
+    required this.chapterBookmarkedTemplate,
+    required this.chapterNotBookmarkedTemplate,
+    required this.inFavoritesTemplate,
+    required this.notInFavoritesTemplate,
+    required this.forcePortraitDescription,
+    required this.keyExit,
+    required this.keyScroll,
+    required this.keySwitchChapter,
+    required this.appearanceSection,
+    required this.dataSection,
+    required this.updateAboutSection,
+    required this.exportAction,
+    required this.importAction,
+    required this.optimizeAction,
+    required this.cancel,
+    required this.scanProgressTemplate,
+    required this.titlesCountTemplate,
+    required this.pagesCountTemplate,
+    required this.moreActions,
   });
 
   // App identity
@@ -497,6 +548,57 @@ class AppStrings {
   final String unlimitedScrollDescription;
   final String unlimitedScrollUpDescription;
   final String settingsDescription;
+  // Soft redesign
+  final String continueReadingSection;
+  final String viewHistory;
+  final String sortLabel;
+  final String chaptersCountTemplate;
+  final String chaptersReadTemplate;
+  final String chaptersDoneTemplate;
+  final String pageOfTemplate;
+  final String chapterPageTemplate;
+  final String finished;
+  final String readAgain;
+  final String localLibrary;
+  final String connected;
+  final String notConfigured;
+  final String unavailable;
+  final String pickComicFolder;
+  final String changeFolder;
+  final String worksOffline;
+  final String welcomeTitle;
+  final String welcomeBody;
+  final String haveBackupImport;
+  final String supported;
+  final String imageFolder;
+  final String folderStructureTitle;
+  final String folderStructureNote;
+  final String libraryFolderTag;
+  final String oneTitleTag;
+  final String chapterTag;
+  final String markPanel;
+  final String displayPanel;
+  final String pageBookmarkedTemplate;
+  final String pageNotBookmarkedTemplate;
+  final String chapterBookmarkedTemplate;
+  final String chapterNotBookmarkedTemplate;
+  final String inFavoritesTemplate;
+  final String notInFavoritesTemplate;
+  final String forcePortraitDescription;
+  final String keyExit;
+  final String keyScroll;
+  final String keySwitchChapter;
+  final String appearanceSection;
+  final String dataSection;
+  final String updateAboutSection;
+  final String exportAction;
+  final String importAction;
+  final String optimizeAction;
+  final String cancel;
+  final String scanProgressTemplate;
+  final String titlesCountTemplate;
+  final String pagesCountTemplate;
+  final String moreActions;
 
   static const en = AppStrings(
     appName: 'ComicRD',
@@ -629,6 +731,58 @@ class AppStrings {
     unlimitedScrollDescription: 'Continue to next chapter at the end',
     unlimitedScrollUpDescription: 'Continue to previous chapter at the top',
     settingsDescription: 'Manage your library, reader, and app preferences.',
+    continueReadingSection: 'Continue Reading',
+    viewHistory: 'View History',
+    sortLabel: 'Sort',
+    chaptersCountTemplate: '{count} chapters',
+    chaptersReadTemplate: '{read} of {total} chapters',
+    chaptersDoneTemplate: '{read} of {total} chapters finished',
+    pageOfTemplate: 'Page {page} of {total}',
+    chapterPageTemplate: '{chapter} · page {page} of {total}',
+    finished: 'Finished',
+    readAgain: 'Read Again',
+    localLibrary: 'Local Library',
+    connected: 'Connected',
+    notConfigured: 'Not Configured',
+    unavailable: 'Unavailable',
+    pickComicFolder: 'Choose Comic Folder',
+    changeFolder: 'Change Folder',
+    worksOffline: 'Works Fully Offline',
+    welcomeTitle: 'Read comics from a folder on your computer.',
+    welcomeBody:
+        'ComicRD reads straight from folders and archives on your device, with no account and no internet. Pick one parent folder; the rest is scanned automatically.',
+    haveBackupImport: 'Have a backup? Import it',
+    supported: 'Supported',
+    imageFolder: 'Image Folder',
+    folderStructureTitle: 'Example Folder Structure',
+    folderStructureNote:
+        'One folder or archive inside the library folder is one title. Subfolders or archives inside it are chapters. You can change the folder anytime in Settings.',
+    libraryFolderTag: 'library folder',
+    oneTitleTag: '1 title',
+    chapterTag: 'chapter',
+    markPanel: 'Mark',
+    displayPanel: 'Display',
+    pageBookmarkedTemplate: 'Page {page} is bookmarked',
+    pageNotBookmarkedTemplate: 'Page {page} is not bookmarked',
+    chapterBookmarkedTemplate: '{chapter} is bookmarked',
+    chapterNotBookmarkedTemplate: '{chapter} is not bookmarked',
+    inFavoritesTemplate: '{comic} is in favorites',
+    notInFavoritesTemplate: '{comic} is not in favorites',
+    forcePortraitDescription: 'Same width for every page',
+    keyExit: 'exit',
+    keyScroll: 'scroll',
+    keySwitchChapter: 'switch chapter',
+    appearanceSection: 'Appearance',
+    dataSection: 'Data & Backup',
+    updateAboutSection: 'Update & About',
+    exportAction: 'Export',
+    importAction: 'Import',
+    optimizeAction: 'Optimize',
+    cancel: 'Cancel',
+    scanProgressTemplate: 'Scanning · {processed} of {total}',
+    titlesCountTemplate: '{count} titles',
+    pagesCountTemplate: '{count} pages',
+    moreActions: 'More Actions',
   );
 
   static const id = AppStrings(
@@ -764,5 +918,57 @@ class AppStrings {
     unlimitedScrollUpDescription: 'Lanjut ke chapter sebelumnya di awal',
     settingsDescription:
         'Kelola pustaka, pembaca, dan preferensi aplikasi Anda.',
+    continueReadingSection: 'Lanjut Membaca',
+    viewHistory: 'Lihat Riwayat',
+    sortLabel: 'Urutkan',
+    chaptersCountTemplate: '{count} chapter',
+    chaptersReadTemplate: '{read} dari {total} chapter',
+    chaptersDoneTemplate: '{read} dari {total} chapter selesai',
+    pageOfTemplate: 'Halaman {page} dari {total}',
+    chapterPageTemplate: '{chapter} · halaman {page} dari {total}',
+    finished: 'Selesai',
+    readAgain: 'Baca Lagi',
+    localLibrary: 'Pustaka Lokal',
+    connected: 'Terhubung',
+    notConfigured: 'Belum Diatur',
+    unavailable: 'Tidak Tersedia',
+    pickComicFolder: 'Pilih Folder Komik',
+    changeFolder: 'Ganti Folder',
+    worksOffline: 'Bekerja Sepenuhnya Offline',
+    welcomeTitle: 'Baca komik dari folder di komputermu.',
+    welcomeBody:
+        'ComicRD membaca langsung dari folder dan arsip di perangkatmu, tanpa akun dan tanpa internet. Pilih satu folder induk, sisanya dipindai otomatis.',
+    haveBackupImport: 'Sudah punya cadangan? Impor cadangan',
+    supported: 'Didukung',
+    imageFolder: 'Folder Gambar',
+    folderStructureTitle: 'Contoh Struktur Folder',
+    folderStructureNote:
+        'Satu folder atau arsip di dalam folder pustaka adalah satu judul. Subfolder atau arsip di dalamnya adalah chapter. Folder bisa diganti kapan saja di Pengaturan.',
+    libraryFolderTag: 'folder pustaka',
+    oneTitleTag: '1 judul',
+    chapterTag: 'chapter',
+    markPanel: 'Tandai',
+    displayPanel: 'Tampilan',
+    pageBookmarkedTemplate: 'Halaman {page} sudah ditandai',
+    pageNotBookmarkedTemplate: 'Halaman {page} belum ditandai',
+    chapterBookmarkedTemplate: '{chapter} sudah ditandai',
+    chapterNotBookmarkedTemplate: '{chapter} belum ditandai',
+    inFavoritesTemplate: '{comic} ada di favorit',
+    notInFavoritesTemplate: '{comic} belum di favorit',
+    forcePortraitDescription: 'Samakan lebar semua halaman',
+    keyExit: 'keluar',
+    keyScroll: 'scroll',
+    keySwitchChapter: 'ganti chapter',
+    appearanceSection: 'Tampilan',
+    dataSection: 'Data & Cadangan',
+    updateAboutSection: 'Pembaruan & Tentang',
+    exportAction: 'Ekspor',
+    importAction: 'Impor',
+    optimizeAction: 'Optimalkan',
+    cancel: 'Batalkan',
+    scanProgressTemplate: 'Memindai · {processed} dari {total}',
+    titlesCountTemplate: '{count} judul',
+    pagesCountTemplate: '{count} halaman',
+    moreActions: 'Aksi Lainnya',
   );
 }
