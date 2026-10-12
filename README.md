@@ -1,27 +1,59 @@
 # ComicRD
 
-Desktop comic reader for local libraries. Flutter owns the desktop UI; Rust owns
-filesystem discovery, archives, SQLite metadata, progress, bookmarks, history,
-backup/import, and the reader image pipeline.
+Desktop comic reader for local libraries — no account, no internet. Flutter
+owns the desktop UI; Rust owns filesystem discovery, archives, SQLite
+metadata, progress, bookmarks, history, backup/import, and the reader image
+pipeline.
 
-Technical details: `docs/technical.md`.
+![ComicRD library view: continue-reading shelf, filter chips and a cover grid](docs/screenshots/library.png)
+
+| Comic detail | Reader with the Display panel |
+| --- | --- |
+| ![Comic detail: cover, progress card and chapter list](docs/screenshots/comic.png) | ![Reader: floating glass toolbar, segmented page bar and the Display panel](docs/screenshots/reader.png) |
+
+| Dark theme | First run |
+| --- | --- |
+| ![Library in the dark theme](docs/screenshots/dark.png) | ![First-run screen with the folder picker and an example folder structure](docs/screenshots/welcome.png) |
+
+Screenshots are rendered from sample data by `app_flutter/test/screenshots_test.dart`
+(see [Screenshots](#screenshots)). Technical details: `docs/technical.md`.
 
 ## Features
 
-- Library source selection + fast top-level listing + explicit full scan
+- Pick one library folder; the shallow listing is instant, a full scan runs in the background
 - Folder, ZIP/CBZ, and RAR/CBR support; nested folder pages to depth 3
 - JPEG, PNG, WebP, GIF, BMP, and AVIF pages
-- Library/history/bookmark tabs; grid/list modes; search, sort, unread/reading filters
-- Chapters with progress, page counts, and natural ordering (`06.5` after `06`)
-- Vertical reader: keyboard, fullscreen, zoom, page gap, stable scroll, auto-save progress, prev/next chapter
+- Library with a continue-reading shelf, grid and list cards, unread/reading filters, search and sort
+- History (continue or read again), favorites, chapter bookmarks and page bookmarks
+- Comic detail: progress card, last read, chapter list with natural ordering (`06.5` after `06`)
+- Vertical reader: floating toolbar, Display panel (zoom, page gap, unlimited scroll, portrait mode),
+  Mark panel (page/chapter bookmark, favorite), segmented page bar with bookmark markers,
+  fullscreen, auto-saved progress, prev/next chapter
+- Keyboard: `Esc` close, `↑ ↓` / `PgUp PgDn` scroll, `← →` switch chapter, `0` / `Home` first page,
+  `Ctrl+T` theme, `Ctrl+L` language
 - On-demand page bytes with bounded prefetch/cache; on-demand thumbnails (200 MB LRU disk cache)
-- Comic detail: selectable title/path, open-folder action, covers
 - SQLite settings/progress/bookmarks/history; backup export/import; Optimize Data (purge stale + VACUUM + report)
-- Auto-update via GitHub Releases; Linux packaging/AUR; Windows installer
+- Light and dark themes, English and Indonesian, auto-update via GitHub Releases; Linux packaging/AUR; Windows installer
+
+## Design
+
+The UI follows a soft, modern system: a lavender-cream ground with white
+cards and tinted shadows, radii 12–28, one 44 px control height, accent
+reserved for the active state and amber for bookmark/"new" markers, set in
+Plus Jakarta Sans. Tokens live in `app_flutter/lib/utils/forui_theme.dart`
+(`ComicReaderFTheme`, `ComicReaderColors`, `AppShape`, `AppIcons`); the shared
+widgets (cards, buttons, chips, segmented control, sort menu, switch, slider,
+search field, progress bar, badges, cover thumbnail) live in
+`app_flutter/lib/widgets/soft_ui.dart`. Every text pairing is at least
+4.5:1 and every UI pairing at least 3:1 in both themes.
 
 ## Status
 
-Main app flows are done: library listing/scan, chapters, reader, progress, bookmarks, history, settings, backup/import, thumbnails, and Optimize Data. Reader loads page bytes on demand with 2048px tiling and a stable scrollbar. Smoke tested on Windows and Linux with Linux packaging available. macOS target exists but still needs a native smoke test.
+Main app flows are done: library listing/scan, chapters, reader, progress,
+bookmarks, history, settings, backup/import, thumbnails, and Optimize Data.
+Reader loads page bytes on demand with 2048px tiling and a stable scrollbar.
+Smoke tested on Windows and Linux with Linux packaging available. macOS
+target exists but still needs a native smoke test.
 
 ## Install
 
@@ -39,15 +71,15 @@ Download `*-setup.exe` from GitHub Releases. Per-user install, no admin needed.
 ### Linux Tarball
 
 ```bash
-tar -xzf comicrd-2.8.1-linux-x86_64.tar.gz
-./comicrd-2.8.1-linux-x86_64/opt/comicrd/ComicRD
+tar -xzf comicrd-2.8.3-linux-x86_64.tar.gz
+./comicrd-2.8.3-linux-x86_64/opt/comicrd/ComicRD
 ```
 
 ### Local Pacman Package
 
 ```bash
-./scripts/package-arch-local.sh 2.8.1
-sudo pacman -U dist/arch/comicrd-bin-2.8.1-1-x86_64.pkg.tar.zst
+./scripts/package-arch-local.sh 2.8.3
+sudo pacman -U dist/arch/comicrd-bin-2.8.3-1-x86_64.pkg.tar.zst
 ```
 
 ## Build From Source
@@ -59,60 +91,31 @@ sudo pacman -U dist/arch/comicrd-bin-2.8.1-1-x86_64.pkg.tar.zst
 - `flutter_rust_bridge_codegen` 2.13.0, `cargo-expand`
 - Platform desktop build tools
 
-Uses Flutter's default renderer (Impeller since 3.47), no extra config.
-Material symbols come from `material_ui` / `cupertino_ui` (SDK copies deprecated Nov 2026).
-
-Arch/CachyOS:
+#### Linux (Arch/CachyOS)
 
 ```bash
-sudo pacman -S --needed base-devel clang cmake dav1d gtk3 ninja pkgconf
+sudo pacman -S --needed base-devel clang cmake ninja pkgconf gtk3 dav1d
 ```
 
-Ubuntu:
+Debian/Ubuntu: `build-essential clang cmake ninja-build pkg-config libgtk-3-dev libdav1d-dev`.
 
-```bash
-sudo apt-get install -y build-essential clang cmake libdav1d-dev libgtk-3-dev ninja-build pkg-config
-```
+#### Windows
 
-macOS:
-
-```bash
-brew install dav1d pkg-config
-export PKG_CONFIG_PATH="$(brew --prefix dav1d)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-```
-
-Windows (Visual Studio build tools required):
+Visual Studio 2022 with the "Desktop development with C++" workload, plus
+dav1d for AVIF decoding:
 
 ```powershell
 # Option A — vcpkg
-scoop install vcpkg pkg-config
-vcpkg install dav1d:x64-windows
-setx PKG_CONFIG_PATH "$env:VCPKG_ROOT\installed\x64-windows\lib\pkgconfig"
-```
+vcpkg install dav1d:x64-windows-static
+$env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT\installed\x64-windows-static\lib\pkgconfig"
 
-```powershell
 # Option B — meson, or run scripts/setup-dav1d.ps1 (installs to %LOCALAPPDATA%\dav1d)
-scoop install meson nasm
-git clone --depth 1 --branch 1.5.4 https://code.videolan.org/videolan/dav1d.git C:\Users\<you>\dav1d-build
-meson setup build --prefix=C:/Users/<you>/dav1d-install --default-library=static -Denable_tools=false -Denable_tests=false -Denable_docs=false
-meson compile -C build
-meson install -C build
-setx PKG_CONFIG_PATH "C:\Users\<you>\dav1d-install\lib\pkgconfig"
 ```
 
-After `setx`, open a new terminal. Alternative (Windows-only, do not commit):
-local `.cargo/config.toml` (already gitignored):
-
-```toml
-[env]
-PKG_CONFIG_PATH = { value = "C:/Users/<you>/dav1d-install/lib/pkgconfig", force = true }
-```
-
-Install tooling:
+#### macOS
 
 ```bash
-cargo install flutter_rust_bridge_codegen --version 2.13.0
-cargo install cargo-expand
+brew install dav1d pkg-config
 ```
 
 ### Development Commands
@@ -160,9 +163,19 @@ No codegen needed for `comicrd_core`-only changes, but still restart the app.
 flutter build linux --release
 flutter build windows --release
 flutter build macos --release
-ISCC.exe /D"AppVersion=2.8.1" app_flutter\windows\installer\comicrd-setup.iss
-./scripts/package-linux.sh 2.8.1
+ISCC.exe /D"AppVersion=2.8.3" app_flutter\windows\installer\comicrd-setup.iss
+./scripts/package-linux.sh 2.8.3
 ```
+
+### Continuous Integration
+
+`.github/workflows/desktop-build.yml` runs the quality checks (`cargo test`,
+`flutter analyze`, `flutter test`) on every push and pull request, builds
+the Linux, Windows and macOS bundles on tags (`v*`) or manual dispatch,
+publishes the GitHub Release and updates the AUR package. The toolchain
+setup, the Windows dav1d build/cache and the tag → version resolution are
+composite actions under `.github/actions/`, so each lives in one place.
+`codeql.yml` scans the Rust workspace.
 
 ## Repository Layout
 
@@ -171,16 +184,18 @@ comicrd_flutter/
 ├── app_flutter/              # Flutter desktop UI
 │   ├── lib/
 │   │   ├── api/              # Dart facade over generated bridge APIs
-│   │   ├── pages/
+│   │   ├── pages/            # library, comic, reader, settings
 │   │   ├── routes/
-│   │   ├── state/
-│   │   ├── widgets/
+│   │   ├── state/            # Riverpod providers and settings/strings
+│   │   ├── utils/            # theme tokens, formatting
+│   │   ├── widgets/          # soft_ui building blocks
 │   │   └── bridge_generated.dart
+│   ├── test/                 # widget/unit tests + screenshot tool
 │   └── pubspec.yaml
 ├── crates/
 │   ├── comicrd_core/         # Reusable Rust core
 │   └── comicrd_bridge/       # flutter_rust_bridge API crate
-├── docs/
+├── docs/                     # technical notes, screenshots, active plan
 ├── scripts/
 └── flutter_rust_bridge.yaml
 ```
@@ -219,14 +234,18 @@ orphans immediately.
 
 `rawLibraryComicsProvider` fetches from Rust; `filteredLibraryComicsProvider`
 applies query/view-mode sync; `libraryComicsProvider` + `libraryPaginationProvider`
-handle pagination. Search is debounced, scroll offsets throttled.
+handle pagination. Search is debounced, scroll offsets throttled. The sidebar
+selection derives from the route and `libraryPreferencesProvider`; settings
+are hydrated once by the shell into the app, library and reader notifiers.
 
 ## Reader Image Pipeline
 
 Metadata-first, bytes-on-demand: Rust lists pages, probes width/height, splits
 tall pages into ≤2048px tiles; Flutter renders flattened tiles with stable
 extents and an exact-total sliver (no scrollbar jumps); tile bytes load only on
-build/prefetch. Progress/bookmarks stay page-based.
+build/prefetch. Progress/bookmarks stay page-based. The reader chrome (toolbar,
+panels, page bar) is an overlay rebuilt on its own version counter, so opening a
+panel never relayouts the page strip.
 
 - Folder: depth 3, ignores dotfiles/`__MACOSX`/`thumbs.db`/`desktop.ini`
 - ZIP/CBZ: read entry bytes on demand
@@ -245,9 +264,27 @@ Keep the bridge minimal: no duplicate/constant/unused fields.
 cargo test
 flutter analyze
 flutter test
+flutter test --coverage   # writes app_flutter/coverage/lcov.info
 ```
 
-Rust tests live in `crates/comicrd_core/tests/` (per concern); Dart tests in `app_flutter/test/`.
+Rust tests live in `crates/comicrd_core/tests/` (per concern); Dart tests in
+`app_flutter/test/`: shared widgets (`soft_ui_test.dart`), the app shell and
+sidebar, the library page (welcome, shelf, filters, list, history, favorites),
+the comic page, the reader pipeline and chrome, the settings page, the
+strings tables and the library-source actions. `test/support/fake_api.dart`
+is the in-memory `ComicRdApi` the widget tests share.
+
+### Screenshots
+
+The README images are produced headlessly, with the real fonts and sample
+data, by a gated test:
+
+```bash
+cd app_flutter
+COMICRD_SCREENSHOTS=1 flutter test test/screenshots_test.dart   # → build/screenshots/*.png
+```
+
+Copy the ones you want into `docs/screenshots/`.
 
 ## License
 
