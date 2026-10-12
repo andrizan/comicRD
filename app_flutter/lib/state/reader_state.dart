@@ -28,6 +28,7 @@ final readerDataProvider = FutureProvider.autoDispose.family<ReaderData, int>((
     pages: pages,
     progress: progress,
     initialPage: initialPage,
+    tiles: flattenTiles(pages),
   );
 });
 
@@ -50,12 +51,17 @@ class ReaderData {
     required this.pages,
     required this.progress,
     required this.initialPage,
+    required this.tiles,
   });
 
   final bridge.ChapterContext? context;
   final List<bridge.PageInfo> pages;
   final bridge.ReadingProgress? progress;
   final int initialPage;
+
+  /// `flattenTiles(pages)`, computed once per chapter load: the reader walks
+  /// this on every scroll event, so it must not be rebuilt per call.
+  final List<TileItem> tiles;
 }
 
 /// One render unit: a tile of a page. Single-tile pages have exactly one

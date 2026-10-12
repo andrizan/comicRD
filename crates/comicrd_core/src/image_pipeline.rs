@@ -436,7 +436,7 @@ fn resize_to_width(img: &image::DynamicImage) -> Option<image::DynamicImage> {
     let scale = MAX_VARIANT_WIDTH as f32 / width as f32;
     let new_height = ((height as f32 * scale).round() as u32).max(1);
     // SIMD fast path; exotic pixel types fall back to the image crate.
-    if let Some(resized) = fir_resize_to_width(img, new_height) {
+    if let Some(resized) = fir_resize(img, MAX_VARIANT_WIDTH, new_height) {
         return Some(resized);
     }
     Some(img.resize(MAX_VARIANT_WIDTH, new_height, FilterType::CatmullRom))
@@ -444,10 +444,15 @@ fn resize_to_width(img: &image::DynamicImage) -> Option<image::DynamicImage> {
 
 /// SIMD downscale via fast_image_resize (CatmullRom, same kernel family as
 /// before; `use_alpha` keeps straight-alpha correctness for RGBA PNGs).
+/// Shared by the reader width-fit and cover thumbnails.
 /// Returns None for non-8-bit pixel types (caller falls back) or on any
 /// internal error (dimensions are pre-validated, so errors are unreachable
 /// in practice but must never panic the reader).
-fn fir_resize_to_width(img: &image::DynamicImage, new_height: u32) -> Option<image::DynamicImage> {
+pub(crate) fn fir_resize(
+    img: &image::DynamicImage,
+    new_width: u32,
+    new_height: u32,
+) -> Option<image::DynamicImage> {
     use fast_image_resize::images::Image as FirImage;
     use fast_image_resize::{
         FilterType as FirFilter, PixelType, ResizeAlg, ResizeOptions, Resizer,
@@ -462,7 +467,7 @@ fn fir_resize_to_width(img: &image::DynamicImage, new_height: u32) -> Option<ima
         image::ColorType::Rgba8 => PixelType::U8x4,
         _ => return None,
     };
-    let mut dst = FirImage::new(MAX_VARIANT_WIDTH, new_height, pixel_type);
+    let mut dst = FirImage::new(new_width, new_height, pixel_type);
     let mut resizer = Resizer::new();
     let options = ResizeOptions::new()
         .resize_alg(ResizeAlg::Convolution(FirFilter::CatmullRom))
@@ -470,13 +475,13 @@ fn fir_resize_to_width(img: &image::DynamicImage, new_height: u32) -> Option<ima
     resizer.resize(img, &mut dst, &options).ok()?;
     let buffer = dst.buffer().to_vec();
     match pixel_type {
-        PixelType::U8 => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+        PixelType::U8 => image::ImageBuffer::from_raw(new_width, new_height, buffer)
             .map(image::DynamicImage::ImageLuma8),
-        PixelType::U8x2 => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+        PixelType::U8x2 => image::ImageBuffer::from_raw(new_width, new_height, buffer)
             .map(image::DynamicImage::ImageLumaA8),
-        PixelType::U8x3 => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+        PixelType::U8x3 => image::ImageBuffer::from_raw(new_width, new_height, buffer)
             .map(image::DynamicImage::ImageRgb8),
-        _ => image::ImageBuffer::from_raw(MAX_VARIANT_WIDTH, new_height, buffer)
+        _ => image::ImageBuffer::from_raw(new_width, new_height, buffer)
             .map(image::DynamicImage::ImageRgba8),
     }
 }
@@ -909,7 +914,7 @@ mod tests {
             image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x * y) % 256) as u8])
         });
         let src = image::DynamicImage::ImageRgb8(rgb);
-        let fir = fir_resize_to_width(&src, 79).expect("fir resize");
+        let fir = fir_resize(&src, 2048, 79).expect("fir resize");
         assert_eq!((fir.width(), fir.height()), (2048, 79));
         let reference = src.resize(2048, 79, FilterType::CatmullRom);
         let (mean, max) = mean_max_abs_diff(fir.to_rgb8().as_raw(), reference.to_rgb8().as_raw());
@@ -928,7 +933,7 @@ mod tests {
             ])
         });
         let src = image::DynamicImage::ImageRgba8(rgba);
-        let fir = fir_resize_to_width(&src, 79).expect("fir resize rgba");
+        let fir = fir_resize(&src, 2048, 79).expect("fir resize rgba");
         assert_eq!((fir.width(), fir.height()), (2048, 79));
         let reference = src.resize(2048, 79, FilterType::CatmullRom);
         let (mean, max) = mean_max_abs_diff(
@@ -952,7 +957,7 @@ mod tests {
             ])
         });
         let src = image::DynamicImage::ImageRgba8(rgba);
-        let fir = fir_resize_to_width(&src, 79).expect("fir varying alpha");
+        let fir = fir_resize(&src, 2048, 79).expect("fir varying alpha");
         assert_eq!((fir.width(), fir.height()), (2048, 79));
         let reference = src.resize(2048, 79, FilterType::CatmullRom);
         let (color_mean, color_max, alpha_mean, alpha_max) =
@@ -967,7 +972,7 @@ mod tests {
     fn fir_resize_falls_back_for_non_8bit_pixels() {
         let rgb16 = image::ImageBuffer::from_pixel(2600, 100, image::Rgb([1000u16, 2000, 3000]));
         let src = image::DynamicImage::ImageRgb16(rgb16);
-        assert!(fir_resize_to_width(&src, 79).is_none());
+        assert!(fir_resize(&src, 2048, 79).is_none());
         // The public path still serves 16-bit PNGs via the image fallback.
         let page = decode_and_fit_png16(&src);
         assert_eq!((page.0, page.1), (2048, 79));

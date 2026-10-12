@@ -18,6 +18,7 @@ import '../utils/date_format.dart';
 import '../utils/forui_theme.dart';
 import '../utils/format_size.dart';
 import '../widgets/back_to_top_button.dart';
+import '../widgets/comic_thumbnail_image.dart';
 
 class ComicPage extends ConsumerStatefulWidget {
   const ComicPage({super.key, required this.comicPath});
@@ -663,7 +664,15 @@ class _ComicCover extends ConsumerWidget {
               color: colors.mutedForeground,
             );
           }
-          return Image.memory(bytes, fit: BoxFit.cover);
+          return Image(
+            image: ComicThumbnailImage(
+              sourcePath: comicPath,
+              maxWidth: 260,
+              maxHeight: 400,
+              bytes: bytes,
+            ),
+            fit: BoxFit.cover,
+          );
         },
         loading: () =>
             Icon(AppIcons.library, size: 48, color: colors.mutedForeground),

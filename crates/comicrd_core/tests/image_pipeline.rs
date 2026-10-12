@@ -288,6 +288,114 @@ fn create_zip_with_png_entries(path: impl AsRef<std::path::Path>, entries: &[(&s
 }
 
 #[test]
+fn get_chapter_pages_skips_non_images_and_keeps_undecodable_entries() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    fs::create_dir_all(&library).expect("library");
+    let comic = library.join("Mixed Comic.cbz");
+    {
+        let file = fs::File::create(&comic).expect("create zip");
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        zip.add_directory("extras/", options).expect("dir entry");
+        zip.start_file("notes.txt", options).expect("start txt");
+        zip.write_all(b"not a page").expect("write txt");
+        zip.start_file("10.png", options).expect("start 10");
+        zip.write_all(&create_png_bytes(200, 80)).expect("write 10");
+        zip.start_file("5.png", options).expect("start 5");
+        zip.write_all(b"not an image").expect("write 5");
+        zip.start_file("2.png", options).expect("start 2");
+        zip.write_all(&create_png_bytes(100, 50)).expect("write 2");
+        zip.finish().expect("finish zip");
+    }
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let chapter_id = core
+        .open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: comic.to_string_lossy().to_string(),
+        })
+        .expect("open chapter");
+
+    let pages = core.get_chapter_pages(chapter_id).expect("pages");
+    let names: Vec<&str> = pages.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["2.png", "5.png", "10.png"]);
+    assert_eq!((pages[0].width, pages[0].height), (Some(100), Some(50)));
+    assert_eq!(pages[0].tile_heights, vec![50]);
+    assert_eq!(
+        (pages[1].width, pages[1].height),
+        (None, None),
+        "undecodable page keeps unknown size"
+    );
+    assert_eq!(pages[1].tile_heights, vec![0]);
+    assert_eq!((pages[2].width, pages[2].height), (Some(200), Some(80)));
+    assert_eq!(pages[2].tile_heights, vec![80]);
+}
+
+#[test]
+fn get_comic_thumbnail_fits_cover_and_caches_on_disk_and_in_memory() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    fs::create_dir_all(&comic).expect("comic");
+    create_png(comic.join("cover.png"), 400, 200);
+    let comic_path = comic.to_string_lossy().to_string();
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    let first = core
+        .get_comic_thumbnail(&comic_path, 100, 100)
+        .expect("thumbnail");
+    assert!(!first.is_empty());
+    let decoded = image::load_from_memory(&first)
+        .expect("decode thumbnail")
+        .to_rgb8();
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        (100, 50),
+        "fits inside 100x100 keeping aspect"
+    );
+    let center = decoded.get_pixel(50, 25);
+    for (channel, expected) in center.0.iter().zip([10u8, 20, 30]) {
+        assert!(
+            (*channel as i32 - expected as i32).abs() <= 4,
+            "solid cover must stay solid after resize + jpeg: {center:?}"
+        );
+    }
+
+    let thumbnails_dir = app_data.join("thumbnails");
+    let cached_files = || {
+        fs::read_dir(&thumbnails_dir)
+            .expect("thumbnails dir")
+            .count()
+    };
+    assert_eq!(cached_files(), 1, "cover cached on disk once");
+
+    let second = core
+        .get_comic_thumbnail(&comic_path, 100, 100)
+        .expect("thumbnail again");
+    assert!(
+        std::sync::Arc::ptr_eq(&first, &second),
+        "second call is a memory-cache hit"
+    );
+
+    // A fresh core (new process) serves the disk copy instead of regenerating.
+    drop(core);
+    let core = ComicRdCore::open(&app_data).expect("reopen core");
+    let from_disk = core
+        .get_comic_thumbnail(&comic_path, 100, 100)
+        .expect("thumbnail from disk");
+    assert_eq!(*from_disk, *first);
+    assert_eq!(cached_files(), 1);
+}
+
+#[test]
 fn render_page_tile_passthrough_counts_single_load_then_hit() {
     let temp = tempdir().expect("tempdir");
     let app_data = temp.path().join("app-data");

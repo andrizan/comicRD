@@ -362,14 +362,22 @@ impl ComicRdCore {
 
         let bytes = generate_thumbnail_bytes(source_path, max_width, max_height)?;
         if !bytes.is_empty() {
-            if let Err(e) = write_disk_thumbnail(
+            match write_disk_thumbnail(
                 &self.thumbnail_dir,
                 source_path,
                 max_width,
                 max_height,
                 &bytes,
             ) {
-                eprintln!("failed writing thumbnail to disk cache: {e}");
+                Ok(()) => {
+                    if let Err(e) = self
+                        .thumbnail_cache
+                        .record_disk_write(&self.thumbnail_dir, bytes.len() as u64)
+                    {
+                        eprintln!("failed trimming thumbnail disk cache: {e}");
+                    }
+                }
+                Err(e) => eprintln!("failed writing thumbnail to disk cache: {e}"),
             }
             self.thumbnail_cache
                 .insert(source_path, max_width, max_height, Arc::clone(&bytes))?;
@@ -888,6 +896,8 @@ impl ComicRdCore {
         // Deleting rows changes library counts and chapter availability.
         self.clear_library_list_cache();
         self.clear_chapter_discovery_cache();
+        // The orphan purge removed cover files; re-measure on next write.
+        self.thumbnail_cache.forget_disk_usage();
         Ok(result)
     }
 

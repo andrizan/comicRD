@@ -557,7 +557,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final readerSettings = ref.watch(readerSettingsProvider);
     // Flattened tile list: one sliver item per tile. The grid depends
     // only on Rust-provided tile_heights, never on zoom or display size.
-    final tiles = flattenTiles(data.pages);
+    final tiles = data.tiles;
     final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
     // Exact total scroll extent (single source of truth with the per-item
     // builder below). Reported to the framework via _ExactTotalChildDelegate
@@ -731,7 +731,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final page = scrollToBottom ? data.pages.length - 1 : data.initialPage;
     _currentPage = page;
     _lastSavedPage = page;
-    final tiles = flattenTiles(data.pages);
+    final tiles = data.tiles;
     _setRenderWindowAroundTile(_firstTileOfPage(tiles, page), tiles.length);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isReaderCurrent(chapterId, generation)) {
@@ -810,7 +810,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final maxExtent = _scroll.position.maxScrollExtent;
     final currentOffset = _scroll.position.pixels;
     final viewportDimension = _scroll.position.viewportDimension;
-    final tiles = flattenTiles(data.pages);
+    final tiles = data.tiles;
     final visibleRange = _visibleTileRange(
       tiles: tiles,
       pages: data.pages,
@@ -847,7 +847,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     final settings = ref.read(readerSettingsProvider);
-    final tiles = flattenTiles(data.pages);
+    final tiles = data.tiles;
     if (tiles.isEmpty) {
       return;
     }
@@ -1108,7 +1108,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         if (data == null || data.pages.isEmpty || nextEnd < nextStart) {
           return;
         }
-        final tiles = flattenTiles(data.pages);
+        final tiles = data.tiles;
         if (tiles.isEmpty) {
           return;
         }

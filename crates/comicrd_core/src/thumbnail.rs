@@ -11,6 +11,7 @@ use crate::chapter::{
     archive_image_bytes, archive_image_entries, discover_chapter_entries_for_comic,
     image_entries_in_dir, image_entries_in_dir_shallow,
 };
+use crate::image_pipeline::fir_resize;
 
 const THUMBNAIL_CACHE_CAP: usize = 64;
 const DEFAULT_THUMBNAIL_QUALITY: u8 = 85;
@@ -31,6 +32,9 @@ pub(crate) struct ThumbnailCache {
 struct ThumbnailCacheState {
     entries: HashMap<ThumbnailKey, Arc<Vec<u8>>>,
     order: VecDeque<ThumbnailKey>,
+    /// Bytes in the on-disk cache, tracked so the cap check is O(1) per
+    /// write instead of a full directory scan. `None` until first measured.
+    disk_bytes: Option<u64>,
 }
 
 impl ThumbnailCacheState {
@@ -90,6 +94,53 @@ impl ThumbnailCache {
         let mut state = self.lock_state()?;
         state.remember(key, bytes);
         Ok(())
+    }
+
+    /// Account for a thumbnail just written to disk and trim the directory
+    /// only when the running total exceeds the cap. The directory is scanned
+    /// once per process (first write) and again only by a trim; every other
+    /// write is a counter bump. The total is approximate under concurrent
+    /// writes; a trim re-measures it exactly.
+    pub(crate) fn record_disk_write(
+        &self,
+        thumbnail_dir: &Path,
+        written: u64,
+    ) -> Result<(), String> {
+        self.record_disk_write_with_cap(thumbnail_dir, written, MAX_DISK_CACHE_BYTES)
+    }
+
+    fn record_disk_write_with_cap(
+        &self,
+        thumbnail_dir: &Path,
+        written: u64,
+        max_bytes: u64,
+    ) -> Result<(), String> {
+        let tracked = {
+            let mut state = self.lock_state()?;
+            state.disk_bytes = state.disk_bytes.map(|total| total + written);
+            state.disk_bytes
+        };
+        // Scans and deletes run outside the lock (plain IO); the scan
+        // already includes the file just written.
+        let total = match tracked {
+            Some(total) => total,
+            None => disk_cache_bytes(thumbnail_dir)?,
+        };
+        let total = if total > max_bytes {
+            trim_disk_cache(thumbnail_dir, max_bytes)?
+        } else {
+            total
+        };
+        self.lock_state()?.disk_bytes = Some(total);
+        Ok(())
+    }
+
+    /// Drop the tracked disk total after files were removed behind the
+    /// cache's back (orphan purge); the next write re-measures.
+    pub(crate) fn forget_disk_usage(&self) {
+        if let Ok(mut state) = self.lock_state() {
+            state.disk_bytes = None;
+        }
     }
 }
 
@@ -172,9 +223,11 @@ fn fit_thumbnail(img: &DynamicImage, max_width: u32, max_height: u32) -> Dynamic
         return img.clone();
     }
 
-    let new_w = (orig_w as f32 * scale).round() as u32;
-    let new_h = (orig_h as f32 * scale).round() as u32;
-    img.resize(new_w, new_h, FilterType::Triangle)
+    let new_w = ((orig_w as f32 * scale).round() as u32).max(1);
+    let new_h = ((orig_h as f32 * scale).round() as u32).max(1);
+    // SIMD fast path shared with the reader (5x cheaper than the image
+    // crate); exotic pixel types (16-bit) keep the image-crate fallback.
+    fir_resize(img, new_w, new_h).unwrap_or_else(|| img.resize(new_w, new_h, FilterType::Triangle))
 }
 
 /// Generate a JPEG thumbnail for a comic source.
@@ -250,14 +303,16 @@ pub(crate) fn write_disk_thumbnail(
         .map_err(|e| format!("failed creating thumbnail dir: {e}"))?;
     let path = thumbnail_dir.join(disk_cache_filename(source_path, max_width, max_height));
     fs::write(&path, bytes).map_err(|e| format!("failed writing thumbnail: {e}"))?;
-    trim_disk_cache(thumbnail_dir, MAX_DISK_CACHE_BYTES)?;
     Ok(())
 }
 
-fn trim_disk_cache(thumbnail_dir: &Path, max_bytes: u64) -> Result<(), String> {
-    let mut entries: Vec<(std::path::PathBuf, u64, SystemTime)> = Vec::new();
-    for entry in fs::read_dir(thumbnail_dir)
-        .map_err(|e| format!("failed reading thumbnail dir: {e}"))?
+/// Regular files in the cache dir as (path, size, mtime).
+fn disk_cache_entries(
+    thumbnail_dir: &Path,
+) -> Result<Vec<(std::path::PathBuf, u64, SystemTime)>, String> {
+    let mut entries = Vec::new();
+    for entry in
+        fs::read_dir(thumbnail_dir).map_err(|e| format!("failed reading thumbnail dir: {e}"))?
     {
         let entry = entry.map_err(|e| format!("failed reading dir entry: {e}"))?;
         let meta = entry
@@ -268,23 +323,35 @@ fn trim_disk_cache(thumbnail_dir: &Path, max_bytes: u64) -> Result<(), String> {
             entries.push((entry.path(), meta.len(), modified));
         }
     }
+    Ok(entries)
+}
 
-    let total: u64 = entries.iter().map(|(_, size, _)| *size).sum();
+fn disk_cache_bytes(thumbnail_dir: &Path) -> Result<u64, String> {
+    Ok(disk_cache_entries(thumbnail_dir)?
+        .iter()
+        .map(|(_, size, _)| *size)
+        .sum())
+}
+
+/// Delete the oldest files until the dir fits `max_bytes`. Returns the
+/// bytes left on disk.
+fn trim_disk_cache(thumbnail_dir: &Path, max_bytes: u64) -> Result<u64, String> {
+    let mut entries = disk_cache_entries(thumbnail_dir)?;
+    let mut total: u64 = entries.iter().map(|(_, size, _)| *size).sum();
     if total <= max_bytes {
-        return Ok(());
+        return Ok(total);
     }
 
     entries.sort_by(|a, b| a.2.cmp(&b.2));
-    let mut to_free = total - max_bytes;
     for (path, size, _) in entries {
-        if to_free == 0 {
+        if total <= max_bytes {
             break;
         }
         if fs::remove_file(&path).is_ok() {
-            to_free = to_free.saturating_sub(size);
+            total = total.saturating_sub(size);
         }
     }
-    Ok(())
+    Ok(total)
 }
 
 /// Delete cached thumbnail files whose source path is not in
@@ -363,6 +430,124 @@ mod tests {
         let thumb = fit_thumbnail(&img, 100, 100);
         assert_eq!(thumb.width(), 50);
         assert_eq!(thumb.height(), 50);
+    }
+
+    #[test]
+    fn fit_thumbnail_falls_back_for_16bit_pixels() {
+        let img = DynamicImage::ImageRgb16(image::ImageBuffer::from_pixel(
+            400,
+            200,
+            image::Rgb([1000u16, 2000, 3000]),
+        ));
+        let thumb = fit_thumbnail(&img, 100, 100);
+        assert_eq!((thumb.width(), thumb.height()), (100, 50));
+    }
+
+    #[test]
+    fn fit_thumbnail_keeps_solid_color() {
+        let img = DynamicImage::ImageRgb8(image::ImageBuffer::from_pixel(
+            400,
+            200,
+            image::Rgb([10u8, 20, 30]),
+        ));
+        let thumb = fit_thumbnail(&img, 100, 100).to_rgb8();
+        assert!(thumb.pixels().all(|p| {
+            p.0.iter()
+                .zip([10u8, 20, 30])
+                .all(|(c, e)| (*c as i32 - e as i32).abs() <= 1)
+        }));
+    }
+
+    #[test]
+    fn fit_thumbnail_never_yields_zero_dimension() {
+        let img = DynamicImage::new_rgb8(1000, 1);
+        let thumb = fit_thumbnail(&img, 100, 100);
+        assert_eq!((thumb.width(), thumb.height()), (100, 1));
+    }
+
+    #[test]
+    fn trim_disk_cache_removes_oldest_until_under_cap() {
+        let dir = tempdir();
+        let dir = Path::new(&dir);
+        for (i, source) in ["/library/A", "/library/B", "/library/C"]
+            .iter()
+            .enumerate()
+        {
+            write_disk_thumbnail(dir, source, 200, 300, &[0u8; 100]).unwrap();
+            set_mtime(dir, source, 1 + i as u64);
+        }
+        assert_eq!(
+            trim_disk_cache(dir, 1000).unwrap(),
+            300,
+            "under cap: nothing removed"
+        );
+        assert_eq!(
+            trim_disk_cache(dir, 250).unwrap(),
+            200,
+            "oldest file removed"
+        );
+        assert!(read_disk_thumbnail(dir, "/library/A", 200, 300).is_none());
+        assert!(read_disk_thumbnail(dir, "/library/C", 200, 300).is_some());
+    }
+
+    #[test]
+    fn record_disk_write_measures_once_then_counts() {
+        let dir = tempdir();
+        let dir = Path::new(&dir);
+        let cache = ThumbnailCache::default();
+        write_disk_thumbnail(dir, "/library/A", 200, 300, &[0u8; 100]).unwrap();
+        cache.record_disk_write(dir, 100).unwrap();
+        assert_eq!(cache.lock_state().unwrap().disk_bytes, Some(100));
+        // Counted, not re-scanned: no file was written for this call.
+        cache.record_disk_write(dir, 50).unwrap();
+        assert_eq!(cache.lock_state().unwrap().disk_bytes, Some(150));
+        cache.forget_disk_usage();
+        assert_eq!(cache.lock_state().unwrap().disk_bytes, None);
+    }
+
+    #[test]
+    fn record_disk_write_trims_only_when_over_cap() {
+        let dir = tempdir();
+        let dir = Path::new(&dir);
+        let cache = ThumbnailCache::default();
+        for (i, source) in ["/library/A", "/library/B", "/library/C"]
+            .iter()
+            .enumerate()
+        {
+            write_disk_thumbnail(dir, source, 200, 300, &[0u8; 100]).unwrap();
+            set_mtime(dir, source, 1 + i as u64);
+        }
+        // First write of the process measures the dir (300 bytes) and trims
+        // because it is over the 250-byte cap: the oldest file goes.
+        cache.record_disk_write_with_cap(dir, 100, 250).unwrap();
+        assert_eq!(cache.lock_state().unwrap().disk_bytes, Some(200));
+        assert!(read_disk_thumbnail(dir, "/library/A", 200, 300).is_none());
+        assert!(read_disk_thumbnail(dir, "/library/B", 200, 300).is_some());
+
+        // Under the cap: no scan, no deletion, just counting.
+        write_disk_thumbnail(dir, "/library/D", 200, 300, &[0u8; 50]).unwrap();
+        set_mtime(dir, "/library/D", 10);
+        cache.record_disk_write_with_cap(dir, 50, 250).unwrap();
+        assert_eq!(cache.lock_state().unwrap().disk_bytes, Some(250));
+        assert!(read_disk_thumbnail(dir, "/library/B", 200, 300).is_some());
+
+        // Over the cap again: trim drops the next-oldest and re-measures.
+        write_disk_thumbnail(dir, "/library/E", 200, 300, &[0u8; 100]).unwrap();
+        set_mtime(dir, "/library/E", 11);
+        cache.record_disk_write_with_cap(dir, 100, 250).unwrap();
+        assert_eq!(cache.lock_state().unwrap().disk_bytes, Some(250));
+        assert!(read_disk_thumbnail(dir, "/library/B", 200, 300).is_none());
+        assert!(read_disk_thumbnail(dir, "/library/E", 200, 300).is_some());
+    }
+
+    /// Explicit mtimes: same-tick writes would make "oldest" ambiguous.
+    fn set_mtime(dir: &Path, source: &str, secs: u64) {
+        std::fs::File::options()
+            .write(true)
+            .open(dir.join(disk_cache_filename(source, 200, 300)))
+            .unwrap()
+            .set_modified(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+            .unwrap();
     }
 
     #[test]

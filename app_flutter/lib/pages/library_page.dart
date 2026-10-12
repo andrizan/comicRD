@@ -17,6 +17,7 @@ import '../utils/date_format.dart';
 import '../utils/forui_theme.dart';
 import '../utils/format_size.dart';
 import '../widgets/back_to_top_button.dart';
+import '../widgets/comic_thumbnail_image.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({super.key});
@@ -1425,7 +1426,15 @@ class _CoverArea extends ConsumerWidget {
               return Positioned.fill(
                 child: ClipRRect(
                   borderRadius: borderRadius,
-                  child: Image.memory(bytes, fit: BoxFit.cover),
+                  child: Image(
+                    image: ComicThumbnailImage(
+                      sourcePath: sourcePath,
+                      maxWidth: 200,
+                      maxHeight: 300,
+                      bytes: bytes,
+                    ),
+                    fit: BoxFit.cover,
+                  ),
                 ),
               );
             },
@@ -1800,7 +1809,15 @@ class _HistoryCover extends ConsumerWidget {
                   color: colors.mutedForeground,
                 );
               }
-              return Image.memory(bytes, fit: BoxFit.cover);
+              return Image(
+                image: ComicThumbnailImage(
+                  sourcePath: sourcePath,
+                  maxWidth: 200,
+                  maxHeight: 300,
+                  bytes: bytes,
+                ),
+                fit: BoxFit.cover,
+              );
             },
             loading: () =>
                 Icon(AppIcons.library, size: 28, color: colors.mutedForeground),
