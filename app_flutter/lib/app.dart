@@ -305,75 +305,88 @@ class _SidebarState extends State<_Sidebar> {
         collapsed ? 12 : 16,
         24,
       ),
-      child: Column(
-        crossAxisAlignment: collapsed
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.stretch,
-        children: [
-          _SidebarBrand(
-            collapsed: collapsed,
-            onToggleCollapse: widget.onToggleCollapse,
-            text: widget.text,
+      // The width animates but the content switches layout at once, so lay
+      // the content out at its final width and let the container clip it
+      // while the animation catches up (otherwise the rows overflow).
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        minWidth: 0,
+        maxWidth: double.infinity,
+        child: SizedBox(
+          width: collapsed
+              ? _Sidebar.collapsedWidth - 24
+              : _Sidebar.expandedWidth - 40,
+          child: Column(
+            crossAxisAlignment: collapsed
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.stretch,
+            children: [
+              _SidebarBrand(
+                collapsed: collapsed,
+                onToggleCollapse: widget.onToggleCollapse,
+                text: widget.text,
+              ),
+              const SizedBox(height: 28),
+              _SidebarNavItem(
+                tab: SidebarTab.library,
+                collapsed: collapsed,
+                icon: AppIcons.library,
+                label: widget.text.library,
+                count: widget.libraryCount,
+                selected: widget.selectedTab == SidebarTab.library,
+                hovered: _hovered == SidebarTab.library,
+                onHoverChanged: _setHovered,
+                onTap: () => widget.onSelectTab(SidebarTab.library),
+              ),
+              const SizedBox(height: 4),
+              _SidebarNavItem(
+                tab: SidebarTab.history,
+                collapsed: collapsed,
+                icon: AppIcons.clock,
+                label: widget.text.history,
+                selected: widget.selectedTab == SidebarTab.history,
+                hovered: _hovered == SidebarTab.history,
+                onHoverChanged: _setHovered,
+                onTap: () => widget.onSelectTab(SidebarTab.history),
+              ),
+              const SizedBox(height: 4),
+              _SidebarNavItem(
+                tab: SidebarTab.favorites,
+                collapsed: collapsed,
+                icon: AppIcons.star,
+                label: widget.text.favorites,
+                count: widget.favoriteCount,
+                selected: widget.selectedTab == SidebarTab.favorites,
+                hovered: _hovered == SidebarTab.favorites,
+                onHoverChanged: _setHovered,
+                onTap: () => widget.onSelectTab(SidebarTab.favorites),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: collapsed ? 4 : 8,
+                ),
+                child: Container(height: 1, color: reader.line),
+              ),
+              _SidebarNavItem(
+                tab: SidebarTab.settings,
+                collapsed: collapsed,
+                icon: AppIcons.settings,
+                label: widget.text.settings,
+                selected: widget.selectedTab == SidebarTab.settings,
+                hovered: _hovered == SidebarTab.settings,
+                onHoverChanged: _setHovered,
+                onTap: () => widget.onSelectTab(SidebarTab.settings),
+              ),
+              const Spacer(),
+              _SidebarStatusCard(
+                collapsed: collapsed,
+                text: widget.text,
+                onTap: () => widget.onSelectTab(SidebarTab.settings),
+              ),
+            ],
           ),
-          const SizedBox(height: 28),
-          _SidebarNavItem(
-            tab: SidebarTab.library,
-            collapsed: collapsed,
-            icon: AppIcons.library,
-            label: widget.text.library,
-            count: widget.libraryCount,
-            selected: widget.selectedTab == SidebarTab.library,
-            hovered: _hovered == SidebarTab.library,
-            onHoverChanged: _setHovered,
-            onTap: () => widget.onSelectTab(SidebarTab.library),
-          ),
-          const SizedBox(height: 4),
-          _SidebarNavItem(
-            tab: SidebarTab.history,
-            collapsed: collapsed,
-            icon: AppIcons.clock,
-            label: widget.text.history,
-            selected: widget.selectedTab == SidebarTab.history,
-            hovered: _hovered == SidebarTab.history,
-            onHoverChanged: _setHovered,
-            onTap: () => widget.onSelectTab(SidebarTab.history),
-          ),
-          const SizedBox(height: 4),
-          _SidebarNavItem(
-            tab: SidebarTab.favorites,
-            collapsed: collapsed,
-            icon: AppIcons.star,
-            label: widget.text.favorites,
-            count: widget.favoriteCount,
-            selected: widget.selectedTab == SidebarTab.favorites,
-            hovered: _hovered == SidebarTab.favorites,
-            onHoverChanged: _setHovered,
-            onTap: () => widget.onSelectTab(SidebarTab.favorites),
-          ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: 12,
-              horizontal: collapsed ? 4 : 8,
-            ),
-            child: Container(height: 1, color: reader.line),
-          ),
-          _SidebarNavItem(
-            tab: SidebarTab.settings,
-            collapsed: collapsed,
-            icon: AppIcons.settings,
-            label: widget.text.settings,
-            selected: widget.selectedTab == SidebarTab.settings,
-            hovered: _hovered == SidebarTab.settings,
-            onHoverChanged: _setHovered,
-            onTap: () => widget.onSelectTab(SidebarTab.settings),
-          ),
-          const Spacer(),
-          _SidebarStatusCard(
-            collapsed: collapsed,
-            text: widget.text,
-            onTap: () => widget.onSelectTab(SidebarTab.settings),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -568,12 +581,16 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
           ? Icon(widget.icon, size: 20, color: fg)
           : Stack(
               clipBehavior: Clip.none,
+              // The row is shorter than the 44 px item: center it, and let
+              // the accent bar span the item (4 px in, 12 px top/bottom)
+              // like the design instead of the row's own height.
+              alignment: AlignmentDirectional.centerStart,
               children: [
                 if (selected)
                   Positioned(
                     left: -10,
-                    top: 8,
-                    bottom: 8,
+                    top: 10,
+                    bottom: 10,
                     child: Container(
                       width: 4,
                       decoration: BoxDecoration(
@@ -677,9 +694,7 @@ class _SidebarStatusCard extends ConsumerWidget {
     final reader = context.appReader;
     final status = ref.watch(librarySourceStatusProvider).asData?.value;
     final (String label, Color tone) = _describe(status, colors, reader);
-    final path = status == null || status.path.isEmpty
-        ? text.localLibrary
-        : status.path;
+    final path = status?.path ?? '';
 
     final iconBox = Container(
       width: 40,
@@ -699,7 +714,8 @@ class _SidebarStatusCard extends ConsumerWidget {
     final Widget card;
     if (collapsed) {
       card = FTooltip(
-        tipBuilder: (context, _) => Text('$path · $label'),
+        tipBuilder: (context, _) =>
+            Text(path.isEmpty ? label : '$path · $label'),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -745,17 +761,18 @@ class _SidebarStatusCard extends ConsumerWidget {
                       color: colors.foreground,
                     ),
                   ),
-                  Text(
-                    path,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 18 / 12,
-                      fontWeight: FontWeight.w500,
-                      color: colors.mutedForeground,
+                  if (path.isNotEmpty)
+                    Text(
+                      path,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 18 / 12,
+                        fontWeight: FontWeight.w500,
+                        color: colors.mutedForeground,
+                      ),
                     ),
-                  ),
                   if (label.isNotEmpty)
                     Row(
                       children: [
@@ -784,7 +801,9 @@ class _SidebarStatusCard extends ConsumerWidget {
     }
     return Semantics(
       button: true,
-      label: '${text.localLibrary}: $path. $label',
+      label: path.isEmpty
+          ? '${text.localLibrary}: $label'
+          : '${text.localLibrary}: $path. $label',
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(

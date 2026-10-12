@@ -220,7 +220,6 @@ class AppStrings {
     required this.search,
     required this.refresh,
     required this.backToTop,
-    required this.totalChapters,
     required this.emptyLibrary,
     required this.comic,
     // Language names
@@ -234,7 +233,6 @@ class AppStrings {
     required this.nextPage,
     required this.nextChapter,
     required this.readerControls,
-    required this.gap,
     required this.zoom,
     required this.fullscreen,
     required this.unlimitedScroll,
@@ -253,10 +251,7 @@ class AppStrings {
     required this.progress,
     required this.grid,
     required this.list,
-    required this.sortDirection,
     // Comic actions
-    required this.pageBookmark,
-    required this.pageBookmarked,
     required this.addPageBookmark,
     required this.removePageBookmark,
     required this.addBookmark,
@@ -266,13 +261,11 @@ class AppStrings {
     required this.openFolder,
     required this.copyTitle,
     required this.copyPath,
-    required this.noLibrarySource,
     // Redesign labels
     required this.menu,
     required this.newBadge,
     required this.continueReading,
     required this.totalSize,
-    required this.chapterCountLabel,
     required this.librarySubtitleTemplate,
     required this.favoritesSubtitleTemplate,
     required this.latestReading,
@@ -280,28 +273,22 @@ class AppStrings {
     required this.backToLibrary,
     required this.directoryPath,
     required this.lastRead,
-    required this.lastReadTemplate,
     required this.readingProgress,
     required this.readingProgressTemplate,
     required this.startFromBeginning,
     required this.filterChapters,
-    required this.allChapters,
     required this.bookmarkChapters,
-    required this.downloaded,
     // Settings panel
     required this.librarySection,
     required this.librarySource,
     required this.librarySourceDescription,
-    required this.browseDirectory,
     required this.refreshSourceStatus,
     required this.readerSection,
     required this.defaultZoom,
     required this.defaultZoomDescription,
     required this.pageGap,
     required this.pageGapDescription,
-    required this.applicationSection,
     // Update
-    required this.updateSection,
     required this.checkForUpdates,
     required this.checkingForUpdates,
     required this.appUpToDate,
@@ -313,7 +300,6 @@ class AppStrings {
     required this.aboutSection,
     required this.aboutDescription,
     required this.viewOnGithub,
-    required this.backupSection,
     required this.exportBackup,
     required this.exportBackupDescription,
     required this.importBackup,
@@ -326,7 +312,6 @@ class AppStrings {
     required this.optimizeData,
     required this.optimizeDataDescription,
     required this.databaseSize,
-    required this.optimizingData,
     required this.optimizeDataCompleted,
     required this.optimizeRemovedComics,
     required this.optimizeRemovedChapters,
@@ -335,7 +320,6 @@ class AppStrings {
     required this.optimizeRemovedThumbnails,
     required this.optimizeFreedSpace,
     required this.optimizeSkippedLibraries,
-    required this.optimizeDataFailed,
     // Scan
     required this.scanLibrary,
     required this.scanLibraryDescription,
@@ -343,7 +327,6 @@ class AppStrings {
     required this.scanNoChange,
     required this.scanProgress,
     required this.scanCompleted,
-    required this.cancelScan,
     // Per-setting descriptions (Win 11-style cards)
     required this.themeDescription,
     required this.localeDescription,
@@ -401,6 +384,7 @@ class AppStrings {
     required this.titlesCountTemplate,
     required this.pagesCountTemplate,
     required this.moreActions,
+    required this.keyFirstPage,
   });
 
   // App identity
@@ -418,7 +402,6 @@ class AppStrings {
   final String search;
   final String refresh;
   final String backToTop;
-  final String totalChapters;
   final String emptyLibrary;
   final String comic;
   // Language names
@@ -432,7 +415,6 @@ class AppStrings {
   final String nextPage;
   final String nextChapter;
   final String readerControls;
-  final String gap;
   final String zoom;
   final String fullscreen;
   final String unlimitedScroll;
@@ -451,10 +433,7 @@ class AppStrings {
   final String progress;
   final String grid;
   final String list;
-  final String sortDirection;
   // Comic actions
-  final String pageBookmark;
-  final String pageBookmarked;
   final String addPageBookmark;
   final String removePageBookmark;
   final String addBookmark;
@@ -464,13 +443,11 @@ class AppStrings {
   final String openFolder;
   final String copyTitle;
   final String copyPath;
-  final String noLibrarySource;
   // Redesign labels
   final String menu;
   final String newBadge;
   final String continueReading;
   final String totalSize;
-  final String chapterCountLabel;
   final String librarySubtitleTemplate;
   final String favoritesSubtitleTemplate;
   final String latestReading;
@@ -478,28 +455,22 @@ class AppStrings {
   final String backToLibrary;
   final String directoryPath;
   final String lastRead;
-  final String lastReadTemplate;
   final String readingProgress;
   final String readingProgressTemplate;
   final String startFromBeginning;
   final String filterChapters;
-  final String allChapters;
   final String bookmarkChapters;
-  final String downloaded;
   // Settings panel
   final String librarySection;
   final String librarySource;
   final String librarySourceDescription;
-  final String browseDirectory;
   final String refreshSourceStatus;
   final String readerSection;
   final String defaultZoom;
   final String defaultZoomDescription;
   final String pageGap;
   final String pageGapDescription;
-  final String applicationSection;
   // Update
-  final String updateSection;
   final String checkForUpdates;
   final String checkingForUpdates;
   final String appUpToDate;
@@ -511,7 +482,6 @@ class AppStrings {
   final String aboutSection;
   final String aboutDescription;
   final String viewOnGithub;
-  final String backupSection;
   final String exportBackup;
   final String exportBackupDescription;
   final String importBackup;
@@ -524,7 +494,6 @@ class AppStrings {
   final String optimizeData;
   final String optimizeDataDescription;
   final String databaseSize;
-  final String optimizingData;
   final String optimizeDataCompleted;
   final String optimizeRemovedComics;
   final String optimizeRemovedChapters;
@@ -533,7 +502,6 @@ class AppStrings {
   final String optimizeRemovedThumbnails;
   final String optimizeFreedSpace;
   final String optimizeSkippedLibraries;
-  final String optimizeDataFailed;
   // Scan
   final String scanLibrary;
   final String scanLibraryDescription;
@@ -541,7 +509,6 @@ class AppStrings {
   final String scanNoChange;
   final String scanProgress;
   final String scanCompleted;
-  final String cancelScan;
   // Per-setting descriptions (Win 11-style cards)
   final String themeDescription;
   final String localeDescription;
@@ -599,6 +566,7 @@ class AppStrings {
   final String titlesCountTemplate;
   final String pagesCountTemplate;
   final String moreActions;
+  final String keyFirstPage;
 
   static const en = AppStrings(
     appName: 'ComicRD',
@@ -614,7 +582,6 @@ class AppStrings {
     search: 'Search',
     refresh: 'Refresh',
     backToTop: 'Back to Top',
-    totalChapters: 'chapters',
     emptyLibrary: 'No Comics Found',
     comic: 'Comic',
     english: 'English',
@@ -626,7 +593,6 @@ class AppStrings {
     nextPage: 'Next Page',
     nextChapter: 'Next Chapter',
     readerControls: 'Reader Controls',
-    gap: 'Gap',
     zoom: 'Zoom',
     fullscreen: 'Fullscreen',
     unlimitedScroll: 'Unlimited Scroll',
@@ -642,9 +608,6 @@ class AppStrings {
     progress: 'Progress',
     grid: 'Grid',
     list: 'List',
-    sortDirection: 'Sort Direction',
-    pageBookmark: 'Page Bookmark',
-    pageBookmarked: 'Page Bookmarked',
     addPageBookmark: 'Add Page Bookmark',
     removePageBookmark: 'Remove Page Bookmark',
     addBookmark: 'Add Bookmark',
@@ -654,38 +617,30 @@ class AppStrings {
     openFolder: 'Open Folder',
     copyTitle: 'Copy Title',
     copyPath: 'Copy Path',
-    noLibrarySource: 'No Library Source Configured',
     menu: 'Menu',
     newBadge: 'New',
     continueReading: 'Continue',
     totalSize: 'Total Size',
-    chapterCountLabel: 'Ch.',
     librarySubtitleTemplate: '{count} Titles Saved',
     favoritesSubtitleTemplate: '{count} Titles Saved',
     latestReading: 'Latest Reading',
     backToLibrary: 'Back to Library',
     directoryPath: 'Directory Path',
     lastRead: 'Last Read',
-    lastReadTemplate: '{chapter} ({date})',
     readingProgress: 'Reading Progress',
     readingProgressTemplate: '{percent}% ({read} of {total} chapters)',
     startFromBeginning: 'Start from Beginning',
     filterChapters: 'Filter Chapters...',
-    allChapters: 'All Chapters',
     bookmarkChapters: 'Bookmarks',
-    downloaded: 'Downloaded',
     librarySection: 'Library',
     librarySource: 'Library Source',
     librarySourceDescription: 'The root folder containing your comics',
-    browseDirectory: 'Browse Directory',
     refreshSourceStatus: 'Refresh Source Status',
     readerSection: 'Reader',
     defaultZoom: 'Default Zoom',
     defaultZoomDescription: 'Set the default zoom level for pages',
     pageGap: 'Page Gap',
     pageGapDescription: 'Spacing between pages',
-    applicationSection: 'Application',
-    updateSection: 'Update',
     checkForUpdates: 'Check for Updates',
     checkingForUpdates: 'Checking...',
     appUpToDate: 'App is up to date',
@@ -696,7 +651,6 @@ class AppStrings {
     aboutSection: 'About',
     aboutDescription: 'A desktop comic reader for local libraries.',
     viewOnGithub: 'View on GitHub',
-    backupSection: 'Backup',
     exportBackup: 'Export Backup',
     exportBackupDescription: 'Export your database to a backup file',
     importBackup: 'Import Backup',
@@ -709,7 +663,6 @@ class AppStrings {
     optimizeDataDescription:
         'Remove data for comics no longer on disk and shrink the database',
     databaseSize: 'Database Size',
-    optimizingData: 'Optimizing...',
     optimizeDataCompleted: 'Optimization Complete',
     optimizeRemovedComics: '{count} comics removed',
     optimizeRemovedChapters: '{count} chapters removed',
@@ -718,14 +671,12 @@ class AppStrings {
     optimizeRemovedThumbnails: '{count} cover images removed',
     optimizeFreedSpace: '{size} of space freed',
     optimizeSkippedLibraries: '{count} library path(s) unavailable, skipped',
-    optimizeDataFailed: 'Optimization Failed',
     scanLibrary: 'Scan Library',
     scanLibraryDescription: 'Scan your library for new comics',
     scanning: 'Scanning...',
     scanNoChange: 'No Changes Detected',
     scanProgress: 'Scanning',
     scanCompleted: 'Scan Complete: {comics} Comics, {chapters} Chapters Found',
-    cancelScan: 'Cancel Scan',
     themeDescription: 'Choose the app theme',
     localeDescription: 'Choose the app language',
     unlimitedScrollDescription: 'Continue to next chapter at the end',
@@ -783,6 +734,7 @@ class AppStrings {
     titlesCountTemplate: '{count} titles',
     pagesCountTemplate: '{count} pages',
     moreActions: 'More Actions',
+    keyFirstPage: 'first page',
   );
 
   static const id = AppStrings(
@@ -799,7 +751,6 @@ class AppStrings {
     search: 'Cari',
     refresh: 'Perbarui',
     backToTop: 'Kembali ke Atas',
-    totalChapters: 'chapter',
     emptyLibrary: 'Tidak Ada Komik',
     comic: 'Komik',
     english: 'Inggris',
@@ -811,7 +762,6 @@ class AppStrings {
     nextPage: 'Halaman Berikutnya',
     nextChapter: 'Chapter Berikutnya',
     readerControls: 'Kontrol Reader',
-    gap: 'Jarak',
     zoom: 'Perbesar',
     fullscreen: 'Layar Penuh',
     unlimitedScroll: 'Scroll Tanpa Batas',
@@ -827,9 +777,6 @@ class AppStrings {
     progress: 'Progres',
     grid: 'Kisi',
     list: 'Daftar',
-    sortDirection: 'Arah Urutan',
-    pageBookmark: 'Bookmark Halaman',
-    pageBookmarked: 'Dibookmark',
     addPageBookmark: 'Bookmark Halaman',
     removePageBookmark: 'Hapus Bookmark Halaman',
     addBookmark: 'Bookmark Chapter',
@@ -839,38 +786,30 @@ class AppStrings {
     openFolder: 'Buka Folder',
     copyTitle: 'Salin Judul',
     copyPath: 'Salin Path',
-    noLibrarySource: 'Sumber Pustaka Belum Dikonfigurasi',
     menu: 'Menu',
     newBadge: 'Baru',
     continueReading: 'Lanjut',
     totalSize: 'Total Ukuran',
-    chapterCountLabel: 'Ch.',
     librarySubtitleTemplate: '{count} Judul Tersimpan',
     favoritesSubtitleTemplate: '{count} Judul Disimpan',
     latestReading: 'Bacaan Terakhir',
     backToLibrary: 'Kembali ke Pustaka',
     directoryPath: 'Path Direktori',
     lastRead: 'Terakhir Dibaca',
-    lastReadTemplate: '{chapter} ({date})',
     readingProgress: 'Progres Baca',
     readingProgressTemplate: '{percent}% ({read} dari {total} chapter)',
     startFromBeginning: 'Mulai dari Awal',
     filterChapters: 'Filter Chapter...',
-    allChapters: 'Semua Chapter',
     bookmarkChapters: 'Bookmark',
-    downloaded: 'Diunduh',
     librarySection: 'Pustaka',
     librarySource: 'Sumber Pustaka',
     librarySourceDescription: 'Folder root yang berisi komik Anda',
-    browseDirectory: 'Pilih Direktori',
     refreshSourceStatus: 'Perbarui Status Sumber',
     readerSection: 'Reader',
     defaultZoom: 'Zoom Default',
     defaultZoomDescription: 'Atur level zoom default untuk halaman',
     pageGap: 'Jarak Halaman',
     pageGapDescription: 'Jarak antar halaman',
-    applicationSection: 'Aplikasi',
-    updateSection: 'Pembaruan',
     checkForUpdates: 'Periksa Pembaruan',
     checkingForUpdates: 'Memeriksa...',
     appUpToDate: 'Aplikasi sudah terbaru',
@@ -881,7 +820,6 @@ class AppStrings {
     aboutSection: 'Tentang',
     aboutDescription: 'Pembaca komik desktop untuk pustaka lokal.',
     viewOnGithub: 'Lihat di GitHub',
-    backupSection: 'Cadangan',
     exportBackup: 'Ekspor Cadangan',
     exportBackupDescription: 'Ekspor database ke file cadangan',
     importBackup: 'Impor Cadangan',
@@ -894,7 +832,6 @@ class AppStrings {
     optimizeDataDescription:
         'Hapus data komik yang sudah tidak ada di disk dan perkecil database',
     databaseSize: 'Ukuran Database',
-    optimizingData: 'Mengoptimalkan...',
     optimizeDataCompleted: 'Optimasi Selesai',
     optimizeRemovedComics: '{count} komik dihapus',
     optimizeRemovedChapters: '{count} chapter dihapus',
@@ -903,7 +840,6 @@ class AppStrings {
     optimizeRemovedThumbnails: '{count} cover dihapus',
     optimizeFreedSpace: '{size} ruang dibebaskan',
     optimizeSkippedLibraries: '{count} jalur pustaka tidak tersedia, dilewati',
-    optimizeDataFailed: 'Optimasi Gagal',
     scanLibrary: 'Pindai Pustaka',
     scanLibraryDescription: 'Pindai pustaka untuk komik baru',
     scanning: 'Memindai...',
@@ -911,7 +847,6 @@ class AppStrings {
     scanProgress: 'Memindai',
     scanCompleted:
         'Pemindaian Selesai: {comics} Komik, {chapters} Chapter Ditemukan',
-    cancelScan: 'Batalkan Pemindaian',
     themeDescription: 'Pilih tema aplikasi',
     localeDescription: 'Pilih bahasa aplikasi',
     unlimitedScrollDescription: 'Lanjut ke chapter berikutnya di akhir',
@@ -970,5 +905,6 @@ class AppStrings {
     titlesCountTemplate: '{count} judul',
     pagesCountTemplate: '{count} halaman',
     moreActions: 'Aksi Lainnya',
+    keyFirstPage: 'halaman pertama',
   );
 }

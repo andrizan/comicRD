@@ -14,13 +14,18 @@ class UpdateState {
       UpdateState(status: status ?? this.status, info: info ?? this.info);
 }
 
+/// The release lookup; tests override it to avoid the network.
+final updateCheckerProvider = Provider<Future<UpdateInfo?> Function()>(
+  (ref) => UpdateChecker.check,
+);
+
 class UpdateNotifier extends Notifier<UpdateState> {
   @override
   UpdateState build() => const UpdateState();
 
   Future<void> checkForUpdates() async {
     state = state.copyWith(status: UpdateStatus.checking);
-    final info = await UpdateChecker.check();
+    final info = await ref.read(updateCheckerProvider)();
     if (!ref.mounted) return;
     if (info != null) {
       state = state.copyWith(status: UpdateStatus.available, info: info);

@@ -21,6 +21,8 @@ class UpdateChecker {
   static const _repo = 'andrizan/comicRD';
   static const _apiUrl = 'https://api.github.com/repos/$_repo/releases/latest';
 
+  /// Fetches the latest GitHub release; null when offline, on a non-200
+  /// response, without a Windows installer asset, or when already current.
   static Future<UpdateInfo?> check() async {
     try {
       final client = HttpClient()
@@ -38,40 +40,49 @@ class UpdateChecker {
       final body = await response.transform(utf8.decoder).join();
       client.close(force: false);
 
-      final json = jsonDecode(body) as Map<String, dynamic>;
-      final tagName =
-          (json['tag_name'] as String?)?.replaceFirst('v', '') ?? '';
-      final releaseNotes = (json['body'] as String?) ?? '';
-      final releaseUrl = (json['html_url'] as String?) ?? '';
-
-      final assets = (json['assets'] as List?) ?? [];
-      String? downloadUrl;
-      for (final asset in assets) {
-        final name = (asset['name'] as String?) ?? '';
-        if (name.endsWith('.exe') && name.contains('setup')) {
-          downloadUrl = asset['browser_download_url'] as String?;
-          break;
-        }
-      }
-
-      if (tagName.isEmpty || downloadUrl == null) return null;
-
       final current = await PackageInfo.fromPlatform();
-      if (_isNewer(tagName, current.version)) {
-        return UpdateInfo(
-          latestVersion: tagName,
-          downloadUrl: downloadUrl,
-          releaseNotes: releaseNotes,
-          releaseUrl: releaseUrl,
-        );
-      }
-      return null;
+      return parseRelease(
+        jsonDecode(body) as Map<String, dynamic>,
+        currentVersion: current.version,
+      );
     } catch (_) {
       return null;
     }
   }
 
-  static bool _isNewer(String latest, String current) {
+  /// Reads a GitHub release payload; returns an update only when it carries
+  /// a `*setup*.exe` asset and its tag is newer than [currentVersion].
+  static UpdateInfo? parseRelease(
+    Map<String, dynamic> json, {
+    required String currentVersion,
+  }) {
+    final tagName = (json['tag_name'] as String?)?.replaceFirst('v', '') ?? '';
+    final releaseNotes = (json['body'] as String?) ?? '';
+    final releaseUrl = (json['html_url'] as String?) ?? '';
+
+    final assets = (json['assets'] as List?) ?? [];
+    String? downloadUrl;
+    for (final asset in assets) {
+      final name = (asset['name'] as String?) ?? '';
+      if (name.endsWith('.exe') && name.contains('setup')) {
+        downloadUrl = asset['browser_download_url'] as String?;
+        break;
+      }
+    }
+
+    if (tagName.isEmpty || downloadUrl == null) return null;
+    if (!isNewer(tagName, currentVersion)) return null;
+    return UpdateInfo(
+      latestVersion: tagName,
+      downloadUrl: downloadUrl,
+      releaseNotes: releaseNotes,
+      releaseUrl: releaseUrl,
+    );
+  }
+
+  /// Numeric, segment-wise comparison; missing or non-numeric segments
+  /// count as 0, so `2.9` > `2.8.3` and `2.8.3-beta` == `2.8.3`.
+  static bool isNewer(String latest, String current) {
     final latestSegments = latest.split('.').map(int.tryParse).toList();
     final currentSegments = current.split('.').map(int.tryParse).toList();
     final len = [

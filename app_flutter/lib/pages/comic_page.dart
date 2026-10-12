@@ -723,6 +723,9 @@ class _CoverActions extends StatelessWidget {
         ],
       );
     }
+    // The 300 px column cannot fit two labelled buttons side by side, so
+    // the folder action collapses to an icon there (its label is the
+    // tooltip); the favorite keeps its label since it reports state.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -735,7 +738,11 @@ class _CoverActions extends StatelessWidget {
           children: [
             Expanded(child: favoriteButton),
             const SizedBox(width: 10),
-            Expanded(child: folderButton),
+            SoftIconButton(
+              icon: AppIcons.folderOpen,
+              tooltip: text.openFolder,
+              onPressed: onOpenFolder,
+            ),
             const SizedBox(width: 10),
             moreButton,
           ],

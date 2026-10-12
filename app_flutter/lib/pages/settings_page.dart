@@ -134,16 +134,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _aboutCard(text),
           ),
         ];
+        // Five sections only: build them all so the section navigation can
+        // always resolve its targets (a lazy list would leave the lower
+        // sections unbuilt until scrolled into view).
         final content = settings.when(
-          data: (_) => ListView(
+          data: (_) => SingleChildScrollView(
             controller: _scroll,
             padding: const EdgeInsets.only(bottom: 64),
-            children: [
-              for (var i = 0; i < sections.length; i++) ...[
-                if (i > 0) const SizedBox(height: 32),
-                sections[i],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < sections.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 32),
+                  sections[i],
+                ],
               ],
-            ],
+            ),
           ),
           error: (error, _) =>
               SoftEmptyState(message: error.toString(), isError: true),
@@ -154,18 +160,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: PageHeading(
-                      title: text.settings,
-                      subtitle: Text(text.settingsDescription),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const _VersionPill(),
-                ],
+              PageHeading(
+                title: text.settings,
+                subtitle: Text(text.settingsDescription),
               ),
               const SizedBox(height: 32),
               Expanded(
@@ -698,7 +695,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Widget _aboutCard(AppStrings text) {
     final updateState = ref.watch(updateProvider);
-    final isAvailable = updateState.status == UpdateStatus.available;
     final isChecking = updateState.status == UpdateStatus.checking;
     final colors = context.theme.colors;
     final (
@@ -716,86 +712,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     };
     return SettingsCard(
       children: [
-        SettingsRow(
-          title: text.appName,
-          descriptionWidget: FutureBuilder<PackageInfo>(
-            future: PackageInfo.fromPlatform(),
-            builder: (context, snapshot) {
-              final version = snapshot.data?.version;
-              final line = statusLabel ?? (version != null ? 'v$version' : '');
-              return _StatusLine(
-                label: version != null && statusLabel != null
-                    ? 'v$version · $line'
-                    : line,
-                tone: tone,
-                icon: tone == _StatusTone.success ? AppIcons.check : null,
-              );
-            },
-          ),
-          control: isChecking
-              ? const SizedBox(
-                  width: AppShape.controlHeight,
-                  height: AppShape.controlHeight,
-                  child: Center(child: FCircularProgress.loader()),
-                )
-              : SoftButton(
-                  label: text.checkForUpdates,
-                  variant: SoftButtonVariant.soft,
-                  onPressed: () =>
-                      ref.read(updateProvider.notifier).checkForUpdates(),
-                ),
-          below: isAvailable
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (updateState.info!.releaseNotes.isNotEmpty) ...[
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 140),
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: colors.muted,
-                          borderRadius: BorderRadius.circular(
-                            AppShape.radiusControl,
-                          ),
-                        ),
-                        child: SingleChildScrollView(
-                          child: Text(
-                            updateState.info!.releaseNotes,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              height: 18 / 12.5,
-                              fontWeight: FontWeight.w500,
-                              color: colors.mutedForeground,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        SoftButton(
-                          label: text.downloadUpdate,
-                          icon: AppIcons.download,
-                          variant: SoftButtonVariant.primary,
-                          onPressed: () =>
-                              _openReleasePage(updateState.info!.releaseUrl),
-                        ),
-                        SoftButton(
-                          label: text.viewRelease,
-                          icon: AppIcons.externalLink,
-                          onPressed: () =>
-                              _openReleasePage(updateState.info!.releaseUrl),
-                        ),
-                      ],
+        // "ComicRD 2.8.3" as the row title; the update state sits below it.
+        FutureBuilder<PackageInfo>(
+          future: PackageInfo.fromPlatform(),
+          builder: (context, snapshot) {
+            final version = snapshot.data?.version;
+            return SettingsRow(
+              title: version == null
+                  ? text.appName
+                  : '${text.appName} $version',
+              descriptionWidget: statusLabel == null
+                  ? null
+                  : _StatusLine(
+                      label: statusLabel,
+                      tone: tone,
+                      icon: tone == _StatusTone.success ? AppIcons.check : null,
                     ),
-                  ],
-                )
-              : null,
+              control: _updateControl(text, isChecking),
+              below: _updateBelow(text, updateState, colors),
+            );
+          },
         ),
         SettingsRow(
           title: text.aboutSection,
@@ -807,6 +743,79 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onPressed: () =>
                 _openReleasePage('https://github.com/andrizan/comicRD'),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _updateControl(AppStrings text, bool isChecking) {
+    if (isChecking) {
+      return const SizedBox(
+        width: AppShape.controlHeight,
+        height: AppShape.controlHeight,
+        child: Center(child: FCircularProgress.loader()),
+      );
+    }
+    return SoftButton(
+      label: text.checkForUpdates,
+      variant: SoftButtonVariant.soft,
+      onPressed: () => ref.read(updateProvider.notifier).checkForUpdates(),
+    );
+  }
+
+  /// Release notes and download actions, only while an update is available.
+  Widget? _updateBelow(
+    AppStrings text,
+    UpdateState updateState,
+    FColors colors,
+  ) {
+    final info = updateState.info;
+    if (updateState.status != UpdateStatus.available || info == null) {
+      return null;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (info.releaseNotes.isNotEmpty) ...[
+          Container(
+            constraints: const BoxConstraints(maxHeight: 140),
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colors.muted,
+              borderRadius: BorderRadius.circular(AppShape.radiusControl),
+            ),
+            child: SingleChildScrollView(
+              child: Text(
+                info.releaseNotes,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 18 / 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            SoftButton(
+              label: text.downloadUpdate,
+              icon: AppIcons.download,
+              variant: SoftButtonVariant.primary,
+              onPressed: () => _openReleasePage(info.releaseUrl),
+            ),
+            SoftButton(
+              label: text.viewRelease,
+              icon: AppIcons.externalLink,
+              onPressed: () => _openReleasePage(info.releaseUrl),
+            ),
+          ],
         ),
       ],
     );
@@ -988,28 +997,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 // ---------------------------------------------------------------------------
 // Widgets
 // ---------------------------------------------------------------------------
-
-class _VersionPill extends StatelessWidget {
-  const _VersionPill();
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox.shrink();
-        final info = snapshot.data!;
-        return Semantics(
-          label: 'Version ${info.version}',
-          child: SoftBadge(
-            label: 'v${info.version}',
-            tone: SoftBadgeTone.accent,
-          ),
-        );
-      },
-    );
-  }
-}
 
 /// The section list on the left of the two-pane layout.
 class _SectionNav extends StatelessWidget {

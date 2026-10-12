@@ -1209,7 +1209,8 @@ class PageHeading extends StatelessWidget {
         ),
         if (subtitle != null) ...[
           const SizedBox(height: 4),
-          DefaultTextStyle(
+          // merge, not replace: keeps the app font family from the theme.
+          DefaultTextStyle.merge(
             style: TextStyle(
               fontSize: 14,
               height: 22 / 14,

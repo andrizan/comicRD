@@ -213,6 +213,20 @@ src/library.rs::tests      — library_source_status_for edge cases
 - Tests that use `list_library_comics_raw` without scanning should expect `0/0/0` counts (shallow FS, no DB data).
 - Don't use dead APIs (e.g., `list_comics()`) in tests — use the production path.
 
+### Flutter Tests
+
+Widget tests live in `app_flutter/test/` and share two helpers:
+
+- `test/support/fake_api.dart` — `FakeComicRdApi`, an in-memory `ComicRdApi` with a small library (comics, history, favorites, chapters, bookmarks, one readable chapter) that records every call. Extend it instead of writing a new fake.
+- `test/support/router_host.dart` — `pumpRoutedPage` hosts one page under a private GoRouter whose other routes render their location as text (`reader:7`, `comic:/path`, `settings`), and hydrates settings like the shell does. Use it for page tests; use `ComicRdApp` only for shell/sidebar tests.
+
+Rules learned the hard way:
+
+- The shell's window-drag `GestureDetector` also listens for double taps, so a tap inside `ComicRdApp` only fires after the double-tap timeout: pump ~400 ms after `tester.tap` before asserting.
+- Widget tests render with the test font (every glyph is `fontSize` wide), so labels are much wider than in the app. Rows that pair a label with a value must use `Expanded`/`Flexible` + ellipsis, never a `Spacer` between two unbounded texts.
+- Buttons wrapped in `FTooltip` leave a short hover timer behind; end such tests with `tester.pumpAndSettle(const Duration(milliseconds: 200))` or a 1 s pump.
+- `test/screenshots_test.dart` renders every screen with the real fonts and sample data; it is skipped unless `COMICRD_SCREENSHOTS=1` and writes PNGs to `build/screenshots` (`COMICRD_SCREENSHOT_DIR` overrides). README images come from it.
+
 ## Planning
 
 The active plan (single source of truth for remaining work) is:

@@ -96,7 +96,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     required this.canvas,
     required this.progress,
     required this.progressTrack,
-    required this.bookmark,
     required this.badgeNew,
     required this.badgeNewForeground,
     required this.star,
@@ -106,7 +105,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     required this.shadow,
     required this.shadowSoft,
     required this.scrim,
-    required this.glass,
   });
 
   /// Background canvas behind comic pages (the reader is always dark).
@@ -117,9 +115,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
 
   /// Progress bar track (background) color.
   final Color progressTrack;
-
-  /// Bookmark marker color (icons, page-indicator segments).
-  final Color bookmark;
 
   /// "New" badge fill.
   final Color badgeNew;
@@ -148,14 +143,10 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
   /// Scrim behind icons drawn over cover art (4.38:1 for the star).
   final Color scrim;
 
-  /// Reader overlay glass fill.
-  final Color glass;
-
   static const light = ComicReaderColors(
     canvas: Color(0xFF0E0D13),
     progress: Color(0xFF6D5DD3),
     progressTrack: Color(0xFFEFEDF6),
-    bookmark: Color(0xFFBF7300),
     badgeNew: Color(0xFFFFF1D6),
     badgeNewForeground: Color(0xFF7A4E00),
     star: Color(0xFFBF7300),
@@ -165,14 +156,12 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     shadow: Color(0x474A3FB0),
     shadowSoft: Color(0x0F1F1B2D),
     scrim: Color(0x9E140F23),
-    glass: Color(0xE0181620),
   );
 
   static const dark = ComicReaderColors(
     canvas: Color(0xFF0E0D13),
     progress: Color(0xFFA294FF),
     progressTrack: Color(0xFF262232),
-    bookmark: Color(0xFFFFC15A),
     badgeNew: Color(0xFF40332D),
     badgeNewForeground: Color(0xFFFFD58A),
     star: Color(0xFFFFC15A),
@@ -182,7 +171,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     shadow: Color(0xB3000000),
     shadowSoft: Color(0x73000000),
     scrim: Color(0x9E140F23),
-    glass: Color(0xE0181620),
   );
 
   @override
@@ -190,7 +178,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     Color? canvas,
     Color? progress,
     Color? progressTrack,
-    Color? bookmark,
     Color? badgeNew,
     Color? badgeNewForeground,
     Color? star,
@@ -200,13 +187,11 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
     Color? shadow,
     Color? shadowSoft,
     Color? scrim,
-    Color? glass,
   }) {
     return ComicReaderColors(
       canvas: canvas ?? this.canvas,
       progress: progress ?? this.progress,
       progressTrack: progressTrack ?? this.progressTrack,
-      bookmark: bookmark ?? this.bookmark,
       badgeNew: badgeNew ?? this.badgeNew,
       badgeNewForeground: badgeNewForeground ?? this.badgeNewForeground,
       star: star ?? this.star,
@@ -216,7 +201,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
       shadow: shadow ?? this.shadow,
       shadowSoft: shadowSoft ?? this.shadowSoft,
       scrim: scrim ?? this.scrim,
-      glass: glass ?? this.glass,
     );
   }
 
@@ -227,7 +211,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
       canvas: Color.lerp(canvas, other.canvas, t)!,
       progress: Color.lerp(progress, other.progress, t)!,
       progressTrack: Color.lerp(progressTrack, other.progressTrack, t)!,
-      bookmark: Color.lerp(bookmark, other.bookmark, t)!,
       badgeNew: Color.lerp(badgeNew, other.badgeNew, t)!,
       badgeNewForeground: Color.lerp(
         badgeNewForeground,
@@ -241,7 +224,6 @@ class ComicReaderColors extends ThemeExtension<ComicReaderColors> {
       shadow: Color.lerp(shadow, other.shadow, t)!,
       shadowSoft: Color.lerp(shadowSoft, other.shadowSoft, t)!,
       scrim: Color.lerp(scrim, other.scrim, t)!,
-      glass: Color.lerp(glass, other.glass, t)!,
     );
   }
 }
@@ -301,67 +283,46 @@ class AppShape {
 class AppIcons {
   const AppIcons._();
 
-  static const IconData menu = FLucideIcons.menu;
   static const IconData search = FLucideIcons.search;
   static const IconData chevronDown = FLucideIcons.chevronDown;
   static const IconData refresh = FLucideIcons.refreshCcw;
   static const IconData settings = FLucideIcons.settings;
   static const IconData library = FLucideIcons.bookOpen;
-  static const IconData history = FLucideIcons.history;
   static const IconData bookmark = FLucideIcons.bookmark;
   static const IconData folderBookmark = FLucideIcons.folderBookmark;
   static const IconData folderOpen = FLucideIcons.folderOpen;
   static const IconData gridView = FLucideIcons.layoutGrid;
   static const IconData list = FLucideIcons.list;
   static const IconData star = FLucideIcons.star;
-  static const IconData back = FLucideIcons.arrowLeft;
   static const IconData arrowUp = FLucideIcons.arrowUp;
   static const IconData chevronRight = FLucideIcons.chevronRight;
   static const IconData chevronLeft = FLucideIcons.chevronLeft;
   static const IconData check = FLucideIcons.check;
-  static const IconData sortUp = FLucideIcons.arrowUpNarrowWide;
-  static const IconData sortDown = FLucideIcons.arrowDownWideNarrow;
   static const IconData more = FLucideIcons.ellipsis;
   static const IconData sun = FLucideIcons.sun;
   static const IconData moon = FLucideIcons.moon;
   static const IconData monitor = FLucideIcons.monitor;
-  static const IconData languages = FLucideIcons.languages;
   static const IconData download = FLucideIcons.download;
   static const IconData upload = FLucideIcons.upload;
   static const IconData save = FLucideIcons.save;
   static const IconData close = FLucideIcons.x;
-  static const IconData chevronFirst = FLucideIcons.chevronFirst;
-  static const IconData chevronLast = FLucideIcons.chevronLast;
-  static const IconData alignCenter = FLucideIcons.alignCenterHorizontal;
   static const IconData minimize = FLucideIcons.minimize;
   static const IconData maximize = FLucideIcons.maximize;
-  static const IconData scroll = FLucideIcons.scroll;
-  static const IconData minus = FLucideIcons.minus;
-  static const IconData plus = FLucideIcons.plus;
   static const IconData copyTitle = FLucideIcons.text;
   static const IconData copyPath = FLucideIcons.copy;
-  static const IconData info = FLucideIcons.info;
   static const IconData code = FLucideIcons.code;
-  static const IconData portrait = FLucideIcons.smartphone;
   static const IconData play = FLucideIcons.play;
   static const IconData chevronsLeft = FLucideIcons.chevronsLeft;
   static const IconData chevronsRight = FLucideIcons.chevronsRight;
   static const IconData sliders = FLucideIcons.slidersHorizontal;
-  static const IconData bookMarked = FLucideIcons.bookMarked;
   static const IconData folder = FLucideIcons.folder;
   static const IconData offline = FLucideIcons.wifiOff;
   static const IconData restart = FLucideIcons.rotateCcw;
   static const IconData sort = FLucideIcons.arrowUpDown;
   static const IconData database = FLucideIcons.database;
   static const IconData clock = FLucideIcons.clock;
-  static const IconData hardDrive = FLucideIcons.hardDrive;
-  static const IconData keyboard = FLucideIcons.keyboard;
-  static const IconData palette = FLucideIcons.palette;
-  static const IconData sparkles = FLucideIcons.sparkles;
-  static const IconData circleCheck = FLucideIcons.circleCheck;
   static const IconData circleAlert = FLucideIcons.circleAlert;
   static const IconData externalLink = FLucideIcons.externalLink;
-  static const IconData images = FLucideIcons.images;
   static const IconData fileArchive = FLucideIcons.fileArchive;
   static const IconData panelLeft = FLucideIcons.panelLeft;
 }
@@ -371,11 +332,7 @@ class AppIcons {
 // ---------------------------------------------------------------------------
 
 extension AppThemeContext on BuildContext {
-  FColors get appColors => theme.colors;
-
-  Color get appAccent => theme.colors.primary;
   Color get appSurface => theme.colors.background;
-  Color get appMutedText => theme.colors.mutedForeground;
   Color get appBorder => theme.colors.border;
 
   /// App-specific colors (reader canvas, markers, success, shadows).
@@ -383,8 +340,4 @@ extension AppThemeContext on BuildContext {
     return Theme.of(this).extension<ComicReaderColors>() ??
         ComicReaderColors.light;
   }
-
-  TextStyle get appBodyStrongStyle =>
-      theme.typography.body.md.copyWith(fontWeight: FontWeight.w600);
-  TextStyle get appCaptionStyle => theme.typography.body.sm;
 }

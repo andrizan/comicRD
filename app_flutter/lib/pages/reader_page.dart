@@ -1254,6 +1254,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     } else if (key == LogicalKeyboardKey.arrowLeft &&
         data?.context?.prevChapterId != null) {
       _switchChapter(data!.context!.prevChapterId!);
+    } else if (key == LogicalKeyboardKey.digit0 ||
+        key == LogicalKeyboardKey.numpad0 ||
+        key == LogicalKeyboardKey.home) {
+      // "0" (and Home) rewinds the chapter to its first page.
+      _jumpToPage(0);
     }
   }
 
@@ -2088,53 +2093,58 @@ class _ReaderTopBar extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 540),
-                  child: _ReaderGlass(
-                    padding: const EdgeInsets.fromLTRB(6, 6, 22, 6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ReaderIconButton(
-                          tooltip: text.close,
-                          icon: AppIcons.chevronLeft,
-                          iconSize: 20,
-                          filled: true,
-                          onPressed: onClose,
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                contextData?.comicTitle ?? text.appName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: _chromeText,
-                                  fontSize: 14,
-                                  height: 20 / 14,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: _chromeMuted,
-                                  fontSize: 12.5,
-                                  height: 18 / 12.5,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+              // Title pill hugs the left edge; the controls pill sits at the
+              // right edge (space-between), whatever the title width.
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 540),
+                    child: _ReaderGlass(
+                      padding: const EdgeInsets.fromLTRB(6, 6, 22, 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ReaderIconButton(
+                            tooltip: text.close,
+                            icon: AppIcons.chevronLeft,
+                            iconSize: 20,
+                            filled: true,
+                            onPressed: onClose,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  contextData?.comicTitle ?? text.appName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _chromeText,
+                                    fontSize: 14,
+                                    height: 20 / 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _chromeMuted,
+                                    fontSize: 12.5,
+                                    height: 18 / 12.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -2265,6 +2275,7 @@ class _ReaderDisplayPanel extends StatelessWidget {
                 _KeyHint(keys: 'Esc', label: text.keyExit),
                 _KeyHint(keys: '↑ ↓', label: text.keyScroll),
                 _KeyHint(keys: '← →', label: text.keySwitchChapter),
+                _KeyHint(keys: '0', label: text.keyFirstPage),
               ],
             ),
           ],

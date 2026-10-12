@@ -1712,17 +1712,22 @@ class _HistoryRow extends StatelessWidget {
                 color: finished ? reader.success : colors.secondaryForeground,
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 12),
             if (total > 0)
-              Text(
-                text.pageOfTemplate
-                    .replaceAll('{page}', '$page')
-                    .replaceAll('{total}', '$total'),
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 18 / 12.5,
-                  fontWeight: FontWeight.w500,
-                  color: colors.mutedForeground,
+              Expanded(
+                child: Text(
+                  text.pageOfTemplate
+                      .replaceAll('{page}', '$page')
+                      .replaceAll('{total}', '$total'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 18 / 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: colors.mutedForeground,
+                  ),
                 ),
               ),
           ],
