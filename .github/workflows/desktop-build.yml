@@ -199,6 +199,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: master
+          # git-cliff needs the full history and tags to find the previous release.
+          fetch-depth: 0
 
       - name: Download build artifacts
         uses: actions/download-artifact@v8
@@ -223,13 +225,21 @@ jobs:
         with:
           bump: "false"
 
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4
+        env:
+          OUTPUT: RELEASE_NOTES.md
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v3
         with:
           name: ComicRD ${{ github.ref_name }}
           files: release-upload/*
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
           prerelease: ${{ steps.version.outputs.prerelease }}
 
       - name: Commit version bump
