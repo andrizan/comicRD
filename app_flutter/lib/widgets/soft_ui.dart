@@ -630,10 +630,14 @@ class SoftSortMenu<T> extends StatelessWidget {
     required this.options,
     required this.value,
     required this.onChanged,
+    this.showPrefix = true,
   });
 
-  /// The muted lead-in, e.g. "Sort".
+  /// The muted lead-in, e.g. "Sort". Always part of the semantics label.
   final String prefix;
+
+  /// False shows only the current order (the comic page design).
+  final bool showPrefix;
   final List<SoftSortOption<T>> options;
   final T value;
   final ValueChanged<T> onChanged;
@@ -684,13 +688,14 @@ class SoftSortMenu<T> extends StatelessWidget {
               Text.rich(
                 TextSpan(
                   children: [
-                    TextSpan(
-                      text: '$prefix: ',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: colors.mutedForeground,
+                    if (showPrefix)
+                      TextSpan(
+                        text: '$prefix: ',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: colors.mutedForeground,
+                        ),
                       ),
-                    ),
                     TextSpan(text: current.label),
                   ],
                 ),

@@ -1,6 +1,7 @@
 import 'package:comicrd_flutter/pages/comic_page.dart';
 import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'support/fake_api.dart';
 import 'support/router_host.dart';
@@ -90,6 +91,43 @@ void main() {
 
     expect(api.savedSettings['chapter_sort_by'], '"name"');
     expect(api.savedSettings['chapter_sort_dir'], '"desc"');
+    // The button resized with its new label; let the popover's overlay timer
+    // fire before the tree is torn down.
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('chapter toolbar shares the heading row and omits the prefix', (
+    tester,
+  ) async {
+    // The test font makes every label far wider than in the app, so the
+    // window must be wide for the toolbar to fit beside the heading.
+    await pumpRoutedPage(
+      tester,
+      api: FakeComicRdApi(),
+      page: const ComicPage(comicPath: fakeFeaturedPath),
+      size: const Size(2200, 900),
+    );
+
+    final heading = tester.getCenter(find.text('Chapter'));
+    final filter = tester.getCenter(find.byType(TextField));
+    expect((heading.dy - filter.dy).abs(), lessThan(1));
+    expect(find.textContaining('Sort'), findsNothing);
+    expect(find.byTooltip('Refresh'), findsNothing);
+    await tester.pumpAndSettle(const Duration(milliseconds: 200));
+  });
+
+  testWidgets('refresh moved into the more menu and purges the caches', (
+    tester,
+  ) async {
+    final api = FakeComicRdApi();
+    await _pump(tester, api);
+
+    await tester.tap(find.byIcon(AppIcons.more));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(api.purgeCalls, 1);
   });
 
   testWidgets('more menu copies the path and the chip copies it too', (

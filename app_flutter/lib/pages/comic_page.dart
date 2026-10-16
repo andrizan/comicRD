@@ -167,6 +167,7 @@ class _ComicPageState extends ConsumerState<ComicPage> {
             onOpenFolder: _openContainingFolder,
             onCopyTitle: () => _copy(title),
             onCopyPath: () => _copy(widget.comicPath),
+            onRefresh: _refreshChapters,
           );
           final header = _ComicHeader(
             text: text,
@@ -223,7 +224,6 @@ class _ComicPageState extends ConsumerState<ComicPage> {
                       onSetTab: (tab) => ref
                           .read(comicPreferencesProvider.notifier)
                           .setSelectedTab(widget.comicPath, tab),
-                      onRefresh: _refreshChapters,
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -636,6 +636,7 @@ class _CoverActions extends StatelessWidget {
     required this.onOpenFolder,
     required this.onCopyTitle,
     required this.onCopyPath,
+    required this.onRefresh,
   });
 
   final AppStrings text;
@@ -648,6 +649,7 @@ class _CoverActions extends StatelessWidget {
   final VoidCallback onOpenFolder;
   final VoidCallback onCopyTitle;
   final VoidCallback onCopyPath;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -699,6 +701,11 @@ class _CoverActions extends StatelessWidget {
               prefix: const Icon(AppIcons.copyPath, size: 16),
               title: Text(text.copyPath),
               onPress: onCopyPath,
+            ),
+            FItem(
+              prefix: const Icon(AppIcons.refresh, size: 16),
+              title: Text(text.refresh),
+              onPress: onRefresh,
             ),
           ],
         ),
@@ -782,6 +789,7 @@ class _ComicHeader extends StatelessWidget {
       children: [
         SelectableText(
           title,
+          minLines: 1,
           maxLines: 2,
           style: TextStyle(
             fontSize: compact ? 28 : 38,
@@ -1007,7 +1015,6 @@ class _ChapterSectionHeader extends StatelessWidget {
     required this.onSearchChanged,
     required this.onSetSort,
     required this.onSetTab,
-    required this.onRefresh,
   });
 
   final AppStrings text;
@@ -1018,7 +1025,6 @@ class _ChapterSectionHeader extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final void Function(ChapterSortBy sortBy, bridge.SortDir sortDir) onSetSort;
   final ValueChanged<ChapterTab> onSetTab;
-  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -1052,6 +1058,7 @@ class _ChapterSectionHeader extends StatelessWidget {
         ),
         SoftSortMenu<_ChapterSort>(
           prefix: text.sortLabel,
+          showPrefix: false,
           value: (preferences.sortBy, preferences.sortDir),
           onChanged: (value) => onSetSort(value.$1, value.$2),
           options: [
@@ -1081,11 +1088,6 @@ class _ChapterSectionHeader extends StatelessWidget {
             ),
           ],
         ),
-        SoftIconButton(
-          icon: AppIcons.refresh,
-          tooltip: text.refresh,
-          onPressed: onRefresh,
-        ),
       ],
     );
     final heading = Text(
@@ -1098,25 +1100,15 @@ class _ChapterSectionHeader extends StatelessWidget {
         color: colors.foreground,
       ),
     );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 900) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [heading, const SizedBox(height: 12), controls],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            heading,
-            const SizedBox(width: 16),
-            Expanded(
-              child: Align(alignment: Alignment.centerRight, child: controls),
-            ),
-          ],
-        );
-      },
+    // The design's `flex-wrap` + `space-between`: the controls sit on the
+    // heading's row, right-aligned, and drop below it only when they no
+    // longer fit.
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 12,
+      runSpacing: 12,
+      children: [heading, controls],
     );
   }
 }
@@ -1405,7 +1397,7 @@ class _ChapterRowState extends State<_ChapterRow> {
                   ),
                   const SizedBox(width: 16),
                   status,
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 16),
                   SoftIconButton(
                     icon: AppIcons.bookmark,
                     tooltip: widget.isBookmarked
