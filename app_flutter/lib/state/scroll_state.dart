@@ -5,25 +5,23 @@ final scrollOffsetsProvider =
       ScrollOffsetsNotifier.new,
     );
 
+/// Remembers scroll positions so a page can restore them when it is rebuilt.
+///
+/// The map is updated in place and never watched: positions are only read
+/// back with [offsetFor] when a page is created. That also lets a page save
+/// its final position from `dispose`, where Riverpod rejects state writes.
 class ScrollOffsetsNotifier extends Notifier<Map<String, double>> {
   static const _maxSize = 200;
 
   @override
-  Map<String, double> build() => const {};
+  Map<String, double> build() => <String, double>{};
 
   double offsetFor(String key) => state[key] ?? 0;
 
   void save(String key, double offset) {
-    if (state[key] == offset) {
-      return;
+    state[key] = offset;
+    while (state.length > _maxSize) {
+      state.remove(state.keys.first);
     }
-    final updated = {...state, key: offset};
-    if (updated.length > _maxSize) {
-      final keys = updated.keys.toList();
-      for (var i = 0; i < keys.length - _maxSize; i++) {
-        updated.remove(keys[i]);
-      }
-    }
-    state = updated;
   }
 }

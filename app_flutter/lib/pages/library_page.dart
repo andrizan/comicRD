@@ -38,6 +38,11 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   final _focusNode = FocusNode(debugLabel: 'LibraryPage');
   Timer? _searchDebounce;
   DateTime _lastScrollSave = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// The latest offset per tab, kept unthrottled so [dispose] can store the
+  /// exact position the 200 ms save throttle may have skipped.
+  final _latestOffsets = <String, double>{};
+  late final ScrollOffsetsNotifier _offsetStore;
   bool _refreshedOnMount = false;
   bool _showBackToTop = false;
   LibraryComicsState _comicsState = const LibraryComicsState(
@@ -58,6 +63,8 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   @override
   void initState() {
     super.initState();
+    // Kept in a field: `ref` cannot be read inside dispose().
+    _offsetStore = ref.read(scrollOffsetsProvider.notifier);
     _historyScroll = _restoredScrollController('library:history');
     _libraryScroll = _restoredScrollController('library:library');
     _favoritesScroll = _restoredScrollController('library:favorites');
@@ -67,7 +74,16 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     if (savedQuery.isNotEmpty) {
       _search.text = savedQuery;
     }
+    // Start from what the providers already hold: laid out empty, the first
+    // frame would clamp a restored scroll offset to zero.
+    _comicsState = ref.read(libraryComicsProvider);
+    _historyState = ref.read(historyListProvider);
+    _rawComics = ref.read(rawLibraryComicsProvider).asData?.value ?? const [];
+    _totalSizeBytes = _sizeOf(_rawComics);
   }
+
+  static int _sizeOf(List<bridge.RawComic> comics) =>
+      comics.fold<int>(0, (sum, comic) => sum + comic.sizeBytes.toInt());
 
   @override
   void didChangeDependencies() {
@@ -98,10 +114,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           (prev, next) {
             final comics = next.asData?.value;
             if (comics == null || !mounted) return;
-            final total = comics.fold<int>(
-              0,
-              (sum, comic) => sum + comic.sizeBytes.toInt(),
-            );
+            final total = _sizeOf(comics);
             final needsComicsUpdate = !identical(comics, _rawComics);
             final needsTotalUpdate = total != _totalSizeBytes;
             if (needsComicsUpdate || needsTotalUpdate) {
@@ -123,9 +136,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
-    _saveScrollOffset('library:history', _historyScroll);
-    _saveScrollOffset('library:library', _libraryScroll);
-    _saveScrollOffset('library:favorites', _favoritesScroll);
+    _latestOffsets.forEach(_offsetStore.save);
     _historyScroll.dispose();
     _libraryScroll.dispose();
     _favoritesScroll.dispose();
@@ -135,12 +146,12 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   }
 
   ScrollController _restoredScrollController(String key) {
-    final offsets = ref.read(scrollOffsetsProvider.notifier);
-    final savedOffset = offsets.offsetFor(key);
+    final savedOffset = _offsetStore.offsetFor(key);
     final controller = ScrollController(
       initialScrollOffset: savedOffset > 0 ? savedOffset : 0,
     );
     controller.addListener(() {
+      if (controller.hasClients) _latestOffsets[key] = controller.offset;
       _saveScrollOffset(key, controller);
       if (identical(controller, _activeScrollController())) {
         _updateBackToTopVisibility(controller);

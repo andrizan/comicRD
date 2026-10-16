@@ -1,6 +1,8 @@
+import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/library_page.dart';
 import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/fake_api.dart';
@@ -8,6 +10,22 @@ import 'support/router_host.dart';
 
 Future<void> _pump(WidgetTester tester, FakeComicRdApi api) {
   return pumpRoutedPage(tester, api: api, page: const LibraryPage());
+}
+
+/// A library whose filesystem listing can be made slow, like a big folder.
+class _SlowListApi extends FakeComicRdApi {
+  _SlowListApi({super.comics});
+
+  Duration delay = Duration.zero;
+
+  @override
+  Future<List<bridge.RawComic>> listLibraryComicsRaw({
+    required bridge.SortBy sortBy,
+    required bridge.SortDir sortDir,
+  }) async {
+    await Future<void>.delayed(delay);
+    return super.listLibraryComicsRaw(sortBy: sortBy, sortDir: sortDir);
+  }
 }
 
 void main() {
@@ -183,6 +201,113 @@ void main() {
     await tester.tap(find.text('Open Folder'));
     await tester.pumpAndSettle();
     expect(api.openedFolders, [fakeFeaturedPath]);
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('scroll position survives a trip to a comic and back', (
+    tester,
+  ) async {
+    final api = FakeComicRdApi(
+      comics: [
+        for (var i = 0; i < 28; i++)
+          fakeComic('Comic ${i.toString().padLeft(2, '0')}', chapters: 3),
+      ],
+    );
+    await _pump(tester, api);
+
+    final scrollView = find.byType(CustomScrollView);
+    double offset() => tester
+        .state<ScrollableState>(
+          find.descendant(of: scrollView, matching: find.byType(Scrollable)),
+        )
+        .position
+        .pixels;
+
+    await tester.drag(scrollView, const Offset(0, -700));
+    await tester.pumpAndSettle();
+    final before = offset();
+    expect(before, greaterThan(300));
+
+    final router = GoRouter.of(tester.element(find.byType(LibraryPage)));
+    router.go('/comic/${Uri.encodeComponent('$fakeRoot/Comic 05')}');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('comic:'), findsOneWidget);
+
+    router.go('/');
+    await tester.pumpAndSettle();
+    expect(offset(), before);
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('scroll position survives a slow relisting on the way back', (
+    tester,
+  ) async {
+    final api = _SlowListApi(
+      comics: [
+        for (var i = 0; i < 28; i++)
+          fakeComic('Comic ${i.toString().padLeft(2, '0')}', chapters: 3),
+      ],
+    );
+    await _pump(tester, api);
+
+    final scrollView = find.byType(CustomScrollView);
+    double offset() => tester
+        .state<ScrollableState>(
+          find.descendant(of: scrollView, matching: find.byType(Scrollable)),
+        )
+        .position
+        .pixels;
+
+    await tester.drag(scrollView, const Offset(0, -700));
+    await tester.pumpAndSettle();
+    final before = offset();
+    expect(before, greaterThan(300));
+
+    final router = GoRouter.of(tester.element(find.byType(LibraryPage)));
+    router.go('/comic/${Uri.encodeComponent('$fakeRoot/Comic 05')}');
+    await tester.pumpAndSettle();
+
+    api.delay = const Duration(milliseconds: 400);
+    router.go('/');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(offset(), before);
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('leaving right after scrolling keeps the last position', (
+    tester,
+  ) async {
+    final api = FakeComicRdApi(
+      comics: [
+        for (var i = 0; i < 28; i++)
+          fakeComic('Comic ${i.toString().padLeft(2, '0')}', chapters: 3),
+      ],
+    );
+    await _pump(tester, api);
+
+    final scrollView = find.byType(CustomScrollView);
+    double offset() => tester
+        .state<ScrollableState>(
+          find.descendant(of: scrollView, matching: find.byType(Scrollable)),
+        )
+        .position
+        .pixels;
+
+    // The second drag lands inside the 200 ms save throttle of the first.
+    await tester.drag(scrollView, const Offset(0, -300));
+    await tester.pump(const Duration(milliseconds: 30));
+    await tester.drag(scrollView, const Offset(0, -150));
+    await tester.pump(const Duration(milliseconds: 30));
+    final atLeave = offset();
+
+    final router = GoRouter.of(tester.element(find.byType(LibraryPage)));
+    router.go('/comic/${Uri.encodeComponent('$fakeRoot/Comic 05')}');
+    await tester.pumpAndSettle();
+    router.go('/');
+    await tester.pumpAndSettle();
+
+    expect(offset(), atLeave);
     await tester.pump(const Duration(seconds: 1));
   });
 }
