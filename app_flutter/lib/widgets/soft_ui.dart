@@ -622,7 +622,8 @@ class SoftSortOption<T> {
   final String label;
 }
 
-/// "Sort: Name A–Z" — a 44 px outline button opening a popover of orders.
+/// "Sort: Name" — a 44 px outline button opening a popover of fields to sort
+/// by, with a separate button beside it flipping ascending / descending.
 class SoftSortMenu<T> extends StatelessWidget {
   const SoftSortMenu({
     super.key,
@@ -630,6 +631,10 @@ class SoftSortMenu<T> extends StatelessWidget {
     required this.options,
     required this.value,
     required this.onChanged,
+    required this.descending,
+    required this.onDescendingChanged,
+    required this.ascendingLabel,
+    required this.descendingLabel,
     this.showPrefix = true,
   });
 
@@ -642,6 +647,12 @@ class SoftSortMenu<T> extends StatelessWidget {
   final T value;
   final ValueChanged<T> onChanged;
 
+  /// The direction button's state, and what it announces for each one.
+  final bool descending;
+  final ValueChanged<bool> onDescendingChanged;
+  final String ascendingLabel;
+  final String descendingLabel;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.theme.colors;
@@ -650,7 +661,7 @@ class SoftSortMenu<T> extends StatelessWidget {
       (option) => option.value == value,
       orElse: () => options.first,
     );
-    return FPopoverMenu(
+    final menu = FPopoverMenu(
       menuAnchor: .topEnd,
       childAnchor: .bottomEnd,
       menu: [
@@ -715,6 +726,18 @@ class SoftSortMenu<T> extends StatelessWidget {
           ),
         ),
       ),
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        menu,
+        const SizedBox(width: 8),
+        SoftIconButton(
+          icon: descending ? AppIcons.arrowDown : AppIcons.arrowUp,
+          tooltip: descending ? descendingLabel : ascendingLabel,
+          onPressed: () => onDescendingChanged(!descending),
+        ),
+      ],
     );
   }
 }

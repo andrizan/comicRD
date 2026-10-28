@@ -773,35 +773,29 @@ class _Toolbar extends StatelessWidget {
 
 typedef _LibrarySort = (bridge.SortBy, bridge.SortDir);
 
-/// "Sort: Name A–Z" popover with the four library sort orders.
+/// "Sort: Name" popover plus the ascending / descending toggle.
 Widget _librarySortMenu({
   required AppStrings text,
   required _LibrarySort sort,
   required void Function(bridge.SortBy sortBy, bridge.SortDir sortDir)
   onChanged,
 }) {
-  return SoftSortMenu<_LibrarySort>(
+  final (sortBy, sortDir) = sort;
+  return SoftSortMenu<bridge.SortBy>(
     prefix: text.sortLabel,
-    value: sort,
-    onChanged: (value) => onChanged(value.$1, value.$2),
+    value: sortBy,
+    onChanged: (value) => onChanged(value, sortDir),
     options: [
-      SoftSortOption(
-        value: (bridge.SortBy.name, bridge.SortDir.asc),
-        label: '${text.name} A–Z',
-      ),
-      SoftSortOption(
-        value: (bridge.SortBy.name, bridge.SortDir.desc),
-        label: '${text.name} Z–A',
-      ),
-      SoftSortOption(
-        value: (bridge.SortBy.folderDate, bridge.SortDir.desc),
-        label: '${text.folderDate} ↓',
-      ),
-      SoftSortOption(
-        value: (bridge.SortBy.folderDate, bridge.SortDir.asc),
-        label: '${text.folderDate} ↑',
-      ),
+      SoftSortOption(value: bridge.SortBy.name, label: text.name),
+      SoftSortOption(value: bridge.SortBy.folderDate, label: text.folderDate),
     ],
+    descending: sortDir == bridge.SortDir.desc,
+    onDescendingChanged: (descending) => onChanged(
+      sortBy,
+      descending ? bridge.SortDir.desc : bridge.SortDir.asc,
+    ),
+    ascendingLabel: text.sortAscending,
+    descendingLabel: text.sortDescending,
   );
 }
 

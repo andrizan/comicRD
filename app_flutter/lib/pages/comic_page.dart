@@ -1003,8 +1003,6 @@ class _ProgressCard extends StatelessWidget {
 // Chapter section header — tabs, search, sort
 // ---------------------------------------------------------------------------
 
-typedef _ChapterSort = (ChapterSortBy, bridge.SortDir);
-
 class _ChapterSectionHeader extends StatelessWidget {
   const _ChapterSectionHeader({
     required this.text,
@@ -1056,37 +1054,29 @@ class _ChapterSectionHeader extends StatelessWidget {
           width: 220,
           onChanged: onSearchChanged,
         ),
-        SoftSortMenu<_ChapterSort>(
+        SoftSortMenu<ChapterSortBy>(
           prefix: text.sortLabel,
           showPrefix: false,
-          value: (preferences.sortBy, preferences.sortDir),
-          onChanged: (value) => onSetSort(value.$1, value.$2),
+          value: preferences.sortBy,
+          onChanged: (value) => onSetSort(value, preferences.sortDir),
           options: [
             SoftSortOption(
-              value: (ChapterSortBy.chapterIndex, bridge.SortDir.asc),
-              label: '${text.chapter} ↑',
+              value: ChapterSortBy.chapterIndex,
+              label: text.chapter,
             ),
+            SoftSortOption(value: ChapterSortBy.name, label: text.name),
             SoftSortOption(
-              value: (ChapterSortBy.chapterIndex, bridge.SortDir.desc),
-              label: '${text.chapter} ↓',
-            ),
-            SoftSortOption(
-              value: (ChapterSortBy.name, bridge.SortDir.asc),
-              label: '${text.name} A–Z',
-            ),
-            SoftSortOption(
-              value: (ChapterSortBy.name, bridge.SortDir.desc),
-              label: '${text.name} Z–A',
-            ),
-            SoftSortOption(
-              value: (ChapterSortBy.folderDate, bridge.SortDir.desc),
-              label: '${text.folderDate} ↓',
-            ),
-            SoftSortOption(
-              value: (ChapterSortBy.folderDate, bridge.SortDir.asc),
-              label: '${text.folderDate} ↑',
+              value: ChapterSortBy.folderDate,
+              label: text.folderDate,
             ),
           ],
+          descending: preferences.sortDir == bridge.SortDir.desc,
+          onDescendingChanged: (descending) => onSetSort(
+            preferences.sortBy,
+            descending ? bridge.SortDir.desc : bridge.SortDir.asc,
+          ),
+          ascendingLabel: text.sortAscending,
+          descendingLabel: text.sortDescending,
         ),
       ],
     );

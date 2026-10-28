@@ -189,29 +189,47 @@ void main() {
   });
 
   group('SoftSortMenu', () {
-    testWidgets('opens the options and reports the chosen one', (tester) async {
+    testWidgets('picks the field and flips the direction separately', (
+      tester,
+    ) async {
       String? chosen;
+      var descending = false;
       await tester.pumpWidget(
         _host(
-          SoftSortMenu<String>(
-            prefix: 'Sort',
-            value: 'name',
-            onChanged: (value) => chosen = value,
-            options: const [
-              SoftSortOption(value: 'name', label: 'Name A–Z'),
-              SoftSortOption(value: 'date', label: 'Folder Date ↓'),
-            ],
+          StatefulBuilder(
+            builder: (context, setState) => SoftSortMenu<String>(
+              prefix: 'Sort',
+              value: 'name',
+              onChanged: (value) => chosen = value,
+              options: const [
+                SoftSortOption(value: 'name', label: 'Name'),
+                SoftSortOption(value: 'date', label: 'Folder Date'),
+              ],
+              descending: descending,
+              onDescendingChanged: (value) =>
+                  setState(() => descending = value),
+              ascendingLabel: 'Ascending',
+              descendingLabel: 'Descending',
+            ),
           ),
         ),
       );
 
-      expect(find.textContaining('Name A–Z'), findsOneWidget);
+      expect(find.textContaining('Name'), findsOneWidget);
+      expect(find.byIcon(AppIcons.arrowUp), findsOneWidget);
+
       await tester.tap(find.byIcon(AppIcons.sort));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Folder Date ↓'));
+      await tester.tap(find.text('Folder Date'));
       await tester.pumpAndSettle();
-
       expect(chosen, 'date');
+      // Choosing a field leaves the direction alone.
+      expect(descending, isFalse);
+
+      await tester.tap(find.byIcon(AppIcons.arrowUp));
+      await tester.pumpAndSettle(const Duration(milliseconds: 200));
+      expect(descending, isTrue);
+      expect(find.byIcon(AppIcons.arrowDown), findsOneWidget);
     });
   });
 

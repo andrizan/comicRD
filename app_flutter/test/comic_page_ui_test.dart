@@ -80,19 +80,25 @@ void main() {
     expect(api.addBookmarkCalls, ['$fakeFeaturedPath/Chapter 1']);
   });
 
-  testWidgets('sort menu persists the chapter order', (tester) async {
+  testWidgets('sort field and direction persist the chapter order', (
+    tester,
+  ) async {
     final api = FakeComicRdApi();
     await _pump(tester, api);
 
     await tester.tap(find.byIcon(AppIcons.sort));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Name Z–A'));
+    await tester.tap(find.text('Name'));
     await tester.pumpAndSettle();
+    expect(api.savedSettings['chapter_sort_by'], '"name"');
+    expect(api.savedSettings['chapter_sort_dir'], '"asc"');
 
+    await tester.tap(find.byIcon(AppIcons.arrowUp));
+    await tester.pumpAndSettle();
     expect(api.savedSettings['chapter_sort_by'], '"name"');
     expect(api.savedSettings['chapter_sort_dir'], '"desc"');
-    // The button resized with its new label; let the popover's overlay timer
-    // fire before the tree is torn down.
+    // The buttons resized with their new state; let the overlay timers fire
+    // before the tree is torn down.
     await tester.pump(const Duration(seconds: 1));
   });
 
@@ -108,7 +114,8 @@ void main() {
       size: const Size(2200, 900),
     );
 
-    final heading = tester.getCenter(find.text('Chapter'));
+    // The sort button reads "Chapter" too; the heading comes first.
+    final heading = tester.getCenter(find.text('Chapter').first);
     final filter = tester.getCenter(find.byType(TextField));
     expect((heading.dy - filter.dy).abs(), lessThan(1));
     expect(find.textContaining('Sort'), findsNothing);

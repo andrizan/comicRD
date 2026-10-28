@@ -337,6 +337,8 @@ class AppStrings {
     required this.continueReadingSection,
     required this.viewHistory,
     required this.sortLabel,
+    required this.sortAscending,
+    required this.sortDescending,
     required this.chaptersCountTemplate,
     required this.chaptersReadTemplate,
     required this.chaptersDoneTemplate,
@@ -519,6 +521,8 @@ class AppStrings {
   final String continueReadingSection;
   final String viewHistory;
   final String sortLabel;
+  final String sortAscending;
+  final String sortDescending;
   final String chaptersCountTemplate;
   final String chaptersReadTemplate;
   final String chaptersDoneTemplate;
@@ -685,6 +689,8 @@ class AppStrings {
     continueReadingSection: 'Continue Reading',
     viewHistory: 'View History',
     sortLabel: 'Sort',
+    sortAscending: 'Ascending',
+    sortDescending: 'Descending',
     chaptersCountTemplate: '{count} chapters',
     chaptersReadTemplate: '{read} of {total} chapters',
     chaptersDoneTemplate: '{read} of {total} chapters finished',
@@ -856,6 +862,8 @@ class AppStrings {
     continueReadingSection: 'Lanjut Membaca',
     viewHistory: 'Lihat Riwayat',
     sortLabel: 'Urutkan',
+    sortAscending: 'Menaik',
+    sortDescending: 'Menurun',
     chaptersCountTemplate: '{count} chapter',
     chaptersReadTemplate: '{read} dari {total} chapter',
     chaptersDoneTemplate: '{read} dari {total} chapter selesai',

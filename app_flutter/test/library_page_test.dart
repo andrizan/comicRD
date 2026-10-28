@@ -105,16 +105,24 @@ void main() {
     expect(find.text('26 of 30 chapters'), findsNothing);
   });
 
-  testWidgets('sort menu persists the chosen order', (tester) async {
+  testWidgets('sort field and direction are chosen and persisted separately', (
+    tester,
+  ) async {
     final api = FakeComicRdApi();
     await _pump(tester, api);
 
     await tester.tap(find.byIcon(AppIcons.sort));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Name Z–A'));
+    await tester.tap(find.text('Folder Date'));
     await tester.pumpAndSettle();
 
-    expect(api.savedSettings['library_sort_by'], '"name"');
+    expect(api.savedSettings['library_sort_by'], '"folder_date"');
+    expect(api.savedSettings['library_sort_dir'], '"asc"');
+
+    await tester.tap(find.byIcon(AppIcons.arrowUp));
+    await tester.pumpAndSettle(const Duration(milliseconds: 200));
+
+    expect(api.savedSettings['library_sort_by'], '"folder_date"');
     expect(api.savedSettings['library_sort_dir'], '"desc"');
   });
 

@@ -295,6 +295,7 @@ class AppIcons {
   static const IconData list = FLucideIcons.list;
   static const IconData star = FLucideIcons.star;
   static const IconData arrowUp = FLucideIcons.arrowUp;
+  static const IconData arrowDown = FLucideIcons.arrowDown;
   static const IconData chevronRight = FLucideIcons.chevronRight;
   static const IconData chevronLeft = FLucideIcons.chevronLeft;
   static const IconData check = FLucideIcons.check;
