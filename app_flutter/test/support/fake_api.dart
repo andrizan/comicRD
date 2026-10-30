@@ -183,7 +183,6 @@ class FakeComicRdApi extends ComicRdApi {
       'default_zoom': '1',
       'page_gap': '12',
       'unlimited_scroll': 'true',
-      'unlimited_scroll_up': 'false',
       'app_theme': '"$theme"',
       'app_locale': '"$locale"',
       ...extraSettings,

@@ -61,15 +61,13 @@ void main() {
     await _pump(tester, api);
 
     final switches = find.byType(SoftSwitch);
-    expect(switches, findsNWidgets(3));
+    // Unlimited scroll and portrait mode: scrolling up into the previous
+    // chapter is part of unlimited scroll, not a switch of its own.
+    expect(switches, findsNWidgets(2));
+    expect(find.text('Unlimited Scroll Up'), findsNothing);
 
     await tester.ensureVisible(switches.at(1));
     await tester.tap(switches.at(1));
-    await tester.pumpAndSettle();
-    expect(api.savedSettings['unlimited_scroll_up'], 'true');
-
-    await tester.ensureVisible(switches.at(2));
-    await tester.tap(switches.at(2));
     await tester.pumpAndSettle();
     expect(api.savedSettings['force_portrait'], 'true');
 

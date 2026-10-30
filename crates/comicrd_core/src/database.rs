@@ -307,7 +307,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         ("default_zoom", "1"),
         ("page_gap", "10"),
         ("unlimited_scroll", "false"),
-        ("unlimited_scroll_up", "true"),
         ("library_sort_by", "\"name\""),
         ("library_sort_dir", "\"asc\""),
         ("library_view_mode", "\"library\""),
@@ -326,6 +325,13 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<(), String> {
         )
         .map_err(|e| format!("failed seeding default setting {key}: {e}"))?;
     }
+    // Unlimited scroll now always chains the previous chapter in as well, so
+    // the separate "scroll up" switch (and its stored value) is gone.
+    conn.execute(
+        "DELETE FROM app_settings WHERE key = 'unlimited_scroll_up'",
+        [],
+    )
+    .map_err(|e| format!("failed removing retired setting: {e}"))?;
     Ok(())
 }
 

@@ -25,9 +25,9 @@ fn open_creates_database_and_seeds_compatible_default_settings() {
         pairs.get("unlimited_scroll").map(String::as_str),
         Some("false")
     );
-    assert_eq!(
-        pairs.get("unlimited_scroll_up").map(String::as_str),
-        Some("true")
+    assert!(
+        !pairs.contains_key("unlimited_scroll_up"),
+        "the retired scroll-up switch must not be seeded"
     );
     assert_eq!(
         pairs.get("library_sort_by").map(String::as_str),
@@ -218,4 +218,21 @@ fn open_drops_legacy_history_key_columns_from_existing_database() {
         })
         .expect("read comic source_path");
     assert_eq!(source_path, "/tmp/lib/Comic A");
+}
+
+#[test]
+fn open_removes_the_retired_scroll_up_setting() {
+    let temp = tempdir().expect("tempdir");
+    let core = ComicRdCore::open(temp.path()).expect("open core");
+    core.set_setting("unlimited_scroll_up", "true")
+        .expect("store the old value");
+    drop(core);
+
+    let core = ComicRdCore::open(temp.path()).expect("reopen core");
+    let settings = core.list_settings().expect("list settings");
+    assert!(settings
+        .iter()
+        .all(|entry| entry.key != "unlimited_scroll_up"));
+    // Other settings are left alone.
+    assert!(settings.iter().any(|entry| entry.key == "unlimited_scroll"));
 }

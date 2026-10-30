@@ -449,17 +449,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         SettingsRow(
-          title: text.unlimitedScrollUp,
-          description: text.unlimitedScrollUpDescription,
-          control: SoftSwitch(
-            value: readerSettings.unlimitedScrollUp,
-            semanticLabel: text.unlimitedScrollUp,
-            onChanged: readerSettings.unlimitedScroll
-                ? notifier.setUnlimitedScrollUp
-                : null,
-          ),
-        ),
-        SettingsRow(
           title: text.forcePortrait,
           description: text.forcePortraitDescription,
           control: SoftSwitch(

@@ -95,27 +95,23 @@ class ReaderSettings {
     this.zoom = 1.0,
     this.pageGap = 20.0,
     this.unlimitedScroll = false,
-    this.unlimitedScrollUp = true,
     this.forcePortrait = false,
   });
 
   final double zoom;
   final double pageGap;
   final bool unlimitedScroll;
-  final bool unlimitedScrollUp;
   final bool forcePortrait;
 
   ReaderSettings copyWith({
     double? zoom,
     double? pageGap,
     bool? unlimitedScroll,
-    bool? unlimitedScrollUp,
     bool? forcePortrait,
   }) => ReaderSettings(
     zoom: zoom ?? this.zoom,
     pageGap: pageGap ?? this.pageGap,
     unlimitedScroll: unlimitedScroll ?? this.unlimitedScroll,
-    unlimitedScrollUp: unlimitedScrollUp ?? this.unlimitedScrollUp,
     forcePortrait: forcePortrait ?? this.forcePortrait,
   );
 }
@@ -139,11 +135,6 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     _saveToDatabase();
   }
 
-  void setUnlimitedScrollUp(bool value) {
-    state = state.copyWith(unlimitedScrollUp: value);
-    _saveToDatabase();
-  }
-
   void setForcePortrait(bool value) {
     state = state.copyWith(forcePortrait: value);
     _saveToDatabase();
@@ -156,9 +147,6 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     unawaited(
       api.setSetting('unlimited_scroll', state.unlimitedScroll.toString()),
     );
-    unawaited(
-      api.setSetting('unlimited_scroll_up', state.unlimitedScrollUp.toString()),
-    );
     unawaited(api.setSetting('force_portrait', state.forcePortrait.toString()));
   }
 
@@ -166,13 +154,11 @@ class ReaderSettingsNotifier extends Notifier<ReaderSettings> {
     final zoom = _decodeDouble(values['default_zoom'], 1.0);
     final gap = _decodeDouble(values['page_gap'], 20.0);
     final unlimitedScroll = _decodeBool(values['unlimited_scroll'], false);
-    final unlimitedScrollUp = _decodeBool(values['unlimited_scroll_up'], true);
     final forcePortrait = _decodeBool(values['force_portrait'], false);
     state = ReaderSettings(
       zoom: zoom.clamp(0.2, 1.5),
       pageGap: gap.clamp(0, 80),
       unlimitedScroll: unlimitedScroll,
-      unlimitedScrollUp: unlimitedScrollUp,
       forcePortrait: forcePortrait,
     );
   }
@@ -236,7 +222,6 @@ class AppStrings {
     required this.zoom,
     required this.fullscreen,
     required this.unlimitedScroll,
-    required this.unlimitedScrollUp,
     required this.forcePortrait,
     // Chapter status
     required this.read,
@@ -331,7 +316,6 @@ class AppStrings {
     required this.themeDescription,
     required this.localeDescription,
     required this.unlimitedScrollDescription,
-    required this.unlimitedScrollUpDescription,
     required this.settingsDescription,
     // Soft redesign
     required this.continueReadingSection,
@@ -420,7 +404,6 @@ class AppStrings {
   final String zoom;
   final String fullscreen;
   final String unlimitedScroll;
-  final String unlimitedScrollUp;
   final String forcePortrait;
   // Chapter status
   final String read;
@@ -515,7 +498,6 @@ class AppStrings {
   final String themeDescription;
   final String localeDescription;
   final String unlimitedScrollDescription;
-  final String unlimitedScrollUpDescription;
   final String settingsDescription;
   // Soft redesign
   final String continueReadingSection;
@@ -600,7 +582,6 @@ class AppStrings {
     zoom: 'Zoom',
     fullscreen: 'Fullscreen',
     unlimitedScroll: 'Unlimited Scroll',
-    unlimitedScrollUp: 'Unlimited Scroll Up',
     forcePortrait: 'Force Portrait',
     read: 'Read',
     reading: 'Reading',
@@ -683,8 +664,8 @@ class AppStrings {
     scanCompleted: 'Scan Complete: {comics} Comics, {chapters} Chapters Found',
     themeDescription: 'Choose the app theme',
     localeDescription: 'Choose the app language',
-    unlimitedScrollDescription: 'Continue to next chapter at the end',
-    unlimitedScrollUpDescription: 'Continue to previous chapter at the top',
+    unlimitedScrollDescription:
+        'Chain the next and previous chapters into one scroll',
     settingsDescription: 'Manage your library, reader, and app preferences.',
     continueReadingSection: 'Continue Reading',
     viewHistory: 'View History',
@@ -771,7 +752,6 @@ class AppStrings {
     zoom: 'Perbesar',
     fullscreen: 'Layar Penuh',
     unlimitedScroll: 'Scroll Tanpa Batas',
-    unlimitedScrollUp: 'Scroll Tanpa Batas ke Atas',
     forcePortrait: 'Mode Potret',
     read: 'Dibaca',
     reading: 'Sedang Dibaca',
@@ -855,8 +835,8 @@ class AppStrings {
         'Pemindaian Selesai: {comics} Komik, {chapters} Chapter Ditemukan',
     themeDescription: 'Pilih tema aplikasi',
     localeDescription: 'Pilih bahasa aplikasi',
-    unlimitedScrollDescription: 'Lanjut ke chapter berikutnya di akhir',
-    unlimitedScrollUpDescription: 'Lanjut ke chapter sebelumnya di awal',
+    unlimitedScrollDescription:
+        'Sambung chapter berikutnya dan sebelumnya dalam satu scroll',
     settingsDescription:
         'Kelola pustaka, pembaca, dan preferensi aplikasi Anda.',
     continueReadingSection: 'Lanjut Membaca',

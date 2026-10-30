@@ -135,15 +135,11 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('Unlimited Scroll'), findsOneWidget);
-    expect(find.text('Unlimited Scroll Up'), findsOneWidget);
 
     await tester.tap(find.byType(FSwitch).first);
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.byType(FSwitch).last);
-    await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(api.savedSettings['unlimited_scroll'], 'true');
-    expect(api.savedSettings['unlimited_scroll_up'], 'false');
   }, skip: true);
 
   testWidgets('library back-to-top button returns the active list to top', (
@@ -460,7 +456,6 @@ class _SettingsPanelApi extends _FakeComicRdApi {
       bridge.SettingEntry(key: 'default_zoom', valueJson: '1'),
       bridge.SettingEntry(key: 'page_gap', valueJson: '10'),
       bridge.SettingEntry(key: 'unlimited_scroll', valueJson: 'false'),
-      bridge.SettingEntry(key: 'unlimited_scroll_up', valueJson: 'true'),
       bridge.SettingEntry(
         key: 'image_pipeline_profile',
         valueJson: '"balanced"',
