@@ -9,6 +9,7 @@ import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
 import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,11 +57,46 @@ void main() {
       api.renderedPageIndices.toSet(),
       isNot({for (var index = 0; index < api.pageCount; index++) index}),
     );
-    expect(find.textContaining('Chapter 28 (28/33)'), findsOneWidget);
+    expect(find.text('Chapter 28'), findsOneWidget);
+    expect(find.text(' (28/33)'), findsOneWidget);
     expect(find.text('28'), findsOneWidget);
     expect(find.text('33'), findsOneWidget);
     expect(api.prefetchedWindows, contains(equals([25, 26, 27, 28, 29])));
     expect(api.evictedWindows, contains(equals([25, 26, 27, 28, 29])));
+  });
+
+  testWidgets('a long chapter title is ellipsised but the position stays', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final longTitle = 'Chapter 28 · ${'The Door That Was Never Opened ' * 6}';
+    final api = _ReaderFakeComicRdApi(
+      lastPage: 0,
+      pageCount: 6,
+      chapterTitle: longTitle,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [comicRdApiProvider.overrideWithValue(api)],
+        child: wrap(const ReaderPage(chapterId: 7)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final title = tester.renderObject<RenderParagraph>(find.text(longTitle));
+    expect(title.didExceedMaxLines, isTrue);
+
+    // The title pill is at most 540 px wide, starting at the 24 px gutter.
+    final position = tester.getRect(find.text(' (28/33)'));
+    expect(position.width, greaterThan(0));
+    expect(position.right, lessThanOrEqualTo(24 + 540));
   });
 
   testWidgets('lazy renders only built pages after scroll settles', (
@@ -651,8 +687,10 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     this.unlimitedScroll = false,
     this.unlimitedScrollUp = true,
     this.prefetchGate,
+    this.chapterTitle = 'Chapter 28',
   });
 
+  final String chapterTitle;
   final int lastPage;
   final int pageCount;
   final int pageWidth;
@@ -702,7 +740,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       chapterId: chapterId,
       comicId: 1,
       comicTitle: 'Kaichou wa Maid-sama!',
-      title: 'Chapter 28',
+      title: chapterTitle,
       comicSourcePath: '/library/Kaichou wa Maid-sama!',
       chapterSourcePath: '/library/Kaichou wa Maid-sama!/Chapter 28',
       chapterIndex: 28,

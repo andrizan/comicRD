@@ -2082,9 +2082,18 @@ class _ReaderTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final contextData = data.context;
-    final subtitle = contextData != null
-        ? '${contextData.title} (${contextData.chapterPosition}/${contextData.chapterTotal})'
-        : text.chapter;
+    final subtitle = contextData?.title ?? text.chapter;
+    // Kept out of the ellipsised title so a long chapter name never hides
+    // where the chapter sits in the comic.
+    final position = contextData != null
+        ? ' (${contextData.chapterPosition}/${contextData.chapterTotal})'
+        : null;
+    const subtitleStyle = TextStyle(
+      color: _chromeMuted,
+      fontSize: 12.5,
+      height: 18 / 12.5,
+      fontWeight: FontWeight.w500,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
       child: LayoutBuilder(
@@ -2129,16 +2138,25 @@ class _ReaderTopBar extends StatelessWidget {
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                Text(
-                                  subtitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: _chromeMuted,
-                                    fontSize: 12.5,
-                                    height: 18 / 12.5,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        subtitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: subtitleStyle,
+                                      ),
+                                    ),
+                                    if (position != null)
+                                      Text(
+                                        position,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        style: subtitleStyle,
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
