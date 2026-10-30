@@ -123,3 +123,60 @@ fn tile_render_does_not_block_progress_writes() {
         .expect("progress exists");
     assert_eq!(progress.last_page, 2);
 }
+
+#[test]
+fn open_chapter_reuses_stored_sizes_until_the_chapter_changes() {
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let chapter_1 = comic.join("Chapter 1");
+    let chapter_2 = comic.join("Chapter 2");
+    fs::create_dir_all(&chapter_1).expect("chapter 1");
+    fs::create_dir_all(&chapter_2).expect("chapter 2");
+    fs::write(chapter_1.join("001.png"), vec![0u8; 1000]).expect("c1 p1");
+    fs::write(chapter_1.join("002.png"), vec![0u8; 2000]).expect("c1 p2");
+    fs::write(chapter_2.join("001.png"), vec![0u8; 500]).expect("c2 p1");
+
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let open = |core: &ComicRdCore| {
+        core.open_chapter_for_reading(OpenChapterPayload {
+            comic_source_path: comic.to_string_lossy().to_string(),
+            chapter_source_path: chapter_1.to_string_lossy().to_string(),
+        })
+        .expect("open chapter")
+    };
+    let sizes = |core: &ComicRdCore| -> Vec<i64> {
+        core.list_comic_chapters_raw(&comic.to_string_lossy())
+            .expect("chapters")
+            .into_iter()
+            .map(|chapter| chapter.size_bytes)
+            .collect()
+    };
+
+    open(&core);
+    assert_eq!(sizes(&core), vec![3000, 500]);
+
+    // Overwriting a page in place leaves the folder's modified time alone, so
+    // the stored size is kept: opening must not re-walk every chapter.
+    fs::write(chapter_1.join("002.png"), vec![0u8; 9000]).expect("grow page");
+    open(&core);
+    assert_eq!(sizes(&core), vec![3000, 500]);
+
+    // Once the chapter counts as changed (its stored time no longer matches),
+    // the size is measured again.
+    let conn = rusqlite::Connection::open(app_data.join("comicrd.db")).expect("db");
+    conn.execute(
+        "UPDATE chapters SET date_modified = 0 WHERE source_path = ?1",
+        [chapter_1.to_string_lossy().to_string()],
+    )
+    .expect("age chapter");
+    drop(conn);
+    open(&core);
+    assert_eq!(sizes(&core), vec![10000, 500]);
+}

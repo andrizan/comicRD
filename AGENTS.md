@@ -149,6 +149,9 @@ The reader image pipeline must keep raw image/page data bounded around the curre
 - Flutter must ask Rust to evict other raw pages for the chapter as the active range changes and on reader close/chapter switch.
 - Rust caches up to 2 page sources and 16 raw tile byte entries.
 - Use `Arc<Vec<u8>>` for cached image bytes to avoid deep copies on Rust cache hits.
+- Tile requests for one page that overlap in time (visible widgets plus a prefetch) share a single decode through `PageCache::page_work`; the decoded page is freed as soon as the last request is out, so this does not widen the cache. A batched prefetch encodes its tiles in parallel (`encode_tiles`).
+- `open_chapter_for_reading` visits every chapter of the comic, so keep it free of per-page work: discovery uses `dir_has_images` (no sorting, no per-file `stat`) and a chapter whose stored modified time still matches keeps its stored size. Do not reintroduce a full walk of every chapter folder there; scans refresh sizes.
+- The workspace optimises dependencies in the dev profile (`[profile.dev.package."*"]`): `flutter run` builds the bridge without `--release`, and unoptimised image decoding made one JPEG page take ~9 s to open.
 - Never hold the DB (`conn`) mutex across filesystem IO, image decode/resize/encode, or archive scans. Resolve DB rows under a short scoped lock, drop the guard, then do slow work (`render_page_tile`, `prefetch_tiles`, `get_chapter_pages` follow this; `PageCache`/`ThumbnailCache` have their own mutexes).
 
 Do not expand reader raw-image cache, Flutter provider retention, or prefetch windows beyond this policy unless the user explicitly changes the memory policy.

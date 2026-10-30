@@ -406,6 +406,27 @@ pub(crate) fn image_entries_in_dir_shallow(path: &Path) -> Vec<PathBuf> {
     image_entries_in_dir_with_depth(path, 1)
 }
 
+/// Whether `image_entries_in_dir(path)` would be non-empty, without building
+/// it: no sorting, no per-file `stat` (the file type comes with the
+/// directory read) and it stops at the first image. Chapter discovery asks
+/// this for every folder of a comic.
+fn dir_has_images(path: &Path) -> bool {
+    WalkDir::new(path)
+        .min_depth(1)
+        .max_depth(3)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .any(|entry| {
+            let candidate = entry.path();
+            let relative = candidate.strip_prefix(path).unwrap_or(candidate);
+            // Symlinked files keep counting, as `Path::is_file` follows them.
+            (entry.file_type().is_file()
+                || (entry.path_is_symlink() && candidate.is_file()))
+                && !ignored_fs_entry(relative)
+                && is_image(candidate)
+        })
+}
+
 fn image_dimensions_from_path(path: &Path) -> Option<(u32, u32)> {
     image::ImageReader::open(path)
         .ok()?
@@ -532,24 +553,19 @@ pub(crate) fn discover_chapter_entries_from_comic_dir(
 
     for child in children {
         if child.is_dir() {
-            let has_images = !image_entries_in_dir(&child).is_empty();
-            let mut nested_archives = Vec::new();
-
-            let child_entries = sort_paths_naturally(
+            let has_images = dir_has_images(&child);
+            // Only archive-looking names are statted and sorted, not every
+            // page of every chapter folder.
+            let nested_archives = sort_paths_naturally(
                 WalkDir::new(&child)
                     .min_depth(1)
                     .max_depth(1)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .map(|e| e.into_path())
+                    .filter(|entry| is_archive(entry) && entry.is_file())
                     .collect(),
             );
-
-            for entry in child_entries {
-                if entry.is_file() && is_archive(&entry) {
-                    nested_archives.push(entry);
-                }
-            }
 
             if has_images {
                 chapter_entries.push((
@@ -757,10 +773,23 @@ pub(crate) fn open_chapter_for_reading_conn(
     let mut total_size_bytes: i64 = 0;
     for (chapter_title, chapter_path, chapter_type, chapter_index) in chapter_entries {
         let modified_at = file_modified_ts(Path::new(&chapter_path));
-        let cached_page_count = chapter_snapshot_by_source_path(&tx, &chapter_path)?
+        let snapshot = chapter_snapshot_by_source_path(&tx, &chapter_path)?;
+        let cached_page_count = snapshot
             .map(|(page_count, _, _, _)| page_count.max(0) as usize)
             .unwrap_or(0);
-        let chapter_size = chapter_size_bytes(Path::new(&chapter_path), &chapter_type);
+        // Summing a folder chapter's size stats every page of it, and this
+        // loop visits every chapter of the comic: on a big folder library
+        // that walk was most of the time spent before the reader opened. A
+        // chapter whose modified time still matches keeps its stored size;
+        // a scan (or any change to the folder) refreshes it.
+        let chapter_size = match snapshot {
+            Some((_, stored_modified, stored_size, _))
+                if stored_modified == modified_at && stored_size > 0 =>
+            {
+                stored_size
+            }
+            _ => chapter_size_bytes(Path::new(&chapter_path), &chapter_type),
+        };
         total_size_bytes = total_size_bytes.saturating_add(chapter_size);
         let chapter_id = upsert_chapter(
             &tx,
@@ -1128,6 +1157,47 @@ mod tests {
 
         let total = chapter_size_bytes(&chapter_dir, "folder");
         assert_eq!(total, 1024 + 2048);
+    }
+
+    #[test]
+    fn dir_has_images_matches_the_image_listing_rules() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path();
+
+        let empty = root.join("empty");
+        fs::create_dir_all(&empty).expect("empty");
+        let junk = root.join("junk");
+        fs::create_dir_all(junk.join("__MACOSX")).expect("macosx");
+        fs::write(junk.join("notes.txt"), b"x").expect("notes");
+        fs::write(junk.join("Thumbs.db"), b"x").expect("thumbs");
+        fs::write(junk.join(".hidden.png"), b"x").expect("hidden");
+        fs::write(junk.join("__MACOSX").join("._001.png"), b"x").expect("macosx file");
+        let shallow = root.join("shallow");
+        fs::create_dir_all(&shallow).expect("shallow");
+        fs::write(shallow.join("001.PNG"), b"x").expect("shallow image");
+        let depth3 = root.join("depth3");
+        fs::create_dir_all(depth3.join("a").join("b")).expect("depth3");
+        fs::write(depth3.join("a").join("b").join("001.jpg"), b"x").expect("depth3 image");
+        let depth4 = root.join("depth4");
+        fs::create_dir_all(depth4.join("a").join("b").join("c")).expect("depth4");
+        fs::write(
+            depth4.join("a").join("b").join("c").join("001.jpg"),
+            b"x",
+        )
+        .expect("depth4 image");
+
+        for dir in [&empty, &junk, &shallow, &depth3, &depth4] {
+            assert_eq!(
+                dir_has_images(dir),
+                !image_entries_in_dir(dir).is_empty(),
+                "{}",
+                dir.display()
+            );
+        }
+        assert!(!dir_has_images(&junk));
+        assert!(dir_has_images(&shallow));
+        assert!(dir_has_images(&depth3));
+        assert!(!dir_has_images(&depth4));
     }
 
     #[test]

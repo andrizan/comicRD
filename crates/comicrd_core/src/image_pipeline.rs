@@ -51,7 +51,20 @@ pub struct CacheStats {
 pub(crate) struct PageCache {
     state: Mutex<PageCacheState>,
     rar_session_base: PathBuf,
+    /// Pages being decoded right now, so overlapping requests share one
+    /// decode (see `page_work`).
+    inflight: Mutex<HashMap<(i64, usize), PageWorkSlot>>,
 }
+
+/// One page's raw bytes and the tile plan derived from them, shared by every
+/// tile request that overlaps in time.
+struct PageWork {
+    bytes: Vec<u8>,
+    mime: &'static str,
+    plan: PagePlan,
+}
+
+type PageWorkSlot = Arc<Mutex<Option<Arc<PageWork>>>>;
 
 /// One extracted rar/cbr chapter: `entries` (archive names, list order)
 /// and `files` (extracted paths) are parallel. Served from disk until the
@@ -123,7 +136,50 @@ impl PageCache {
         Self {
             state: Mutex::new(PageCacheState::default()),
             rar_session_base: base,
+            inflight: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// The decoded work for one page, shared between requests in flight.
+    ///
+    /// Several tile widgets (and a prefetch racing them) ask for different
+    /// tiles of one tall page within milliseconds; each used to decode the
+    /// whole page on its own. The first request here decodes, the others
+    /// wait and reuse the result. Nothing is kept afterwards: the last
+    /// request out frees the decoded page, and the finished tiles live in
+    /// the bounded byte cache.
+    fn page_work(
+        &self,
+        key: (i64, usize),
+        load: impl FnOnce() -> Result<PageWork, String>,
+    ) -> Result<Arc<PageWork>, String> {
+        let slot = {
+            let mut inflight = self
+                .inflight
+                .lock()
+                .map_err(|_| "page work lock poisoned".to_string())?;
+            Arc::clone(inflight.entry(key).or_default())
+        };
+        let result = {
+            let mut shared = slot
+                .lock()
+                .map_err(|_| "page work lock poisoned".to_string())?;
+            match shared.as_ref() {
+                Some(work) => Ok(Arc::clone(work)),
+                None => load().map(|work| {
+                    let work = Arc::new(work);
+                    *shared = Some(Arc::clone(&work));
+                    work
+                }),
+            }
+        };
+        if let Ok(mut inflight) = self.inflight.lock() {
+            // Only the table and this call hold the slot: nobody is waiting.
+            if Arc::strong_count(&slot) <= 2 {
+                inflight.remove(&key);
+            }
+        }
+        result
     }
 
     fn lock_state(&self) -> Result<MutexGuard<'_, PageCacheState>, String> {
@@ -664,6 +720,36 @@ fn encode_planned_tile(
     }
 }
 
+/// Encode several tiles of one decoded page. Tiles are independent, so on a
+/// multi-core machine they are encoded side by side; a single tile stays on
+/// the calling thread.
+fn encode_tiles(
+    work: &PageWork,
+    tiles: &[usize],
+) -> Result<Vec<(usize, Vec<u8>, &'static str)>, String> {
+    let encode = |tile_index: usize| {
+        encode_planned_tile(&work.plan, &work.bytes, work.mime, tile_index)
+            .map(|(out, out_mime)| (tile_index, out, out_mime))
+    };
+    if tiles.len() < 2 {
+        return tiles.iter().map(|&tile_index| encode(tile_index)).collect();
+    }
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = tiles
+            .iter()
+            .map(|&tile_index| scope.spawn(move || encode(tile_index)))
+            .collect();
+        workers
+            .into_iter()
+            .map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or_else(|_| Err("tile encode panicked".to_string()))
+            })
+            .collect()
+    })
+}
+
 /// Batched prefetch for one page: hit-filter under a short lock, then a
 /// single decode serves every missed tile of the page. Tiles are handled
 /// in payload order and fail fast on the first out-of-range tile, like
@@ -691,17 +777,17 @@ pub(crate) fn prefetch_page_tiles_conn(
     if need.is_empty() {
         return Ok(());
     }
-    let source = get_or_load_page_source(cache, chapter_id, source_path, source_type)?;
-    let (bytes, mime) = read_page_bytes(&source, page_index)?;
-    let plan = plan_page_tiles(&bytes, mime);
-    let mut encoded = Vec::with_capacity(need.len());
-    for tile_index in need {
-        if tile_index >= plan.tiles.len() {
-            return Err("tile index out of range".to_string());
-        }
-        let (out, out_mime) = encode_planned_tile(&plan, &bytes, mime, tile_index)?;
-        encoded.push((tile_index, out, out_mime));
+    let work = cache.page_work((chapter_id, page_index), || {
+        let source = get_or_load_page_source(cache, chapter_id, source_path, source_type)?;
+        let (bytes, mime) = read_page_bytes(&source, page_index)?;
+        let plan = plan_page_tiles(&bytes, mime);
+        Ok(PageWork { bytes, mime, plan })
+    })?;
+    // Fail fast on the first out-of-range tile, before any encoding.
+    if need.iter().any(|&tile_index| tile_index >= work.plan.tiles.len()) {
+        return Err("tile index out of range".to_string());
     }
+    let encoded = encode_tiles(&work, &need)?;
     // One decode served the whole batch: +1 load no matter how many tiles
     // were encoded (a lost race counts as a hit instead).
     {
@@ -748,19 +834,33 @@ fn get_or_load_tile_bytes(
             return Ok(result);
         }
     }
-    let source = get_or_load_page_source(cache, chapter_id, source_path, source_type)?;
-    let (bytes, mime) = read_page_bytes(&source, page_index)?;
     // Shared layout/output plan: the fast header path, GIF/corrupt
     // whole-file fallback, and decode+tile math agree here so the single
-    // render and the batched prefetch below serve identical bytes.
-    let plan = plan_page_tiles(&bytes, mime);
-    if tile_index >= plan.tiles.len() {
+    // render and the batched prefetch below serve identical bytes. The
+    // decode itself is shared with any other request for this page in flight.
+    let work = cache.page_work((chapter_id, page_index), || {
+        let source = get_or_load_page_source(cache, chapter_id, source_path, source_type)?;
+        let (bytes, mime) = read_page_bytes(&source, page_index)?;
+        let plan = plan_page_tiles(&bytes, mime);
+        Ok(PageWork { bytes, mime, plan })
+    })?;
+    if tile_index >= work.plan.tiles.len() {
         return Err("tile index out of range".to_string());
+    }
+    // A request we waited behind may already have produced this tile.
+    {
+        let mut state = cache.lock_state()?;
+        if let Some(cached) = state.bytes.get(&key) {
+            let result = (Arc::clone(&cached.bytes), cached.mime);
+            state.stats.page_bytes_cache_hits += 1;
+            state.touch_bytes(key);
+            return Ok(result);
+        }
     }
     // Lazy siblings: only the requested tile is encoded here, so first
     // paint pays one decode + one encode. The batched prefetch above
     // decodes once per page for its whole window (no per-tile re-decode).
-    let (out, out_mime) = encode_planned_tile(&plan, &bytes, mime, tile_index)?;
+    let (out, out_mime) = encode_planned_tile(&work.plan, &work.bytes, work.mime, tile_index)?;
     remember_tile_bytes(cache, key, out, out_mime)
 }
 
@@ -1109,5 +1209,113 @@ mod tests {
             .write_to(&mut cursor, image::ImageFormat::Jpeg)
             .expect("encode jpeg");
         cursor.into_inner()
+    }
+
+    fn raw_work(tag: u8) -> PageWork {
+        PageWork {
+            bytes: vec![tag],
+            mime: "image/png",
+            plan: PagePlan {
+                body: PageBody::Raw,
+                fitted_width: 1,
+                tiles: vec![1],
+                resized: false,
+            },
+        }
+    }
+
+    #[test]
+    fn page_work_is_shared_by_overlapping_requests_and_freed_after() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache = PageCache::default();
+        let loads = AtomicUsize::new(0);
+        let results = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..4)
+                .map(|index| {
+                    let cache = &cache;
+                    let loads = &loads;
+                    scope.spawn(move || {
+                        // Stagger the callers so the first is still loading
+                        // when the others arrive.
+                        std::thread::sleep(std::time::Duration::from_millis(index * 15));
+                        cache
+                            .page_work((1, 0), || {
+                                loads.fetch_add(1, Ordering::SeqCst);
+                                std::thread::sleep(std::time::Duration::from_millis(120));
+                                Ok(raw_work(7))
+                            })
+                            .expect("page work")
+                    })
+                })
+                .collect();
+            workers
+                .into_iter()
+                .map(|worker| worker.join().expect("worker"))
+                .collect::<Vec<_>>()
+        });
+
+        assert_eq!(loads.load(Ordering::SeqCst), 1, "one decode for all callers");
+        assert!(results.iter().all(|work| Arc::ptr_eq(work, &results[0])));
+        assert!(
+            cache.inflight.lock().unwrap().is_empty(),
+            "nothing stays decoded once the last caller is out"
+        );
+
+        // A later, separate request decodes again rather than serving a
+        // stale, held-over page.
+        cache
+            .page_work((1, 0), || {
+                loads.fetch_add(1, Ordering::SeqCst);
+                Ok(raw_work(8))
+            })
+            .expect("later page work");
+        assert_eq!(loads.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn page_work_keeps_pages_apart_and_retries_after_a_failed_load() {
+        let cache = PageCache::default();
+        let first = cache.page_work((1, 0), || Ok(raw_work(1))).expect("page 0");
+        let second = cache.page_work((1, 1), || Ok(raw_work(2))).expect("page 1");
+        assert_eq!(first.bytes, vec![1]);
+        assert_eq!(second.bytes, vec![2]);
+
+        assert!(cache
+            .page_work((2, 0), || Err("unreadable".to_string()))
+            .is_err());
+        let retried = cache
+            .page_work((2, 0), || Ok(raw_work(3)))
+            .expect("retry after failure");
+        assert_eq!(retried.bytes, vec![3]);
+        assert!(cache.inflight.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn encode_tiles_in_parallel_matches_encoding_them_one_by_one() {
+        // 600x5000 PNG: three tiles (2048 + 2048 + 904), so it takes the
+        // decode path and the tiles are cropped and re-encoded.
+        let bytes = png_bytes(600, 5000);
+        let plan = plan_page_tiles(&bytes, "image/png");
+        assert_eq!(plan.tiles, vec![2048, 2048, 904]);
+        let work = PageWork {
+            bytes,
+            mime: "image/png",
+            plan,
+        };
+
+        let parallel = encode_tiles(&work, &[2, 0, 1]).expect("parallel");
+        assert_eq!(
+            parallel.iter().map(|(index, _, _)| *index).collect::<Vec<_>>(),
+            vec![2, 0, 1],
+            "results keep the requested order"
+        );
+        for (index, out, out_mime) in parallel {
+            let (expected, expected_mime) =
+                encode_planned_tile(&work.plan, &work.bytes, work.mime, index)
+                    .expect("sequential");
+            assert_eq!(out, expected, "tile {index}");
+            assert_eq!(out_mime, expected_mime);
+        }
     }
 }

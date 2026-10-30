@@ -13,6 +13,17 @@ edition = "2021"
 rust-version = "1.98"
 license = "MIT"
 
+# Debug builds (`flutter run` calls `cargo build` without `--release`) would
+# otherwise compile image decoding, resizing and zip inflate at opt-level 0,
+# which made one JPEG page take ~9 s instead of ~0.4 s to open. Optimise the
+# dependencies (they rarely change, so this is compiled once) and keep the
+# app's own crates cheap to rebuild and debug.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.comicrd_core]
+opt-level = 2
+
 [profile.release]
 # Fat LTO + one codegen unit: whole-program inlining across the image
 # decode/resize crates and a 32% smaller bridge library (12.3 -> 8.4 MB).
