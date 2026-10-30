@@ -61,7 +61,6 @@ jobs:
 
   build-linux:
     name: Build Linux Bundle
-    needs: quality
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
 
@@ -90,7 +89,6 @@ jobs:
 
   build-windows:
     name: Build Windows Bundle
-    needs: quality
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
 
@@ -147,7 +145,6 @@ jobs:
 
   build-macos:
     name: Build macOS Bundle
-    needs: quality
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
 
@@ -185,7 +182,11 @@ jobs:
 
   release:
     name: Create GitHub Release
+    # The tagged commit has normally already passed on master, so the release
+    # builds do not wait for Quality: it runs beside them, and nothing is
+    # published unless it passes too.
     needs:
+      - quality
       - build-linux
       - build-windows
       - build-macos

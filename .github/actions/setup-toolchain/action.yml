@@ -27,8 +27,12 @@ runs:
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
 
+    # Only master saves: a cache written from a tag or a pull request ref is
+    # not reachable from the next one, so saving it just costs time.
     - name: Cache Rust build
       uses: Swatinem/rust-cache@v2
+      with:
+        save-if: ${{ github.ref == 'refs/heads/master' }}
 
     # dav1d (AVIF decode) and GTK (Flutter desktop embedder) are the only
     # native libraries the workspace links against.
