@@ -31,6 +31,15 @@ final _shotKey = GlobalKey();
 const _root = '/home/andrizan/Comics';
 const _featured = '$_root/Twilight Keeper';
 
+const _monospaceFontCandidates = [
+  '/usr/share/fonts/noto/NotoSansMono-Regular.ttf',
+  '/usr/share/fonts/TTF/DejaVuSansMono.ttf',
+  '/usr/share/fonts/dejavu/DejaVuSansMono.ttf',
+  '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+  '/System/Library/Fonts/Menlo.ttc',
+  'C:\\Windows\\Fonts\\consola.ttf',
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -60,6 +69,21 @@ void main() {
     final lucide = FontLoader('packages/forui_lucide/ForuiLucideIcons');
     lucide.addFont(rootBundle.load('packages/forui_lucide/assets/lucide.ttf'));
     await lucide.load();
+    // The app asks the OS for a monospace font (the path chip on the comic
+    // page). The test environment has none, so every glyph would render as a
+    // solid block; borrow a real one from the machine when there is one and
+    // fall back to the bundled font so the text stays readable.
+    final mono = FontLoader('monospace');
+    final monoFile = _monospaceFontCandidates
+        .map(File.new)
+        .where((file) => file.existsSync())
+        .firstOrNull;
+    mono.addFont(
+      monoFile != null
+          ? Future.value(ByteData.sublistView(monoFile.readAsBytesSync()))
+          : rootBundle.load('assets/fonts/PlusJakartaSans-Medium.ttf'),
+    );
+    await mono.load();
     Directory(_outDir).createSync(recursive: true);
   });
 
@@ -78,6 +102,10 @@ void main() {
     await tester.tap(find.text('Favorites'));
     await _shoot(tester, '04-favorites');
 
+    // A title is opened from the Library tab, so the sidebar should say so.
+    await tester.tap(find.text('Library'));
+    // The shell's window-drag detector delays taps by the double-tap timeout.
+    await tester.pump(const Duration(milliseconds: 400));
     _go(tester, '/comic/${encodeRoutePath(_featured)}');
     await _shoot(tester, '05-comic');
 
