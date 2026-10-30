@@ -91,6 +91,20 @@ void main() {
     await tester.tap(find.text('Mark'));
     await _shoot(tester, '09-reader-mark');
 
+    // Unlimited scroll chains the next chapter in below this one: scroll to
+    // the end so it loads, then stop on the separator between the two.
+    final position = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    final endOfChapter = position.maxScrollExtent;
+    position.jumpTo(endOfChapter - 100);
+    await _settle(tester);
+    // The old end plus the viewport is the chapter's bottom edge, less the
+    // 90 px of bottom padding; park the separator a little below the top.
+    position.jumpTo(endOfChapter + position.viewportDimension - 90 - 250);
+    await _settle(tester);
+    await _shoot(tester, '17-reader-chapter-break');
+
     _go(tester, '/');
     await _settle(tester);
     await tester.pump(const Duration(seconds: 3));

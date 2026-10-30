@@ -5,7 +5,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart'
     show ItemExtentBuilder, RenderSliverVariedExtentList, ScrollCacheExtent;
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' as widgets;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:window_manager/window_manager.dart';
@@ -140,6 +139,7 @@ class _ExactTotalChildDelegate extends SliverChildBuilderDelegate {
     super.builder, {
     required this.exactTotal,
     super.childCount,
+    super.findChildIndexCallback,
   });
 
   final double exactTotal;
@@ -162,11 +162,13 @@ class _ExactTotalSliverList extends SliverMultiBoxAdaptorWidget {
     required this.itemExtentBuilder,
     required this.exactTotal,
     required int itemCount,
+    ChildIndexGetter? findChildIndex,
   }) : super(
          delegate: _ExactTotalChildDelegate(
            itemBuilder,
            childCount: itemCount,
            exactTotal: exactTotal,
+           findChildIndexCallback: findChildIndex,
          ),
        );
 
@@ -200,22 +202,55 @@ class ReaderPage extends ConsumerStatefulWidget {
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
 }
 
+/// A slice of one chapter's tiles, as chapter-local tile indices.
+typedef _WindowSegment = ({int chapterId, int start, int end});
+
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   static int _activeInstances = 0;
-  static bool _scrollToBottomOnRestore = false;
 
   /// Floating top toolbar: 20 px inset + 56 px pill, plus a 2 px breath.
   static const double _topPadding = 78;
 
   /// Floating page bar: 56 px pill + 24 px inset.
   static const double _bottomChromeHeight = 80;
+
+  /// The "finished / next chapter" header drawn above the first page of every
+  /// chapter that follows another one in the strip.
+  static const double _transitionExtent = 168;
+
+  /// A neighbouring chapter starts loading once the viewport is this many
+  /// viewport heights from that end of the strip.
+  static const double _preloadViewports = 3;
+
   late ScrollController _scroll;
   final _focusNode = FocusNode(debugLabel: 'ReaderPage');
   _TileLayout? _tileLayout;
   Timer? _progressTimer;
   Timer? _initialScrollTimer;
+
+  /// The chapters chained into the scroll view. Null until the opened chapter
+  /// has loaded; with unlimited scroll off it only ever holds that chapter.
+  ReaderStrip? _strip;
+
+  /// Slot (in [_strip]) of the chapter being read, and the page within it.
+  int _activeSlot = 0;
   int _currentPage = 0;
-  int _lastSavedPage = -1;
+
+  /// Last page persisted per chapter, so a repeat is not written twice.
+  final Map<int, int> _savedPages = {};
+  final Map<int, Set<int>> _pageMarks = {};
+  final Set<int> _loadingMarks = {};
+
+  /// Keeps the provider of a chained chapter (other than the opened one,
+  /// which `build` watches) alive for as long as it is in the strip.
+  final Map<int, ProviderSubscription<AsyncValue<ReaderData>>> _chapterHolds =
+      {};
+  final Set<int> _loadingChapters = {};
+  final Set<int> _failedChapters = {};
+
+  /// Chapters whose raw pages were already released because the window left
+  /// them, so the eviction is not repeated on every scroll event.
+  final Set<int> _idleChapters = {};
   bool _ignoreNextScrollUpdate = false;
   bool _restoredProgress = false;
   bool _initialScrollDone = false;
@@ -227,15 +262,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // page list, and overlay changes don't rebuild it either.
   final ValueNotifier<int> _overlayVersion = ValueNotifier(0);
   late final ComicRdApi _api;
-  ReaderData? _lastReaderData;
-  int? _lastReaderChapterId;
   Completer<void>? _prefetchQueue;
-  int? _prefetchQueuedStart;
-  int? _prefetchQueuedEnd;
+  List<_WindowSegment>? _prefetchQueued;
+
+  /// Prefetch window as strip-wide tile indices (`_renderEnd < _renderStart`
+  /// means none yet).
   int _renderStart = 0;
   int _renderEnd = -1;
   int _readerGeneration = 0;
-  final Set<int> _pageBookmarkedPages = {};
+
+  StripChapter? get _activeChapter {
+    final strip = _strip;
+    if (strip == null || strip.chapters.isEmpty) {
+      return null;
+    }
+    return strip.chapters[_activeSlot.clamp(0, strip.chapters.length - 1)];
+  }
+
+  Set<int> get _activeMarks {
+    final chapter = _activeChapter;
+    return chapter == null
+        ? const <int>{}
+        : _pageMarks[chapter.chapterId] ?? const <int>{};
+  }
 
   @override
   void initState() {
@@ -252,17 +301,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void dispose() {
     _progressTimer?.cancel();
     _initialScrollTimer?.cancel();
-    final data = _lastReaderData;
-    final chapterId = _lastReaderChapterId;
-    if (data != null && chapterId != null) {
-      unawaited(_saveProgressDirect(chapterId: chapterId, data: data));
-      unawaited(
-        _releaseChapterMemory(
-          chapterId: chapterId,
-          pages: data.pages,
-          invalidateRenderedPages: false,
-        ),
-      );
+    final strip = _strip;
+    final active = _activeChapter;
+    if (active != null) {
+      unawaited(_saveProgressDirect(active));
+    }
+    if (strip != null) {
+      unawaited(_releaseStripMemory(strip, invalidateRenderedPages: false));
     }
     _activeInstances--;
     if (_activeInstances <= 0) {
@@ -287,45 +332,44 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _progressTimer?.cancel();
     _initialScrollTimer?.cancel();
     _initialScrollTimer = null;
+    _readerGeneration++;
+    _activeSlot = 0;
     _currentPage = 0;
-    _lastSavedPage = -1;
     _ignoreNextScrollUpdate = false;
     _restoredProgress = false;
     _initialScrollDone = false;
     _renderStart = 0;
     _renderEnd = -1;
-    // Per-chapter state: the bookmark set must not leak into the new
-    // chapter (the loader below only fetches when this is empty).
-    _pageBookmarkedPages.clear();
+    // Per-chapter state must not leak into the new chapter.
+    _savedPages.clear();
+    _pageMarks.clear();
+    _loadingMarks.clear();
+    _loadingChapters.clear();
+    _failedChapters.clear();
+    _idleChapters.clear();
     _toolbarVisible = true;
     _openPanel = _ReaderPanel.none;
     _refreshOverlay();
-    final oldData = _lastReaderChapterId == oldWidget.chapterId
-        ? _lastReaderData
-        : null;
-    if (_lastReaderChapterId == oldWidget.chapterId) {
-      _lastReaderData = null;
-      _lastReaderChapterId = null;
-    }
-    final oldChapterId = oldWidget.chapterId;
-    final oldPages = oldData?.pages;
+    final oldStrip = _strip;
+    _strip = null;
+    final oldChapters = oldStrip?.chapters ?? const <StripChapter>[];
+    final oldIds = oldStrip == null
+        ? [oldWidget.chapterId]
+        : [for (final chapter in oldChapters) chapter.chapterId];
+    _closeHolds();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      ref.invalidate(readerDataProvider(oldChapterId));
-      if (oldPages != null) {
-        _invalidateRenderedTiles(oldChapterId, oldPages);
+      for (final id in oldIds) {
+        ref.invalidate(readerDataProvider(id));
+      }
+      for (final chapter in oldChapters) {
+        _invalidateRenderedTiles(chapter.chapterId, chapter.data.pages);
       }
     });
-    if (oldData != null) {
-      unawaited(
-        _releaseChapterMemory(
-          chapterId: oldChapterId,
-          pages: oldData.pages,
-          invalidateRenderedPages: false,
-        ),
-      );
+    if (oldStrip != null) {
+      unawaited(_releaseStripMemory(oldStrip, invalidateRenderedPages: false));
     }
     if (_scroll.hasClients) {
       _scroll.jumpTo(0);
@@ -348,16 +392,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final settings = ref.watch(appSettingsProvider);
     final text = stringsFor(settings.localeCode);
     final reader = ref.watch(readerDataProvider(widget.chapterId));
+    // One comic per strip, so the opened chapter names it for every slot.
     final comicPath = reader.asData?.value.context?.comicSourcePath ?? '';
-    final chapterSourcePath =
-        reader.asData?.value.context?.chapterSourcePath ?? '';
     final bookmarkedChapterPaths = comicPath.isEmpty
         ? const <String>[]
         : ref.watch(chapterBookmarksProvider(comicPath)).asData?.value ??
               const <String>[];
-    final isBookmarked =
-        chapterSourcePath.isNotEmpty &&
-        bookmarkedChapterPaths.contains(chapterSourcePath);
     final isFavorited =
         ref.watch(comicFavoritedProvider(comicPath)).asData?.value ?? false;
     return KeyboardListener(
@@ -365,23 +405,25 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       focusNode: _focusNode,
       onKeyEvent: (event) {
         if (event is KeyDownEvent) {
-          _handleKey(event.logicalKey, reader.asData?.value);
+          _handleKey(
+            event.logicalKey,
+            _activeChapter?.data ?? reader.asData?.value,
+          );
         }
       },
       child: ColoredBox(
         color: context.appReader.canvas,
         child: reader.when(
           data: (data) {
-            _lastReaderData = data;
-            _lastReaderChapterId = widget.chapterId;
+            final strip = _ensureStrip(data);
             _restoreProgress(data);
-            if (_pageBookmarkedPages.isEmpty) {
-              unawaited(_loadPageBookmarks(widget.chapterId));
+            if (!_pageMarks.containsKey(widget.chapterId)) {
+              unawaited(_loadPageMarks(widget.chapterId));
             }
             return Stack(
               children: [
                 Positioned.fill(
-                  child: _readerScrollView(data: data, text: text),
+                  child: _readerScrollView(strip: strip, text: text),
                 ),
                 Positioned(
                   top: 0,
@@ -406,174 +448,179 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 Positioned.fill(
                   child: ValueListenableBuilder<int>(
                     valueListenable: _overlayVersion,
-                    builder: (_, _, _) => Stack(
-                      children: [
-                        // Click-away target: an open panel closes when the
-                        // pages behind it are tapped.
-                        if (_openPanel != _ReaderPanel.none)
-                          Positioned.fill(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTap: () => _setPanel(_ReaderPanel.none),
+                    builder: (_, _, _) {
+                      // The chapter in view changes as the strip scrolls, so
+                      // everything that names it is read here, not in build.
+                      final activeData = _activeChapter?.data ?? data;
+                      final chapterSourcePath =
+                          activeData.context?.chapterSourcePath ?? '';
+                      final isBookmarked =
+                          chapterSourcePath.isNotEmpty &&
+                          bookmarkedChapterPaths.contains(chapterSourcePath);
+                      return Stack(
+                        children: [
+                          // Click-away target: an open panel closes when the
+                          // pages behind it are tapped.
+                          if (_openPanel != _ReaderPanel.none)
+                            Positioned.fill(
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.translucent,
+                                onTap: () => _setPanel(_ReaderPanel.none),
+                              ),
                             ),
-                          ),
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: AnimatedSlide(
-                            offset: _toolbarVisible
-                                ? Offset.zero
-                                : const Offset(0, -1),
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutCubic,
-                            child: AnimatedOpacity(
-                              opacity: _toolbarVisible ? 1 : 0,
+                          Positioned(
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            child: AnimatedSlide(
+                              offset: _toolbarVisible
+                                  ? Offset.zero
+                                  : const Offset(0, -1),
                               duration: const Duration(milliseconds: 300),
                               curve: Curves.easeOutCubic,
-                              child: IgnorePointer(
-                                ignoring: !_toolbarVisible,
-                                child: MouseRegion(
-                                  onEnter: (_) => _showToolbar(),
-                                  child: _ReaderTopBar(
-                                    text: text,
-                                    data: data,
-                                    fullscreen: _fullscreen,
-                                    openPanel: _openPanel,
-                                    hasMarks:
-                                        isBookmarked ||
-                                        isFavorited ||
-                                        _pageBookmarkedPages.contains(
-                                          _currentPage,
-                                        ),
-                                    onClose: () => _close(data),
-                                    onTogglePanel: _togglePanel,
-                                    onToggleFullscreen: _toggleFullscreen,
+                              child: AnimatedOpacity(
+                                opacity: _toolbarVisible ? 1 : 0,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutCubic,
+                                child: IgnorePointer(
+                                  ignoring: !_toolbarVisible,
+                                  child: MouseRegion(
+                                    onEnter: (_) => _showToolbar(),
+                                    child: _ReaderTopBar(
+                                      text: text,
+                                      data: activeData,
+                                      fullscreen: _fullscreen,
+                                      openPanel: _openPanel,
+                                      hasMarks:
+                                          isBookmarked ||
+                                          isFavorited ||
+                                          _activeMarks.contains(_currentPage),
+                                      onClose: () => _close(activeData),
+                                      onTogglePanel: _togglePanel,
+                                      onToggleFullscreen: _toggleFullscreen,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        if (_toolbarVisible && _openPanel != _ReaderPanel.none)
-                          Positioned(
-                            top: 92,
-                            right: 24,
-                            child: MouseRegion(
-                              onEnter: (_) => _showToolbar(),
-                              child: _openPanel == _ReaderPanel.display
-                                  ? _ReaderDisplayPanel(
-                                      text: text,
-                                      settings: readerSettings,
-                                      onGapChanged: (gap) {
-                                        ref
-                                            .read(
-                                              readerSettingsProvider.notifier,
-                                            )
-                                            .setPageGap(gap);
-                                      },
-                                      onZoomChanged: (zoom) {
-                                        ref
-                                            .read(
-                                              readerSettingsProvider.notifier,
-                                            )
-                                            .setZoom(zoom);
-                                      },
-                                      onUnlimitedScrollChanged: (value) {
-                                        ref
-                                            .read(
-                                              readerSettingsProvider.notifier,
-                                            )
-                                            .setUnlimitedScroll(value);
-                                      },
-                                      onUnlimitedScrollUpChanged: (value) {
-                                        ref
-                                            .read(
-                                              readerSettingsProvider.notifier,
-                                            )
-                                            .setUnlimitedScrollUp(value);
-                                      },
-                                      onForcePortraitChanged: (value) {
-                                        ref
-                                            .read(
-                                              readerSettingsProvider.notifier,
-                                            )
-                                            .setForcePortrait(value);
-                                      },
-                                    )
-                                  : _ReaderMarkPanel(
-                                      text: text,
-                                      data: data,
-                                      currentPage: _currentPage,
-                                      isPageBookmarked: _pageBookmarkedPages
-                                          .contains(_currentPage),
-                                      isChapterBookmarked: isBookmarked,
-                                      isFavorited: isFavorited,
-                                      onTogglePageBookmark: _togglePageBookmark,
-                                      onToggleChapterBookmark: () =>
-                                          _toggleBookmark(
-                                            chapterSourcePath,
-                                            comicPath,
-                                          ),
-                                      onToggleFavorite: () =>
-                                          _toggleFavorite(comicPath),
-                                    ),
+                          if (_toolbarVisible &&
+                              _openPanel != _ReaderPanel.none)
+                            Positioned(
+                              top: 92,
+                              right: 24,
+                              child: MouseRegion(
+                                onEnter: (_) => _showToolbar(),
+                                child: _openPanel == _ReaderPanel.display
+                                    ? _ReaderDisplayPanel(
+                                        text: text,
+                                        settings: readerSettings,
+                                        onGapChanged: (gap) {
+                                          ref
+                                              .read(
+                                                readerSettingsProvider.notifier,
+                                              )
+                                              .setPageGap(gap);
+                                        },
+                                        onZoomChanged: (zoom) {
+                                          ref
+                                              .read(
+                                                readerSettingsProvider.notifier,
+                                              )
+                                              .setZoom(zoom);
+                                        },
+                                        onUnlimitedScrollChanged: (value) {
+                                          ref
+                                              .read(
+                                                readerSettingsProvider.notifier,
+                                              )
+                                              .setUnlimitedScroll(value);
+                                        },
+                                        onForcePortraitChanged: (value) {
+                                          ref
+                                              .read(
+                                                readerSettingsProvider.notifier,
+                                              )
+                                              .setForcePortrait(value);
+                                        },
+                                      )
+                                    : _ReaderMarkPanel(
+                                        text: text,
+                                        data: activeData,
+                                        currentPage: _currentPage,
+                                        isPageBookmarked: _activeMarks.contains(
+                                          _currentPage,
+                                        ),
+                                        isChapterBookmarked: isBookmarked,
+                                        isFavorited: isFavorited,
+                                        onTogglePageBookmark:
+                                            _togglePageBookmark,
+                                        onToggleChapterBookmark: () =>
+                                            _toggleBookmark(
+                                              chapterSourcePath,
+                                              comicPath,
+                                            ),
+                                        onToggleFavorite: () =>
+                                            _toggleFavorite(comicPath),
+                                      ),
+                              ),
                             ),
-                          ),
-                        Positioned(
-                          top: 20,
-                          right: 24,
-                          child: AnimatedOpacity(
-                            opacity: _toolbarVisible ? 0 : 1,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutCubic,
-                            child: IgnorePointer(
-                              ignoring: _toolbarVisible,
-                              child: _ReaderGlass(
-                                radius: 999,
-                                child: _ReaderIconButton(
-                                  tooltip: text.readerControls,
-                                  icon: AppIcons.sliders,
-                                  onPressed: _showToolbar,
+                          Positioned(
+                            top: 20,
+                            right: 24,
+                            child: AnimatedOpacity(
+                              opacity: _toolbarVisible ? 0 : 1,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                              child: IgnorePointer(
+                                ignoring: _toolbarVisible,
+                                child: _ReaderGlass(
+                                  radius: 999,
+                                  child: _ReaderIconButton(
+                                    tooltip: text.readerControls,
+                                    icon: AppIcons.sliders,
+                                    onPressed: _showToolbar,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          // Page bar stays visible while scrolling: only
-                          // shrinks to its compact look instead of hiding
-                          // with the toolbar.
-                          child: MouseRegion(
-                            onEnter: (_) => _showToolbar(),
-                            child: _ReaderPageBar(
-                              text: text,
-                              currentPage: _currentPage,
-                              pageCount: data.pages.length,
-                              pageBookmarkedPages: _pageBookmarkedPages,
-                              expanded: _toolbarVisible,
-                              onSelected: _jumpToPage,
-                              onPreviousPage: () => _jumpBy(-1),
-                              onNextPage: () => _jumpBy(1),
-                              onPreviousChapter:
-                                  data.context?.prevChapterId == null
-                                  ? null
-                                  : () => _switchChapter(
-                                      data.context!.prevChapterId!,
-                                    ),
-                              onNextChapter: data.context?.nextChapterId == null
-                                  ? null
-                                  : () => _switchChapter(
-                                      data.context!.nextChapterId!,
-                                    ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            // Page bar stays visible while scrolling: only
+                            // shrinks to its compact look instead of hiding
+                            // with the toolbar.
+                            child: MouseRegion(
+                              onEnter: (_) => _showToolbar(),
+                              child: _ReaderPageBar(
+                                text: text,
+                                currentPage: _currentPage,
+                                pageCount: activeData.pages.length,
+                                pageBookmarkedPages: _activeMarks,
+                                expanded: _toolbarVisible,
+                                onSelected: _jumpToPage,
+                                onPreviousPage: () => _jumpBy(-1),
+                                onNextPage: () => _jumpBy(1),
+                                onPreviousChapter:
+                                    activeData.context?.prevChapterId == null
+                                    ? null
+                                    : () => _switchChapter(
+                                        activeData.context!.prevChapterId!,
+                                      ),
+                                onNextChapter:
+                                    activeData.context?.nextChapterId == null
+                                    ? null
+                                    : () => _switchChapter(
+                                        activeData.context!.nextChapterId!,
+                                      ),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -595,113 +642,102 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
+  /// The strip always starts as the chapter the route opened.
+  ReaderStrip _ensureStrip(ReaderData data) {
+    final existing = _strip;
+    if (existing != null) {
+      return existing;
+    }
+    final strip = ReaderStrip([StripChapter(widget.chapterId, data)]);
+    _strip = strip;
+    _activeSlot = 0;
+    return strip;
+  }
+
   Widget _readerScrollView({
-    required ReaderData data,
+    required ReaderStrip strip,
     required AppStrings text,
   }) {
-    if (data.pages.isEmpty) {
+    if (strip.tileCount == 0) {
       return Align(
         alignment: Alignment.center,
         child: Text(text.noPages, style: const TextStyle(color: Colors.white)),
       );
     }
     final readerSettings = ref.watch(readerSettingsProvider);
-    // Flattened tile list: one sliver item per tile. The grid depends
-    // only on Rust-provided tile_heights, never on zoom or display size.
-    final tiles = data.tiles;
     final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
     // Exact total scroll extent (single source of truth with the per-item
     // builder below). Reported to the framework via _ExactTotalChildDelegate
     // so maxScrollExtent never wobbles from average-based estimation.
-    final totalExtent = _totalTilesExtent(
-      tiles,
-      data.pages,
-      readerSettings,
-      maxWidth,
+    final layout = _layoutFor(
+      strip,
+      zoom: readerSettings.zoom,
+      maxWidth: maxWidth,
+      pageGap: readerSettings.pageGap,
+      forcePortrait: readerSettings.forcePortrait,
     );
-    return widgets.RawScrollbar(
-      controller: _scroll,
-      thumbVisibility: true,
-      trackVisibility: true,
-      interactive: true,
-      thickness: 12,
-      radius: const Radius.circular(999),
-      thumbColor: const Color(0xff5b5670),
-      trackColor: const Color(0xff0e0d13),
-      trackBorderColor: const Color(0xff0e0d13),
-      child: CustomScrollView(
-        controller: _scroll,
-        scrollCacheExtent: const ScrollCacheExtent.pixels(1500),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(
-              top: _topPadding,
-              bottom: _bottomChromeHeight + readerSettings.pageGap,
-            ),
-            sliver: _ExactTotalSliverList(
-              itemBuilder: (context, index) =>
-                  _readerTileListItem(data, tiles, readerSettings, index),
-              itemExtentBuilder: (index, _) => _tileExtentAt(
-                tiles,
-                data.pages,
-                readerSettings,
-                maxWidth,
-                index,
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: CustomScrollView(
+            controller: _scroll,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(1500),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  top: _topPadding,
+                  bottom: _bottomChromeHeight + readerSettings.pageGap,
+                ),
+                sliver: _ExactTotalSliverList(
+                  itemBuilder: (context, index) =>
+                      _readerTileListItem(strip, readerSettings, index, text),
+                  itemExtentBuilder: (index, _) =>
+                      index < 0 || index >= strip.tileCount
+                      ? null
+                      : layout.extents[index],
+                  findChildIndex: (key) => _indexOfItemKey(strip, key),
+                  itemCount: strip.tileCount,
+                  exactTotal: layout.totalExtent,
+                ),
               ),
-              itemCount: tiles.length,
-              exactTotal: totalExtent,
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        // Scoped to the chapter in view, so it starts over with each chapter
+        // the way a scrollbar over a single chapter would.
+        Positioned(
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: _ChapterScrollbar.width,
+          child: _ChapterScrollbar(controller: _scroll, layout: layout),
+        ),
+      ],
     );
   }
 
-  /// Display extent of one tile item, or null beyond the list.
-  /// Single source of truth shared by the item builder and the exact total.
-  double? _tileExtentAt(
-    List<TileItem> tiles,
-    List<bridge.PageInfo> pages,
-    ReaderSettings readerSettings,
-    double maxWidth,
-    int index,
-  ) {
-    if (index < 0 || index >= tiles.length) {
+  /// Strip-wide index of the item a [ValueKey] (chapter, page, tile) names,
+  /// so items keep their state when a chapter is prepended above them.
+  int? _indexOfItemKey(ReaderStrip strip, Key key) {
+    if (key is! ValueKey<(int, int, int)>) {
       return null;
     }
-    return _layoutFor(
-      tiles,
-      pages,
-      zoom: readerSettings.zoom,
-      maxWidth: maxWidth,
-      pageGap: readerSettings.pageGap,
-      forcePortrait: readerSettings.forcePortrait,
-    ).extents[index];
+    final (chapterId, page, tile) = key.value;
+    final slot = strip.slotOfChapter(chapterId);
+    if (slot < 0) {
+      return null;
+    }
+    final tiles = strip.chapters[slot].data.tiles;
+    final local = firstTileOfPage(tiles, page) + tile;
+    return local < tiles.length ? strip.globalTile(slot, local) : null;
   }
 
-  double _totalTilesExtent(
-    List<TileItem> tiles,
-    List<bridge.PageInfo> pages,
-    ReaderSettings readerSettings,
-    double maxWidth,
-  ) {
-    return _layoutFor(
-      tiles,
-      pages,
-      zoom: readerSettings.zoom,
-      maxWidth: maxWidth,
-      pageGap: readerSettings.pageGap,
-      forcePortrait: readerSettings.forcePortrait,
-    ).totalExtent;
-  }
-
-  /// Prefix-summed geometry for the current tiles and layout inputs, built
-  /// once and reused until any input changes (new chapter, zoom, window
-  /// width, gap). Every per-scroll lookup goes through this instead of
-  /// re-measuring all tiles.
+  /// Prefix-summed geometry for the current strip and layout inputs, built
+  /// once and reused until any input changes (a chapter joins the strip,
+  /// zoom, window width, gap). Every per-scroll lookup goes through this
+  /// instead of re-measuring all tiles.
   _TileLayout _layoutFor(
-    List<TileItem> tiles,
-    List<bridge.PageInfo> pages, {
+    ReaderStrip strip, {
     required double zoom,
     required double maxWidth,
     required double pageGap,
@@ -709,38 +745,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }) {
     final cached = _tileLayout;
     if (cached != null &&
-        cached.matches(tiles, zoom, maxWidth, pageGap, forcePortrait)) {
+        cached.matches(strip, zoom, maxWidth, pageGap, forcePortrait)) {
       return cached;
     }
-    final tops = List<double>.filled(tiles.length, 0);
-    final bottoms = List<double>.filled(tiles.length, 0);
-    final extents = List<double>.filled(tiles.length, 0);
+    final count = strip.tileCount;
+    final tops = List<double>.filled(count, 0);
+    final contentTops = List<double>.filled(count, 0);
+    final bottoms = List<double>.filled(count, 0);
+    final extents = List<double>.filled(count, 0);
     var top = _topPadding;
     var total = _topPadding + _bottomChromeHeight + pageGap;
-    for (var i = 0; i < tiles.length; i++) {
-      final layout = _tilePages(pages, tiles[i]);
-      final height = _tileDisplayHeight(
-        tile: tiles[i],
-        page: layout.page,
-        zoom: zoom,
-        maxWidth: maxWidth,
-        prevPage: layout.prevPage,
-        forcePortrait: forcePortrait,
-      );
-      final gap = _tileGap(tiles, i, pageGap);
-      tops[i] = top;
-      bottoms[i] = top + height;
-      extents[i] = height + gap;
-      total += height + gap;
-      top = bottoms[i] + gap;
+    var index = 0;
+    for (var slot = 0; slot < strip.chapters.length; slot++) {
+      final data = strip.chapters[slot].data;
+      for (var local = 0; local < data.tiles.length; local++, index++) {
+        final tile = data.tiles[local];
+        final layout = _tilePages(data.pages, tile);
+        // The first page of a chapter that follows another carries the
+        // "finished / next" header above it.
+        final header = slot > 0 && local == 0 ? _transitionExtent : 0.0;
+        final height = _tileDisplayHeight(
+          tile: tile,
+          page: layout.page,
+          zoom: zoom,
+          maxWidth: maxWidth,
+          prevPage: layout.prevPage,
+          forcePortrait: forcePortrait,
+        );
+        final gap = _tileGap(data.tiles, local, pageGap);
+        tops[index] = top;
+        contentTops[index] = top + header;
+        bottoms[index] = top + header + height;
+        extents[index] = header + height + gap;
+        total += header + height + gap;
+        top = bottoms[index] + gap;
+      }
     }
     final built = _TileLayout(
-      tiles: tiles,
+      strip: strip,
       zoom: zoom,
       maxWidth: maxWidth,
       pageGap: pageGap,
       forcePortrait: forcePortrait,
       tops: tops,
+      contentTops: contentTops,
       bottoms: bottoms,
       extents: extents,
       totalExtent: total,
@@ -749,31 +797,64 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return built;
   }
 
-  Widget _readerTileListItem(
-    ReaderData data,
-    List<TileItem> tiles,
-    ReaderSettings readerSettings,
-    int index,
-  ) {
-    final tile = tiles[index];
-    final layout = _tilePages(data.pages, tile);
-    return Padding(
-      key: ValueKey('p${tile.pageIndex}t${tile.tileIndex}'),
-      // Gap only between pages, never between tiles of one page (seams).
-      padding: EdgeInsets.only(
-        bottom: _tileGap(tiles, index, readerSettings.pageGap),
-      ),
-      child: _ReaderPageItem(
-        chapterId: widget.chapterId,
-        page: layout.page,
-        tileIndex: tile.tileIndex,
-        tilePixelHeight: tile.pixelHeight,
-        zoom: readerSettings.zoom,
-        prevPage: layout.prevPage,
-        forcePortrait: readerSettings.forcePortrait,
-      ),
+  _TileLayout _currentLayout(ReaderStrip strip) {
+    final settings = ref.read(readerSettingsProvider);
+    return _layoutFor(
+      strip,
+      zoom: settings.zoom,
+      maxWidth: _ReaderPageLayout.maxDisplayWidth(context),
+      pageGap: settings.pageGap,
+      forcePortrait: settings.forcePortrait,
     );
   }
+
+  Widget _readerTileListItem(
+    ReaderStrip strip,
+    ReaderSettings readerSettings,
+    int index,
+    AppStrings text,
+  ) {
+    final at = strip.locate(index);
+    final chapter = strip.chapters[at.slot];
+    final data = chapter.data;
+    final tile = data.tiles[at.local];
+    final layout = _tilePages(data.pages, tile);
+    final item = _ReaderPageItem(
+      chapterId: chapter.chapterId,
+      page: layout.page,
+      tileIndex: tile.tileIndex,
+      tilePixelHeight: tile.pixelHeight,
+      zoom: readerSettings.zoom,
+      prevPage: layout.prevPage,
+      forcePortrait: readerSettings.forcePortrait,
+    );
+    final startsFollowingChapter = at.slot > 0 && at.local == 0;
+    return Padding(
+      key: ValueKey((chapter.chapterId, tile.pageIndex, tile.tileIndex)),
+      // Gap only between pages, never between tiles of one page (seams).
+      padding: EdgeInsets.only(
+        bottom: _tileGap(data.tiles, at.local, readerSettings.pageGap),
+      ),
+      child: startsFollowingChapter
+          ? Column(
+              children: [
+                SizedBox(
+                  height: _transitionExtent,
+                  child: _ChapterTransition(
+                    text: text,
+                    finishedTitle: _chapterTitle(strip.chapters[at.slot - 1]),
+                    next: data,
+                  ),
+                ),
+                Expanded(child: item),
+              ],
+            )
+          : item,
+    );
+  }
+
+  String _chapterTitle(StripChapter chapter) =>
+      chapter.data.context?.title ?? '';
 
   /// Page (+ previous page for landscape rules) owning a tile.
   /// `pageIndex` equals the page position (Rust enumerates in order).
@@ -831,18 +912,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _restoredProgress = true;
     final chapterId = widget.chapterId;
     final generation = _readerGeneration;
-    final scrollToBottom = _scrollToBottomOnRestore;
-    _scrollToBottomOnRestore = false;
-    final page = scrollToBottom ? data.pages.length - 1 : data.initialPage;
+    final page = data.initialPage;
     _currentPage = page;
-    _lastSavedPage = page;
-    final tiles = data.tiles;
-    _setRenderWindowAroundTile(_firstTileOfPage(tiles, page), tiles.length);
+    _savedPages[chapterId] = page;
+    final strip = _strip!;
+    _setRenderWindowAroundTile(
+      strip.globalTile(0, _firstTileOfPage(data.tiles, page)),
+      strip.tileCount,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_isReaderCurrent(chapterId, generation)) {
+      if (!_isCurrent(generation)) {
         return;
       }
-      _jumpToPage(page, persist: false);
+      _jumpToChapterPage(0, page, persist: false);
       unawaited(_prefetchWindow(_renderStart, _renderEnd));
       _initialScrollTimer?.cancel();
       late final Timer timer;
@@ -850,7 +932,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         if (identical(_initialScrollTimer, timer)) {
           _initialScrollTimer = null;
         }
-        if (_isReaderCurrent(chapterId, generation)) {
+        if (_isCurrent(generation)) {
           _initialScrollDone = true;
           _updateViewportWindow(persistProgress: false);
         }
@@ -879,7 +961,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         isRead: false,
       ),
     );
-    if (!_isReaderCurrent(chapterId, generation)) {
+    if (!_isCurrent(generation)) {
       return;
     }
     _invalidateProgressProviders(data, onClose: false);
@@ -897,140 +979,96 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _updateViewportWindow();
-    _checkAutoAdvanceChapter();
-  }
-
-  void _checkAutoAdvanceChapter() {
-    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    if (data == null || data.pages.isEmpty) {
-      return;
-    }
-    final settings = ref.read(readerSettingsProvider);
-    if (!settings.unlimitedScroll) {
-      return;
-    }
-    if (!_scroll.hasClients) {
-      return;
-    }
-    final maxExtent = _scroll.position.maxScrollExtent;
-    final currentOffset = _scroll.position.pixels;
-    final viewportDimension = _scroll.position.viewportDimension;
-    final tiles = data.tiles;
-    final visibleRange = _visibleTileRange(
-      tiles: tiles,
-      pages: data.pages,
-      zoom: settings.zoom,
-      pageGap: settings.pageGap,
-      forcePortrait: settings.forcePortrait,
-    );
-
-    // Check for next chapter (scroll to end)
-    final nextChapterId = data.context?.nextChapterId;
-    if (nextChapterId != null) {
-      final isAtEnd = currentOffset >= maxExtent - viewportDimension * 0.1;
-      if (isAtEnd &&
-          tiles[visibleRange.last].pageIndex >= data.pages.length - 1) {
-        _switchChapter(nextChapterId);
-        return;
-      }
-    }
-
-    // Check for previous chapter (scroll to beginning)
-    final prevChapterId = data.context?.prevChapterId;
-    if (prevChapterId != null && settings.unlimitedScrollUp) {
-      final isAtStart = currentOffset <= viewportDimension * 0.1;
-      if (isAtStart && tiles[visibleRange.first].pageIndex <= 0) {
-        _switchChapter(prevChapterId, scrollToBottom: true);
-        return;
-      }
-    }
   }
 
   void _updateViewportWindow({bool persistProgress = true}) {
-    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    if (data == null || data.pages.isEmpty || !_scroll.hasClients) {
+    final strip = _strip;
+    if (strip == null || strip.tileCount == 0 || !_scroll.hasClients) {
       return;
     }
-    final settings = ref.read(readerSettingsProvider);
-    final tiles = data.tiles;
-    if (tiles.isEmpty) {
-      return;
-    }
-    final range = _visibleTileRange(
-      tiles: tiles,
-      pages: data.pages,
-      zoom: settings.zoom,
-      pageGap: settings.pageGap,
-      forcePortrait: settings.forcePortrait,
+    final layout = _currentLayout(strip);
+    final range = _visibleTileRange(layout);
+    final center = layout.tileForOffset(
+      _scroll.offset + _scroll.position.viewportDimension / 2,
     );
-    final centerTile = _tileAtViewportCenter(
-      tiles: tiles,
-      pages: data.pages,
-      zoom: settings.zoom,
-      pageGap: settings.pageGap,
-      forcePortrait: settings.forcePortrait,
-    );
-    final page = tiles[centerTile].pageIndex;
+    final located = strip.locate(center);
+    final page =
+        strip.chapters[located.slot].data.tiles[located.local].pageIndex;
     final start = math.max(0, range.first - 2);
-    final end = math.min(tiles.length - 1, range.last + 2);
+    final end = math.min(strip.tileCount - 1, range.last + 2);
+    final slotChanged = located.slot != _activeSlot;
     final pageChanged = page != _currentPage;
     final windowChanged = start != _renderStart || end != _renderEnd;
-    if (!pageChanged && !windowChanged) {
+    if (slotChanged) {
+      _changeActiveChapter(
+        located.slot,
+        page,
+        persist: persistProgress,
+        finishedPrevious: located.slot == _activeSlot + 1,
+      );
+    } else if (pageChanged) {
+      _currentPage = page;
+      _refreshOverlay();
+      if (persistProgress) {
+        _scheduleProgressSave();
+      }
+    }
+    if (windowChanged) {
+      _renderStart = start;
+      _renderEnd = end;
+      unawaited(_prefetchWindow(start, end));
+    }
+    _maybeLoadAdjacent();
+  }
+
+  /// Makes [slot] the chapter being read: the top bar, page indicator and
+  /// marks follow it at once, and both chapters' progress is written now
+  /// rather than after the scroll-save debounce.
+  void _changeActiveChapter(
+    int slot,
+    int page, {
+    required bool persist,
+    required bool finishedPrevious,
+  }) {
+    final strip = _strip;
+    final previous = _activeChapter;
+    if (strip == null || previous == null) {
       return;
     }
+    _progressTimer?.cancel();
+    final leftPage = finishedPrevious
+        ? previous.data.pages.length - 1
+        : _currentPage;
+    _activeSlot = slot;
     _currentPage = page;
-    _renderStart = start;
-    _renderEnd = end;
-    if (pageChanged) {
-      _refreshOverlay();
+    final active = strip.chapters[slot];
+    _refreshOverlay();
+    if (persist) {
+      // Scrolling on into the next chapter means the previous one was read to
+      // its end, even if a fast scroll skipped past its last page.
+      unawaited(_persistProgress(previous, leftPage));
+      unawaited(_persistProgress(active, page));
+      _rememberLastOpened(active);
+    } else {
+      _savedPages[active.chapterId] = page;
     }
-    if (pageChanged && persistProgress) {
-      _scheduleProgressSave();
-    }
-    unawaited(_prefetchWindow(start, end));
   }
 
-  int _tileAtViewportCenter({
-    required List<TileItem> tiles,
-    required List<bridge.PageInfo> pages,
-    required double zoom,
-    required double pageGap,
-    bool forcePortrait = false,
-  }) {
-    if (!_scroll.hasClients || tiles.isEmpty) {
-      return _firstTileOfPage(tiles, _currentPage);
+  void _rememberLastOpened(StripChapter chapter) {
+    final comicPath = chapter.data.context?.comicSourcePath;
+    final chapterPath = chapter.data.context?.chapterSourcePath;
+    if (comicPath == null ||
+        comicPath.isEmpty ||
+        chapterPath == null ||
+        chapterPath.isEmpty) {
+      return;
     }
-    final viewportCenter =
-        _scroll.offset + _scroll.position.viewportDimension / 2;
-    return _tileForOffset(
-      tiles: tiles,
-      pages: pages,
-      zoom: zoom,
-      pageGap: pageGap,
-      offset: viewportCenter,
-      forcePortrait: forcePortrait,
-    );
+    ref
+        .read(lastOpenedChapterProvider.notifier)
+        .remember(comicPath, chapterPath);
   }
 
-  ({int first, int last}) _visibleTileRange({
-    required List<TileItem> tiles,
-    required List<bridge.PageInfo> pages,
-    required double zoom,
-    required double pageGap,
-    bool forcePortrait = false,
-  }) {
-    if (!_scroll.hasClients || tiles.isEmpty) {
-      final tile = _firstTileOfPage(tiles, _currentPage);
-      return (first: tile, last: tile);
-    }
-    final layout = _layoutFor(
-      tiles,
-      pages,
-      zoom: zoom,
-      maxWidth: _ReaderPageLayout.maxDisplayWidth(context),
-      pageGap: pageGap,
-      forcePortrait: forcePortrait,
-    );
+  ({int first, int last}) _visibleTileRange(_TileLayout layout) {
     final visibleTop = _scroll.offset;
     final visibleBottom = visibleTop + _scroll.position.viewportDimension;
     final range = layout.visibleRange(visibleTop, visibleBottom);
@@ -1039,27 +1077,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return (first: tile, last: tile);
     }
     return range;
-  }
-
-  int _tileForOffset({
-    required List<TileItem> tiles,
-    required List<bridge.PageInfo> pages,
-    required double zoom,
-    required double pageGap,
-    required double offset,
-    bool forcePortrait = false,
-  }) {
-    if (tiles.isEmpty) {
-      return 0;
-    }
-    return _layoutFor(
-      tiles,
-      pages,
-      zoom: zoom,
-      maxWidth: _ReaderPageLayout.maxDisplayWidth(context),
-      pageGap: pageGap,
-      forcePortrait: forcePortrait,
-    ).tileForOffset(offset);
   }
 
   /// First tile position of a page (binary search; pages are ordered).
@@ -1077,57 +1094,226 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _renderEnd = math.min(tileCount - 1, tilePos + 2);
   }
 
-  void _scheduleProgressSave() {
-    _progressTimer?.cancel();
-    _progressTimer = Timer(const Duration(milliseconds: 450), () {
-      _saveProgress(immediate: true);
+  // -------------------------------------------------------------------------
+  // Chaining neighbouring chapters into the strip
+  // -------------------------------------------------------------------------
+
+  /// Starts loading the chapter before / after the strip once the viewport is
+  /// close to that end, so crossing into it never waits on a load.
+  void _maybeLoadAdjacent() {
+    final strip = _strip;
+    if (strip == null || !_initialScrollDone || !_scroll.hasClients) {
+      return;
+    }
+    final settings = ref.read(readerSettingsProvider);
+    if (!settings.unlimitedScroll) {
+      return;
+    }
+    final position = _scroll.position;
+    final lookahead = position.viewportDimension * _preloadViewports;
+    final nextId = strip.chapters.last.data.context?.nextChapterId;
+    if (nextId != null &&
+        position.maxScrollExtent - position.pixels <= lookahead) {
+      unawaited(_extendStrip(nextId, forward: true));
+    }
+    final prevId = strip.chapters.first.data.context?.prevChapterId;
+    if (prevId != null &&
+        position.pixels - position.minScrollExtent <= lookahead) {
+      unawaited(_extendStrip(prevId, forward: false));
+    }
+  }
+
+  Future<void> _extendStrip(int chapterId, {required bool forward}) async {
+    final strip = _strip;
+    if (strip == null ||
+        strip.slotOfChapter(chapterId) >= 0 ||
+        _loadingChapters.contains(chapterId) ||
+        _failedChapters.contains(chapterId)) {
+      return;
+    }
+    final generation = _readerGeneration;
+    _loadingChapters.add(chapterId);
+    final hold = ref.listenManual(readerDataProvider(chapterId), (_, _) {});
+    var kept = false;
+    try {
+      final data = await ref.read(readerDataProvider(chapterId).future);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      if (data.pages.isEmpty) {
+        _failedChapters.add(chapterId);
+        return;
+      }
+      if (!forward) {
+        await _whenScrollSettled();
+        if (!_isCurrent(generation)) {
+          return;
+        }
+      }
+      final current = _strip;
+      final edge = forward
+          ? current?.chapters.last.data.context?.nextChapterId
+          : current?.chapters.first.data.context?.prevChapterId;
+      if (current == null || edge != chapterId) {
+        return;
+      }
+      final chapter = StripChapter(chapterId, data);
+      _chapterHolds[chapterId] = hold;
+      kept = true;
+      final progress = data.progress;
+      _savedPages[chapterId] = progress != null && !progress.isRead
+          ? progress.lastPage.toInt()
+          : -1;
+      if (forward) {
+        _setStrip(current.appended(chapter));
+      } else {
+        _prependChapter(current, chapter);
+      }
+      unawaited(_loadPageMarks(chapterId));
+    } catch (_) {
+      _failedChapters.add(chapterId);
+    } finally {
+      _loadingChapters.remove(chapterId);
+      if (!kept) {
+        hold.close();
+      }
+    }
+  }
+
+  /// A prepend moves every existing item down, which a running scroll
+  /// animation would undo; wait for it so the correction below sticks.
+  Future<void> _whenScrollSettled() async {
+    if (!_scroll.hasClients) {
+      return;
+    }
+    final scrolling = _scroll.position.isScrollingNotifier;
+    if (!scrolling.value) {
+      return;
+    }
+    final settled = Completer<void>();
+    void listener() {
+      if (!scrolling.value && !settled.isCompleted) {
+        settled.complete();
+      }
+    }
+
+    scrolling.addListener(listener);
+    try {
+      await settled.future;
+    } finally {
+      scrolling.removeListener(listener);
+    }
+  }
+
+  void _setStrip(ReaderStrip next) {
+    setState(() => _strip = next);
+    // New tiles are only prefetched once the window is recomputed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateViewportWindow(persistProgress: false);
+      }
     });
   }
 
-  Future<void> _saveProgress({required bool immediate}) async {
-    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    _lastReaderData = data;
-    if (data == null || data.pages.isEmpty || _currentPage == _lastSavedPage) {
+  /// Puts [chapter] above the strip without moving what is on screen: the
+  /// scroll offset grows by exactly how far the content in view was pushed.
+  void _prependChapter(ReaderStrip current, StripChapter chapter) {
+    final next = current.prepended(chapter);
+    final added = chapter.data.tiles.length;
+    if (!_scroll.hasClients) {
+      setState(() {
+        _strip = next;
+        _activeSlot += 1;
+      });
       return;
     }
-    _lastSavedPage = _currentPage;
-    final isRead = _currentPage >= data.pages.length - 1;
-    await ref
-        .read(comicRdApiProvider)
-        .saveProgress(
-          bridge.SaveProgressPayload(
-            chapterId: widget.chapterId,
-            lastPage: _currentPage,
-            totalPages: data.pages.length,
-            isRead: isRead,
-          ),
-        );
-    ReaderSaveGuard.track(widget.chapterId, _currentPage, data.pages.length);
-    _invalidateProgressProviders(data, onClose: false);
+    final before = _currentLayout(current);
+    final anchor = _visibleTileRange(before).first;
+    final shift =
+        _currentLayout(next).contentTops[anchor + added] -
+        before.contentTops[anchor];
+    setState(() {
+      _strip = next;
+      _activeSlot += 1;
+    });
+    _scroll.position.correctBy(shift);
+    if (_renderEnd >= _renderStart) {
+      _renderStart += added;
+      _renderEnd += added;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateViewportWindow(persistProgress: false);
+      }
+    });
   }
 
-  Future<void> _saveProgressDirect({int? chapterId, ReaderData? data}) async {
-    final targetData = data ?? _lastReaderData;
-    final targetChapterId = chapterId ?? _lastReaderChapterId;
-    if (targetData == null ||
-        targetChapterId == null ||
-        targetData.pages.isEmpty) {
+  void _closeHolds() {
+    for (final hold in _chapterHolds.values) {
+      hold.close();
+    }
+    _chapterHolds.clear();
+  }
+
+  // -------------------------------------------------------------------------
+  // Progress
+  // -------------------------------------------------------------------------
+
+  void _scheduleProgressSave() {
+    _progressTimer?.cancel();
+    _progressTimer = Timer(const Duration(milliseconds: 450), () {
+      final active = _activeChapter;
+      if (active != null) {
+        unawaited(_persistProgress(active, _currentPage));
+      }
+    });
+  }
+
+  /// Writes [page] as the chapter's progress unless it is already stored.
+  /// Reaching the last page marks the chapter read.
+  Future<void> _persistProgress(StripChapter chapter, int page) async {
+    final count = chapter.data.pages.length;
+    if (count == 0) {
       return;
     }
-    final isRead = _currentPage >= targetData.pages.length - 1;
+    final clamped = page.clamp(0, count - 1);
+    if (_savedPages[chapter.chapterId] == clamped) {
+      return;
+    }
+    _savedPages[chapter.chapterId] = clamped;
     await _api.saveProgress(
       bridge.SaveProgressPayload(
-        chapterId: targetChapterId,
-        lastPage: _currentPage,
-        totalPages: targetData.pages.length,
-        isRead: isRead,
+        chapterId: chapter.chapterId,
+        lastPage: clamped,
+        totalPages: count,
+        isRead: clamped >= count - 1,
       ),
     );
-    ReaderSaveGuard.track(
-      targetChapterId,
-      _currentPage,
-      targetData.pages.length,
+    ReaderSaveGuard.track(chapter.chapterId, clamped, count);
+    if (mounted) {
+      _invalidateProgressProviders(chapter.data, onClose: false);
+    }
+  }
+
+  /// Saves [chapter]'s current page without the "already stored" shortcut;
+  /// used where the app is about to leave the reader.
+  Future<void> _saveProgressDirect(StripChapter chapter) async {
+    final count = chapter.data.pages.length;
+    if (count == 0) {
+      return;
+    }
+    final isActive = identical(chapter, _activeChapter);
+    final page = (isActive ? _currentPage : _savedPages[chapter.chapterId] ?? 0)
+        .clamp(0, count - 1);
+    await _api.saveProgress(
+      bridge.SaveProgressPayload(
+        chapterId: chapter.chapterId,
+        lastPage: page,
+        totalPages: count,
+        isRead: page >= count - 1,
+      ),
     );
+    ReaderSaveGuard.track(chapter.chapterId, page, count);
   }
 
   void _invalidateProgressProviders(ReaderData data, {required bool onClose}) {
@@ -1144,76 +1330,59 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.invalidate(comicChaptersProvider(comicPath));
   }
 
+  // -------------------------------------------------------------------------
+  // Prefetch
+  // -------------------------------------------------------------------------
+
+  /// The part of strip window [start]..[end] that falls inside each chapter.
+  List<_WindowSegment> _segmentsFor(ReaderStrip strip, int start, int end) {
+    final segments = <_WindowSegment>[];
+    if (strip.tileCount == 0 || end < start) {
+      return segments;
+    }
+    final first = strip.locate(math.max(0, start));
+    final last = strip.locate(math.min(strip.tileCount - 1, end));
+    for (var slot = first.slot; slot <= last.slot; slot++) {
+      final chapter = strip.chapters[slot];
+      segments.add((
+        chapterId: chapter.chapterId,
+        start: slot == first.slot ? first.local : 0,
+        end: slot == last.slot ? last.local : chapter.data.tiles.length - 1,
+      ));
+    }
+    return segments;
+  }
+
   Future<void> _prefetchWindow(int start, int end) async {
-    final chapterId = widget.chapterId;
     final generation = _readerGeneration;
-    if (!_isReaderCurrent(chapterId, generation) || end < start) {
+    final strip = _strip;
+    if (strip == null || !_isCurrent(generation) || end < start) {
       return;
     }
+    final segments = _segmentsFor(strip, start, end);
     if (_prefetchQueue != null && !_prefetchQueue!.isCompleted) {
-      _prefetchQueuedStart = start;
-      _prefetchQueuedEnd = end;
+      _prefetchQueued = segments;
       return;
     }
     final completer = Completer<void>();
     _prefetchQueue = completer;
-    _prefetchQueuedStart = null;
-    _prefetchQueuedEnd = null;
+    _prefetchQueued = null;
     try {
-      final api = ref.read(comicRdApiProvider);
-      var nextStart = start;
-      var nextEnd = end;
+      var next = segments;
       while (true) {
-        if (!_isReaderCurrent(chapterId, generation)) {
+        if (!_isCurrent(generation)) {
           return;
         }
-        final data = ref.read(readerDataProvider(chapterId)).asData?.value;
-        if (data == null || data.pages.isEmpty || nextEnd < nextStart) {
+        await _prefetchSegments(next, generation);
+        if (!_isCurrent(generation)) {
           return;
         }
-        final tiles = data.tiles;
-        if (tiles.isEmpty) {
+        final queued = _prefetchQueued;
+        _prefetchQueued = null;
+        if (queued == null) {
           return;
         }
-        final clampedStart = math.max(0, nextStart);
-        final clampedEnd = math.min(tiles.length - 1, nextEnd);
-        final windowTiles = [
-          for (var index = clampedStart; index <= clampedEnd; index++)
-            tiles[index],
-        ];
-        // evictChapterPages stays page-based; Rust drops all tiles of
-        // pages outside the window.
-        final keepPages = <int>{
-          for (final tile in windowTiles) tile.pageIndex,
-        }.toList()..sort();
-        await api.evictChapterPages(chapterId: chapterId, keepPages: keepPages);
-        if (!_isReaderCurrent(chapterId, generation)) {
-          return;
-        }
-        await api.prefetchTiles(
-          bridge.PrefetchTilesPayload(
-            chapterId: chapterId,
-            tiles: [
-              for (final tile in windowTiles)
-                bridge.PageTile(
-                  pageIndex: tile.pageIndex,
-                  tileIndex: tile.tileIndex,
-                ),
-            ],
-          ),
-        );
-        if (!_isReaderCurrent(chapterId, generation)) {
-          return;
-        }
-        final queuedStart = _prefetchQueuedStart;
-        final queuedEnd = _prefetchQueuedEnd;
-        _prefetchQueuedStart = null;
-        _prefetchQueuedEnd = null;
-        if (queuedStart == null || queuedEnd == null) {
-          return;
-        }
-        nextStart = queuedStart;
-        nextEnd = queuedEnd;
+        next = queued;
       }
     } finally {
       completer.complete();
@@ -1222,6 +1391,78 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       }
     }
   }
+
+  Future<void> _prefetchSegments(
+    List<_WindowSegment> segments,
+    int generation,
+  ) async {
+    final inWindow = {for (final segment in segments) segment.chapterId};
+    // Chapters the window has moved away from give their raw pages back, once.
+    for (final chapter in [...?_strip?.chapters]) {
+      if (inWindow.contains(chapter.chapterId)) {
+        _idleChapters.remove(chapter.chapterId);
+      } else if (_idleChapters.add(chapter.chapterId)) {
+        await _api.evictChapterPages(
+          chapterId: chapter.chapterId,
+          keepPages: [],
+        );
+        if (!_isCurrent(generation)) {
+          return;
+        }
+      }
+    }
+    for (final segment in segments) {
+      final strip = _strip;
+      final slot = strip?.slotOfChapter(segment.chapterId) ?? -1;
+      if (strip == null || slot < 0) {
+        continue;
+      }
+      final tiles = strip.chapters[slot].data.tiles;
+      if (tiles.isEmpty) {
+        continue;
+      }
+      final clampedStart = math.max(0, segment.start);
+      final clampedEnd = math.min(tiles.length - 1, segment.end);
+      if (clampedEnd < clampedStart) {
+        continue;
+      }
+      final windowTiles = [
+        for (var index = clampedStart; index <= clampedEnd; index++)
+          tiles[index],
+      ];
+      // evictChapterPages stays page-based; Rust drops all tiles of
+      // pages outside the window.
+      final keepPages = <int>{
+        for (final tile in windowTiles) tile.pageIndex,
+      }.toList()..sort();
+      await _api.evictChapterPages(
+        chapterId: segment.chapterId,
+        keepPages: keepPages,
+      );
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      await _api.prefetchTiles(
+        bridge.PrefetchTilesPayload(
+          chapterId: segment.chapterId,
+          tiles: [
+            for (final tile in windowTiles)
+              bridge.PageTile(
+                pageIndex: tile.pageIndex,
+                tileIndex: tile.tileIndex,
+              ),
+          ],
+        ),
+      );
+      if (!_isCurrent(generation)) {
+        return;
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Keys, closing and switching chapters
+  // -------------------------------------------------------------------------
 
   void _handleKey(LogicalKeyboardKey key, ReaderData? data) {
     if (key == LogicalKeyboardKey.escape) {
@@ -1262,25 +1503,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  Future<void> _close(ReaderData data) async {
-    final chapterId = widget.chapterId;
-    await _saveProgressDirect(chapterId: chapterId, data: data);
+  Future<void> _close(ReaderData fallback) async {
+    final strip = _strip;
+    final active = _activeChapter ?? StripChapter(widget.chapterId, fallback);
+    final data = active.data;
+    await _saveProgressDirect(active);
     _invalidateProgressProviders(data, onClose: true);
-    ref.invalidate(readerDataProvider(chapterId));
-    await _releaseChapterMemory(chapterId: chapterId, pages: data.pages);
+    for (final chapter in strip?.chapters ?? [active]) {
+      ref.invalidate(readerDataProvider(chapter.chapterId));
+    }
+    await _releaseStripMemory(strip);
     if (!mounted) {
       return;
     }
     final comicPath = data.context?.comicSourcePath;
-    final chapterPath = data.context?.chapterSourcePath;
-    if (chapterPath != null &&
-        chapterPath.isNotEmpty &&
-        comicPath != null &&
-        comicPath.isNotEmpty) {
-      ref
-          .read(lastOpenedChapterProvider.notifier)
-          .remember(comicPath, chapterPath);
-    }
+    _rememberLastOpened(active);
 
     // Defer navigation so provider invalidations finish before the comic page
     // is rebuilt. This avoids "setState during build" errors in Riverpod 3.
@@ -1295,20 +1532,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
   }
 
-  Future<void> _switchChapter(
-    int chapterId, {
-    bool scrollToBottom = false,
-  }) async {
-    _scrollToBottomOnRestore = scrollToBottom;
-    final currentChapterId = widget.chapterId;
-    final data =
-        ref.read(readerDataProvider(currentChapterId)).asData?.value ??
-        (_lastReaderChapterId == currentChapterId ? _lastReaderData : null);
-    await _saveProgressDirect(chapterId: currentChapterId, data: data);
+  Future<void> _switchChapter(int chapterId) async {
+    final strip = _strip;
+    final slot = strip?.slotOfChapter(chapterId) ?? -1;
+    if (strip != null && slot >= 0) {
+      // Already chained in: go there without reloading anything.
+      _jumpToChapterPage(slot, strip.chapters[slot].data.initialPage);
+      return;
+    }
+    final active = _activeChapter;
+    if (active != null) {
+      await _saveProgressDirect(active);
+    }
 
     // Update last opened chapter immediately so the comic page shows the
     // correct "continue reading" target even if the app is killed right after.
-    final comicPath = data?.context?.comicSourcePath;
+    final comicPath = active?.data.context?.comicSourcePath;
     if (comicPath != null && comicPath.isNotEmpty) {
       try {
         final newCtx = await _api.getChapterContext(chapterId);
@@ -1323,46 +1562,49 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       }
     }
 
-    ref.invalidate(readerDataProvider(currentChapterId));
-    await _releaseChapterMemory(
-      chapterId: currentChapterId,
-      pages: data?.pages,
-    );
+    for (final chapter in strip?.chapters ?? const <StripChapter>[]) {
+      ref.invalidate(readerDataProvider(chapter.chapterId));
+    }
+    ref.invalidate(readerDataProvider(widget.chapterId));
+    await _releaseStripMemory(strip);
     if (mounted) {
       context.go('/reader/$chapterId');
     }
   }
 
-  Future<void> _releaseChapterMemory({
-    required int chapterId,
-    required List<bridge.PageInfo>? pages,
+  /// Gives back every chapter of [strip]: pending prefetch finishes first,
+  /// then the Rust side drops the raw pages of each chapter.
+  Future<void> _releaseStripMemory(
+    ReaderStrip? strip, {
     bool invalidateRenderedPages = true,
   }) async {
     _readerGeneration++;
     _initialScrollTimer?.cancel();
     _initialScrollTimer = null;
-    _prefetchQueuedStart = null;
-    _prefetchQueuedEnd = null;
+    _prefetchQueued = null;
     final pendingPrefetch = _prefetchQueue;
-    if (invalidateRenderedPages && pages != null) {
-      _invalidateRenderedTiles(chapterId, pages);
+    if (invalidateRenderedPages && strip != null) {
+      for (final chapter in strip.chapters) {
+        _invalidateRenderedTiles(chapter.chapterId, chapter.data.pages);
+      }
     }
-    if (_lastReaderChapterId == chapterId) {
-      _lastReaderData = null;
-      _lastReaderChapterId = null;
+    if (identical(_strip, strip)) {
+      _strip = null;
     }
+    _closeHolds();
     _renderStart = 0;
     _renderEnd = -1;
+    _idleChapters.clear();
     if (pendingPrefetch != null && !pendingPrefetch.isCompleted) {
       await pendingPrefetch.future;
     }
-    await _api.evictChapterPages(chapterId: chapterId, keepPages: []);
+    for (final chapter in strip?.chapters ?? const <StripChapter>[]) {
+      await _api.evictChapterPages(chapterId: chapter.chapterId, keepPages: []);
+    }
   }
 
-  bool _isReaderCurrent(int chapterId, int generation) {
-    return mounted &&
-        widget.chapterId == chapterId &&
-        _readerGeneration == generation;
+  bool _isCurrent(int generation) {
+    return mounted && _readerGeneration == generation;
   }
 
   void _invalidateRenderedTiles(int chapterId, List<bridge.PageInfo> pages) {
@@ -1381,38 +1623,71 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     PaintingBinding.instance.imageCache.clearLiveImages();
   }
 
+  // -------------------------------------------------------------------------
+  // Jumping
+  // -------------------------------------------------------------------------
+
+  /// Steps [delta] pages within the chapter in view, rolling over into the
+  /// neighbouring chapter when it is already part of the strip.
   void _jumpBy(int delta) {
-    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    final count = data?.pages.length ?? 0;
-    if (count == 0) {
+    final strip = _strip;
+    final active = _activeChapter;
+    if (strip == null || active == null || active.data.pages.isEmpty) {
       return;
     }
-    _jumpToPage((_currentPage + delta).clamp(0, count - 1));
+    final target = _currentPage + delta;
+    if (target >= active.data.pages.length &&
+        _activeSlot + 1 < strip.chapters.length) {
+      _jumpToChapterPage(_activeSlot + 1, 0);
+    } else if (target < 0 && _activeSlot > 0) {
+      final previous = strip.chapters[_activeSlot - 1];
+      _jumpToChapterPage(_activeSlot - 1, previous.data.pages.length - 1);
+    } else {
+      _jumpToPage(target.clamp(0, active.data.pages.length - 1));
+    }
   }
 
   void _jumpToPage(int page, {bool persist = true}) {
-    final data = ref.read(readerDataProvider(widget.chapterId)).asData?.value;
-    final pages = data?.pages ?? const [];
-    if (pages.isEmpty) {
+    _jumpToChapterPage(_activeSlot, page, persist: persist);
+  }
+
+  void _jumpToChapterPage(int slot, int page, {bool persist = true}) {
+    final strip = _strip;
+    if (strip == null || slot < 0 || slot >= strip.chapters.length) {
       return;
     }
-    final tiles = flattenTiles(pages);
-    _setRenderWindowAroundTile(_firstTileOfPage(tiles, page), tiles.length);
-    if (page != _currentPage) {
-      _currentPage = page;
-      _refreshOverlay();
+    final chapter = strip.chapters[slot];
+    if (chapter.data.pages.isEmpty) {
+      return;
     }
-    if (persist) {
-      _scheduleProgressSave();
-    } else {
-      _lastSavedPage = page;
+    final clampedPage = page.clamp(0, chapter.data.pages.length - 1);
+    final tile = strip.globalTile(
+      slot,
+      _firstTileOfPage(chapter.data.tiles, clampedPage),
+    );
+    _setRenderWindowAroundTile(tile, strip.tileCount);
+    if (slot != _activeSlot) {
+      _changeActiveChapter(
+        slot,
+        clampedPage,
+        persist: persist,
+        finishedPrevious: false,
+      );
+    } else if (clampedPage != _currentPage) {
+      _currentPage = clampedPage;
+      _refreshOverlay();
+      if (persist) {
+        _scheduleProgressSave();
+      }
+    }
+    if (!persist) {
+      _savedPages[chapter.chapterId] = clampedPage;
     }
     unawaited(_prefetchWindow(_renderStart, _renderEnd));
     if (_scroll.hasClients) {
-      final estimatedOffset = _scrollOffsetForPageIndex(page, pages);
-      final targetOffset = estimatedOffset
-          .clamp(0, _scroll.position.maxScrollExtent)
-          .toDouble();
+      final targetOffset = _currentLayout(
+        strip,
+      ).contentTops[tile].clamp(0, _scroll.position.maxScrollExtent).toDouble();
       if ((_scroll.position.pixels - targetOffset).abs() > 0.5) {
         _ignoreNextScrollUpdate = _initialScrollDone;
         _scroll.jumpTo(targetOffset);
@@ -1438,30 +1713,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         curve: Curves.easeOutCubic,
       ),
     );
-  }
-
-  double _scrollOffsetForPageIndex(int page, List<bridge.PageInfo> pages) {
-    if (!_scroll.hasClients || pages.isEmpty) {
-      return 0;
-    }
-    final settings = ref.read(readerSettingsProvider);
-    final tiles = flattenTiles(pages);
-    final target = _firstTileOfPage(tiles, page.clamp(0, pages.length - 1));
-    final maxWidth = _ReaderPageLayout.maxDisplayWidth(context);
-    var offset = _topPadding;
-    for (var i = 0; i < target; i++) {
-      final layout = _tilePages(pages, tiles[i]);
-      offset += _tileDisplayHeight(
-        tile: tiles[i],
-        page: layout.page,
-        zoom: settings.zoom,
-        maxWidth: maxWidth,
-        prevPage: layout.prevPage,
-        forcePortrait: settings.forcePortrait,
-      );
-      offset += _tileGap(tiles, i, settings.pageGap);
-    }
-    return offset.clamp(0, _scroll.position.maxScrollExtent).toDouble();
   }
 
   void _refreshOverlay() {
@@ -1550,25 +1801,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.invalidate(allFavoritesProvider);
   }
 
-  Future<void> _loadPageBookmarks(int chapterId) async {
+  Future<void> _loadPageMarks(int chapterId) async {
+    if (!_loadingMarks.add(chapterId)) {
+      return;
+    }
     try {
       final bookmarks = await _api.listPageBookmarks(chapterId: chapterId);
       if (!mounted) return;
-      _pageBookmarkedPages
-        ..clear()
-        ..addAll(bookmarks.map((b) => b.page.toInt()));
+      _pageMarks[chapterId] = {...bookmarks.map((b) => b.page.toInt())};
       _refreshOverlay();
-    } catch (_) {}
+    } catch (_) {
+      // Marks are cosmetic; the chapter still reads fine without them.
+    } finally {
+      _loadingMarks.remove(chapterId);
+    }
   }
 
   Future<void> _togglePageBookmark() async {
-    final data = _lastReaderData;
-    if (data == null || data.pages.isEmpty) return;
+    final active = _activeChapter;
+    if (active == null || active.data.pages.isEmpty) return;
     final pageIndex = _currentPage;
-    if (pageIndex < 0 || pageIndex >= data.pages.length) return;
-    final chapterId = widget.chapterId;
+    if (pageIndex < 0 || pageIndex >= active.data.pages.length) return;
+    final chapterId = active.chapterId;
+    final marks = _pageMarks.putIfAbsent(chapterId, () => <int>{});
 
-    if (_pageBookmarkedPages.contains(pageIndex)) {
+    if (marks.contains(pageIndex)) {
       // Find and remove the bookmark
       try {
         final bookmarks = await _api.listPageBookmarks(chapterId: chapterId);
@@ -1578,7 +1835,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
       } catch (_) {}
       if (mounted) {
-        _pageBookmarkedPages.remove(pageIndex);
+        marks.remove(pageIndex);
         _refreshOverlay();
       }
     } else {
@@ -1592,55 +1849,64 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
       } catch (_) {}
       if (mounted) {
-        _pageBookmarkedPages.add(pageIndex);
+        marks.add(pageIndex);
         _refreshOverlay();
       }
     }
   }
 }
 
-/// Prefix-summed tile geometry for one (tiles, zoom, width, gap) state.
+/// Prefix-summed tile geometry for one (strip, zoom, width, gap) state.
 ///
 /// Built once in O(n); the lookups the scroll handler needs on every scroll
 /// event (visible range, tile under an offset, item extents, total extent)
 /// are then O(log n) or O(1) instead of a walk over every tile per event.
+/// Tiles are indexed across the whole strip.
 class _TileLayout {
   const _TileLayout({
-    required this.tiles,
+    required this.strip,
     required this.zoom,
     required this.maxWidth,
     required this.pageGap,
     required this.forcePortrait,
     required this.tops,
+    required this.contentTops,
     required this.bottoms,
     required this.extents,
     required this.totalExtent,
   });
 
-  final List<TileItem> tiles;
+  final ReaderStrip strip;
   final double zoom;
   final double maxWidth;
   final double pageGap;
   final bool forcePortrait;
 
-  /// Top edge of each tile, including the reader's top padding.
+  /// Top edge of each item, including the reader's top padding and, for the
+  /// first page of a chapter that follows another, its transition header.
   final List<double> tops;
 
-  /// Bottom edge of each tile (top + display height, no gap).
+  /// Top edge of each tile's image, below any transition header.
+  final List<double> contentTops;
+
+  /// Bottom edge of each tile (image bottom, no gap).
   final List<double> bottoms;
 
-  /// Sliver item extent of each tile: display height + the gap after it.
+  /// Sliver item extent of each tile: header + display height + the gap
+  /// after it.
   final List<double> extents;
   final double totalExtent;
 
+  int get tileCount => tops.length;
+
   bool matches(
-    List<TileItem> tiles,
+    ReaderStrip strip,
     double zoom,
     double maxWidth,
     double pageGap,
     bool forcePortrait,
   ) {
-    return identical(this.tiles, tiles) &&
+    return identical(this.strip, strip) &&
         this.zoom == zoom &&
         this.maxWidth == maxWidth &&
         this.pageGap == pageGap &&
@@ -1652,7 +1918,7 @@ class _TileLayout {
   ({int first, int last})? visibleRange(double top, double bottom) {
     final first = lowerBoundIndex(bottoms, top);
     final last = upperBoundIndex(tops, bottom);
-    if (first >= tiles.length || last < first) {
+    if (first >= tileCount || last < first) {
       return null;
     }
     return (first: first, last: last);
@@ -1661,7 +1927,264 @@ class _TileLayout {
   /// First tile whose bottom edge is at or below [offset], else the last.
   int tileForOffset(double offset) {
     final index = lowerBoundIndex(bottoms, offset);
-    return index < tiles.length ? index : tiles.length - 1;
+    return index < tileCount ? index : tileCount - 1;
+  }
+}
+
+/// Vertical scrollbar scoped to the chapter under the viewport centre.
+///
+/// The strip chains chapters into one scroll view, so a stock scrollbar would
+/// span all of them and its thumb would never start over. This one measures
+/// only the active chapter's stretch of the strip: its thumb restarts at the
+/// top when the next chapter begins, and dragging it moves within that chapter.
+class _ChapterScrollbar extends StatefulWidget {
+  const _ChapterScrollbar({required this.controller, required this.layout});
+
+  static const double width = 16;
+
+  final ScrollController controller;
+  final _TileLayout layout;
+
+  @override
+  State<_ChapterScrollbar> createState() => _ChapterScrollbarState();
+}
+
+class _ChapterScrollbarState extends State<_ChapterScrollbar> {
+  static const double _thickness = 12;
+  static const double _minThumb = 36;
+
+  /// Pointer distance from the thumb's top while it is being dragged.
+  double _grab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // The controller only has a position after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  /// Where the active chapter starts and ends along the scroll axis.
+  ({double top, double bottom}) _region(double offset, double viewport) {
+    final layout = widget.layout;
+    final strip = layout.strip;
+    final center = layout.tileForOffset(offset + viewport / 2);
+    final slot = strip.locate(center).slot;
+    final top = slot == 0 ? 0.0 : layout.tops[strip.tileStart(slot)];
+    final bottom = slot == strip.chapters.length - 1
+        ? layout.totalExtent
+        : layout.tops[strip.tileStart(slot + 1)];
+    return (top: top, bottom: bottom);
+  }
+
+  ({double top, double thumb, double region, double range})? _measure(
+    double track,
+  ) {
+    final controller = widget.controller;
+    if (!controller.hasClients || track <= 0) {
+      return null;
+    }
+    final position = controller.position;
+    final viewport = position.viewportDimension;
+    final region = _region(position.pixels, viewport);
+    final length = math.max(region.bottom - region.top, viewport);
+    final range = length - viewport;
+    final progress = range <= 0
+        ? 0.0
+        : ((position.pixels - region.top) / range).clamp(0.0, 1.0);
+    final thumb = (track * viewport / length).clamp(_minThumb, track);
+    return (
+      top: (track - thumb) * progress,
+      thumb: thumb.toDouble(),
+      region: region.top,
+      range: range,
+    );
+  }
+
+  void _seek(double thumbTop, double track) {
+    final measured = _measure(track);
+    if (measured == null || measured.range <= 0) {
+      return;
+    }
+    final free = track - measured.thumb;
+    final progress = free <= 0 ? 0.0 : (thumbTop / free).clamp(0.0, 1.0);
+    final position = widget.controller.position;
+    widget.controller.jumpTo(
+      (measured.region + progress * measured.range).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final track = constraints.maxHeight;
+        return AnimatedBuilder(
+          animation: widget.controller,
+          builder: (context, _) {
+            final measured = _measure(track);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (details) {
+                final m = _measure(track);
+                if (m != null) {
+                  _seek(details.localPosition.dy - m.thumb / 2, track);
+                }
+              },
+              onVerticalDragStart: (details) {
+                final m = _measure(track);
+                if (m == null) {
+                  return;
+                }
+                final dy = details.localPosition.dy;
+                final onThumb = dy >= m.top && dy <= m.top + m.thumb;
+                _grab = onThumb ? dy - m.top : m.thumb / 2;
+                if (!onThumb) {
+                  _seek(dy - _grab, track);
+                }
+              },
+              onVerticalDragUpdate: (details) =>
+                  _seek(details.localPosition.dy - _grab, track),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  width: _thickness,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(color: Color(0xff0e0d13)),
+                    child: Stack(
+                      children: [
+                        if (measured != null)
+                          Positioned(
+                            key: const ValueKey('reader-scrollbar-thumb'),
+                            top: measured.top,
+                            left: 0,
+                            right: 0,
+                            height: measured.thumb,
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Color(0xff5b5670),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(999),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// The separator between two chapters of the strip: what was just finished
+/// and what comes next, with where it sits in the comic.
+class _ChapterTransition extends StatelessWidget {
+  const _ChapterTransition({
+    required this.text,
+    required this.finishedTitle,
+    required this.next,
+  });
+
+  final AppStrings text;
+  final String finishedTitle;
+  final ReaderData next;
+
+  @override
+  Widget build(BuildContext context) {
+    final chapterContext = next.context;
+    final facts = [
+      if (chapterContext != null && chapterContext.chapterTotal > 0)
+        '${chapterContext.chapterPosition}/${chapterContext.chapterTotal}',
+      text.pagesCountTemplate.replaceAll('{count}', '${next.pages.length}'),
+    ].join(' · ');
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(AppIcons.check, size: 16, color: _chromeAccent),
+                  const SizedBox(width: 6),
+                  Text(
+                    text.finished,
+                    style: const TextStyle(
+                      color: _chromeAccentInk,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                finishedTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _chromeMuted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Container(
+                width: 120,
+                height: 1,
+                margin: const EdgeInsets.symmetric(vertical: 16),
+                color: _chromeLine,
+              ),
+              Text(
+                text.nextChapter,
+                style: const TextStyle(
+                  color: _chromeMuted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                next.context?.title ?? text.chapter,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _chromeText,
+                  fontSize: 17,
+                  height: 24 / 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                facts,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _chromeMuted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -2220,7 +2743,6 @@ class _ReaderDisplayPanel extends StatelessWidget {
     required this.onZoomChanged,
     required this.onGapChanged,
     required this.onUnlimitedScrollChanged,
-    required this.onUnlimitedScrollUpChanged,
     required this.onForcePortraitChanged,
   });
 
@@ -2229,7 +2751,6 @@ class _ReaderDisplayPanel extends StatelessWidget {
   final ValueChanged<double> onZoomChanged;
   final ValueChanged<double> onGapChanged;
   final ValueChanged<bool> onUnlimitedScrollChanged;
-  final ValueChanged<bool> onUnlimitedScrollUpChanged;
   final ValueChanged<bool> onForcePortraitChanged;
 
   @override
@@ -2272,12 +2793,6 @@ class _ReaderDisplayPanel extends StatelessWidget {
               description: text.unlimitedScrollDescription,
               value: settings.unlimitedScroll,
               onChanged: onUnlimitedScrollChanged,
-            ),
-            _ReaderSwitchRow(
-              title: text.unlimitedScrollUp,
-              description: text.unlimitedScrollUpDescription,
-              value: settings.unlimitedScrollUp,
-              onChanged: onUnlimitedScrollUpChanged,
             ),
             _ReaderSwitchRow(
               title: text.forcePortrait,

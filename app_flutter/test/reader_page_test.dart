@@ -8,7 +8,6 @@ import 'package:comicrd_flutter/pages/reader_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
 import 'package:comicrd_flutter/utils/forui_theme.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -334,156 +333,243 @@ void main() {
     expect(finalEvict, greaterThan(prefetchComplete));
   });
 
-  testWidgets('unlimited scroll opens previous chapter on top overscroll', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1200, 800);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  group('continuous chapter strip', () {
+    // 900x240 pages are landscape, so they draw 1176 px wide (the window less
+    // its gutter): 313.6 px tall, 10 px apart. Six pages are 1931.6 px of
+    // chapter; the viewport is 800 px tall.
+    const pageDrawn = 240 * 1176 / 900;
+    const chapterExtent = 6 * pageDrawn + 5 * 10;
 
-    final api = _ReaderFakeComicRdApi(
-      lastPage: 0,
-      pageCount: 6,
-      pageHeight: 240,
-      prevChapterIds: const {8: 7},
-      unlimitedScroll: true,
-    );
-    final router = GoRouter(
-      initialLocation: '/reader/8',
-      routes: [
-        GoRoute(
-          path: '/reader/:chapterId',
-          builder: (context, state) => ReaderPage(
-            chapterId: int.parse(state.pathParameters['chapterId']!),
-          ),
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
-
-    await tester.pumpWidget(
-      ProviderScope(
+    Future<({GoRouter router, ProviderContainer container})> pumpStrip(
+      WidgetTester tester,
+      _ReaderFakeComicRdApi api, {
+      required int chapterId,
+    }) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final container = ProviderContainer(
         overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: wrap(const ReaderPage(chapterId: 8), router: router),
-      ),
+      );
+      addTearDown(container.dispose);
+      final router = GoRouter(
+        initialLocation: '/reader/$chapterId',
+        routes: [
+          GoRoute(
+            path: '/reader/:chapterId',
+            builder: (context, state) => ReaderPage(
+              chapterId: int.parse(state.pathParameters['chapterId']!),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: wrap(ReaderPage(chapterId: chapterId), router: router),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      return (router: router, container: container);
+    }
+
+    ScrollPosition position(WidgetTester tester) =>
+        tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+
+    Future<void> scrollTo(WidgetTester tester, double offset) async {
+      position(tester).jumpTo(offset);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    _ReaderFakeComicRdApi twoChapters() {
+      return _ReaderFakeComicRdApi(
+        lastPage: 0,
+        pageCount: 6,
+        pageHeight: 240,
+        nextChapterIds: const {7: 8},
+        prevChapterIds: const {8: 7},
+        unlimitedScroll: true,
+        chapterTitles: const {7: 'Chapter 27', 8: 'Chapter 28'},
+        chapterPositions: const {7: 27, 8: 28},
+      );
+    }
+
+    testWidgets('loads the next chapter ahead without leaving the reader', (
+      tester,
+    ) async {
+      final api = twoChapters();
+      final host = await pumpStrip(tester, api, chapterId: 7);
+
+      // Within a few screens of the end, so it is already in the strip.
+      expect(api.loadedChapterIds, containsAll([7, 8]));
+      expect(host.router.routeInformationProvider.value.uri.path, '/reader/7');
+      expect(find.byType(FCircularProgress), findsNothing);
+    });
+
+    testWidgets(
+      'shows what was finished and what comes next between chapters',
+      (tester) async {
+        final api = twoChapters();
+        await pumpStrip(tester, api, chapterId: 7);
+
+        // Just above the boundary: the header sits under the viewport's top.
+        await scrollTo(tester, 78 + chapterExtent - 200);
+
+        expect(find.text('Finished'), findsOneWidget);
+        expect(find.text('Next Chapter'), findsOneWidget);
+        expect(find.text('28/33 · 6 pages'), findsOneWidget);
+      },
     );
-    await tester.pump();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
 
-    expect(api.loadedChapterIds, contains(8));
-    expect(api.loadedChapterIds, isNot(contains(7)));
+    testWidgets('scrolling across the boundary switches the status at once', (
+      tester,
+    ) async {
+      final api = twoChapters();
+      final host = await pumpStrip(tester, api, chapterId: 7);
+      expect(find.text(' (27/33)'), findsOneWidget);
 
-    final scrollableCenter = tester.getCenter(find.byType(CustomScrollView));
-    tester.binding.handlePointerEvent(
-      PointerScrollEvent(
-        position: scrollableCenter,
-        scrollDelta: const Offset(0, -360),
-      ),
+      // Viewport centre lands on the first page of chapter 28.
+      await scrollTo(tester, 78 + chapterExtent + 168 - 300);
+
+      expect(find.text(' (28/33)'), findsOneWidget);
+      expect(find.text(' (27/33)'), findsNothing);
+      // The chapter left behind is finished at once, without waiting for the
+      // scroll-save debounce.
+      expect(
+        api.savedProgress.any(
+          (p) => p.chapterId == 7 && p.lastPage == 5 && p.isRead,
+        ),
+        isTrue,
+      );
+      expect(
+        host.container.read(
+          lastOpenedChapterProvider,
+        )['/library/Kaichou wa Maid-sama!'],
+        '/library/Kaichou wa Maid-sama!/Chapter 28',
+      );
+      // Still the same reader page: nothing reloaded or navigated.
+      expect(host.router.routeInformationProvider.value.uri.path, '/reader/7');
+    });
+
+    testWidgets('scrolling back switches the status back', (tester) async {
+      final api = twoChapters();
+      await pumpStrip(tester, api, chapterId: 7);
+
+      await scrollTo(tester, 78 + chapterExtent + 168 - 300);
+      expect(find.text(' (28/33)'), findsOneWidget);
+
+      await scrollTo(tester, 400);
+      expect(find.text(' (27/33)'), findsOneWidget);
+      expect(find.text(' (28/33)'), findsNothing);
+    });
+
+    testWidgets('chains the previous chapter in and keeps the page in place', (
+      tester,
+    ) async {
+      final api = twoChapters();
+      await pumpStrip(tester, api, chapterId: 8);
+
+      expect(api.loadedChapterIds, containsAll([7, 8]));
+      // Chapter 28's first page was at the top; chapter 27 and the header
+      // now sit above it, so the offset moved down by exactly their height.
+      expect(
+        position(tester).pixels,
+        moreOrLessEquals(78 + chapterExtent + 168, epsilon: 1),
+      );
+      expect(find.text(' (28/33)'), findsOneWidget);
+      // The viewport centre is on the second 313 px page, as it is when the
+      // chapter opens alone: chapter 27 changed nothing about what is read.
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('6'), findsOneWidget);
+    });
+
+    testWidgets('scrollbar thumb starts over with each chapter', (
+      tester,
+    ) async {
+      final api = twoChapters();
+      await pumpStrip(tester, api, chapterId: 7);
+      final thumb = find.byKey(const ValueKey('reader-scrollbar-thumb'));
+      expect(thumb, findsOneWidget);
+
+      // Chapter 27 spans [0, 78 + chapterExtent]; its last 800 px are the
+      // final screen, where the thumb rests on the bottom of the track.
+      await scrollTo(tester, 78 + chapterExtent - 800);
+      expect(tester.getRect(thumb).bottom, moreOrLessEquals(800, epsilon: 1));
+
+      // One step into chapter 28 and the thumb is back at the top, not
+      // part-way down a track that spans both chapters.
+      await scrollTo(tester, 78 + chapterExtent + 168 - 300);
+      expect(tester.getRect(thumb).top, moreOrLessEquals(0, epsilon: 1));
+      expect(find.text(' (28/33)'), findsOneWidget);
+    });
+
+    testWidgets('dragging the thumb stays inside the chapter in view', (
+      tester,
+    ) async {
+      final api = twoChapters();
+      await pumpStrip(tester, api, chapterId: 7);
+      final thumb = find.byKey(const ValueKey('reader-scrollbar-thumb'));
+
+      await tester.drag(thumb, const Offset(0, 3000));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Pulled all the way down, the viewport ends exactly where chapter 27
+      // does; the next chapter is reached by scrolling, not by the thumb.
+      expect(
+        position(tester).pixels,
+        moreOrLessEquals(78 + chapterExtent - 800, epsilon: 2),
+      );
+      expect(find.text(' (27/33)'), findsOneWidget);
+    });
+
+    testWidgets(
+      'next chapter button jumps within the strip without reloading',
+      (tester) async {
+        final api = twoChapters();
+        final host = await pumpStrip(tester, api, chapterId: 7);
+
+        await tester.tap(find.byTooltip('Next Chapter'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(find.text(' (28/33)'), findsOneWidget);
+        expect(api.loadedChapterIds.where((id) => id == 8), hasLength(1));
+        expect(
+          host.router.routeInformationProvider.value.uri.path,
+          '/reader/7',
+        );
+      },
     );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
 
-    expect(api.loadedChapterIds, contains(7));
+    testWidgets('a chapter that fails to load is skipped, not retried', (
+      tester,
+    ) async {
+      final api = _ReaderFakeComicRdApi(
+        lastPage: 0,
+        pageCount: 6,
+        pageHeight: 240,
+        nextChapterIds: const {7: 8},
+        unlimitedScroll: true,
+        chapterPositions: const {7: 27},
+        failingChapterIds: const {8},
+      );
+      await pumpStrip(tester, api, chapterId: 7);
+
+      for (final offset in [300.0, 700.0, 1200.0, 1500.0]) {
+        await scrollTo(tester, offset);
+      }
+
+      expect(api.loadedChapterIds.where((id) => id == 8), hasLength(1));
+      expect(find.text(' (27/33)'), findsOneWidget);
+    });
   });
-
-  testWidgets(
-    'unlimited scroll opens previous chapter when scrolling up at top',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1200, 800);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final api = _ReaderFakeComicRdApi(
-        lastPage: 0,
-        pageCount: 6,
-        pageHeight: 240,
-        prevChapterIds: const {8: 7},
-        unlimitedScroll: true,
-      );
-      final router = GoRouter(
-        initialLocation: '/reader/8',
-        routes: [
-          GoRoute(
-            path: '/reader/:chapterId',
-            builder: (context, state) => ReaderPage(
-              chapterId: int.parse(state.pathParameters['chapterId']!),
-            ),
-          ),
-        ],
-      );
-      addTearDown(router.dispose);
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [comicRdApiProvider.overrideWithValue(api)],
-          child: wrap(const ReaderPage(chapterId: 8), router: router),
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(api.loadedChapterIds, contains(8));
-      expect(api.loadedChapterIds, isNot(contains(7)));
-
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(api.loadedChapterIds, contains(7));
-    },
-  );
-
-  testWidgets(
-    'unlimited scroll does not open previous chapter when scroll up is disabled',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(1200, 800);
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final api = _ReaderFakeComicRdApi(
-        lastPage: 0,
-        pageCount: 6,
-        pageHeight: 240,
-        prevChapterIds: const {8: 7},
-        unlimitedScroll: true,
-        unlimitedScrollUp: false,
-      );
-      final router = GoRouter(
-        initialLocation: '/reader/8',
-        routes: [
-          GoRoute(
-            path: '/reader/:chapterId',
-            builder: (context, state) => ReaderPage(
-              chapterId: int.parse(state.pathParameters['chapterId']!),
-            ),
-          ),
-        ],
-      );
-      addTearDown(router.dispose);
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [comicRdApiProvider.overrideWithValue(api)],
-          child: wrap(const ReaderPage(chapterId: 8), router: router),
-        ),
-      );
-      await tester.pump();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(api.loadedChapterIds, contains(8));
-      expect(api.loadedChapterIds, isNot(contains(7)));
-    },
-  );
 
   testWidgets('reader favorite uses the current chapter path', (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -685,12 +771,17 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     this.nextChapterIds = const {},
     this.prevChapterIds = const {},
     this.unlimitedScroll = false,
-    this.unlimitedScrollUp = true,
     this.prefetchGate,
     this.chapterTitle = 'Chapter 28',
+    this.chapterTitles = const {},
+    this.chapterPositions = const {},
+    this.failingChapterIds = const {},
   });
 
   final String chapterTitle;
+  final Map<int, String> chapterTitles;
+  final Map<int, int> chapterPositions;
+  final Set<int> failingChapterIds;
   final int lastPage;
   final int pageCount;
   final int pageWidth;
@@ -699,7 +790,6 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   final Map<int, int> nextChapterIds;
   final Map<int, int> prevChapterIds;
   final bool unlimitedScroll;
-  final bool unlimitedScrollUp;
   final Completer<void>? prefetchGate;
   final renderedPageIndices = <int>[];
   final renderedTiles = <(int, int)>[];
@@ -725,10 +815,6 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
         key: 'unlimited_scroll',
         valueJson: unlimitedScroll.toString(),
       ),
-      bridge.SettingEntry(
-        key: 'unlimited_scroll_up',
-        valueJson: unlimitedScrollUp.toString(),
-      ),
       const bridge.SettingEntry(key: 'app_theme', valueJson: '"dark"'),
       const bridge.SettingEntry(key: 'app_locale', valueJson: '"en"'),
     ];
@@ -736,15 +822,16 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 
   @override
   Future<bridge.ChapterContext?> getChapterContext(int chapterId) async {
+    final title = chapterTitles[chapterId] ?? chapterTitle;
     return bridge.ChapterContext(
       chapterId: chapterId,
       comicId: 1,
       comicTitle: 'Kaichou wa Maid-sama!',
-      title: chapterTitle,
+      title: title,
       comicSourcePath: '/library/Kaichou wa Maid-sama!',
-      chapterSourcePath: '/library/Kaichou wa Maid-sama!/Chapter 28',
+      chapterSourcePath: '/library/Kaichou wa Maid-sama!/$title',
       chapterIndex: 28,
-      chapterPosition: 28,
+      chapterPosition: chapterPositions[chapterId] ?? 28,
       chapterTotal: 33,
       prevChapterId: prevChapterIds[chapterId],
       nextChapterId: nextChapterIds[chapterId],
@@ -754,6 +841,9 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
   @override
   Future<List<bridge.PageInfo>> getChapterPages(int chapterId) async {
     loadedChapterIds.add(chapterId);
+    if (failingChapterIds.contains(chapterId)) {
+      throw StateError('chapter $chapterId cannot be opened');
+    }
     final pages = [
       for (var index = 0; index < pageCount; index++)
         bridge.PageInfo(

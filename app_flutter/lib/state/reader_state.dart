@@ -66,6 +66,87 @@ class ReaderData {
   final List<TileItem> tiles;
 }
 
+/// One chapter chained into the reader's continuous strip.
+class StripChapter {
+  const StripChapter(this.chapterId, this.data);
+
+  final int chapterId;
+  final ReaderData data;
+}
+
+/// The chapters chained together in the reader, in reading order.
+///
+/// Scrolling past the end of a chapter continues straight into the next one
+/// (and, optionally, past the top into the previous one), so the reader
+/// addresses tiles by their position across the whole strip. Every chapter
+/// keeps its own Rust-provided tile grid; this only maps a strip-wide tile
+/// index to the chapter that owns it. Pure data, no widgets.
+class ReaderStrip {
+  ReaderStrip(Iterable<StripChapter> chapters)
+    : chapters = List.unmodifiable(chapters),
+      _starts = _tileStarts(chapters),
+      tileCount = chapters.fold(0, (sum, c) => sum + c.data.tiles.length);
+
+  final List<StripChapter> chapters;
+  final int tileCount;
+
+  /// Strip-wide index of each chapter's first tile.
+  final List<int> _starts;
+
+  static List<int> _tileStarts(Iterable<StripChapter> chapters) {
+    final starts = <int>[];
+    var next = 0;
+    for (final chapter in chapters) {
+      starts.add(next);
+      next += chapter.data.tiles.length;
+    }
+    return starts;
+  }
+
+  /// Position of [chapterId] in the strip, or -1 when it is not loaded.
+  int slotOfChapter(int chapterId) {
+    for (var slot = 0; slot < chapters.length; slot++) {
+      if (chapters[slot].chapterId == chapterId) {
+        return slot;
+      }
+    }
+    return -1;
+  }
+
+  /// Strip-wide index of the first tile of [slot].
+  int tileStart(int slot) => _starts[slot];
+
+  /// Strip-wide index of tile [local] of [slot].
+  int globalTile(int slot, int local) => _starts[slot] + local;
+
+  /// Chapter slot and chapter-local tile index owning strip tile [global].
+  ({int slot, int local}) locate(int global) {
+    var low = 0;
+    var high = _starts.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (_starts[mid] <= global) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    final slot = math.max(0, low - 1);
+    return (slot: slot, local: global - _starts[slot]);
+  }
+
+  TileItem tileAt(int global) {
+    final at = locate(global);
+    return chapters[at.slot].data.tiles[at.local];
+  }
+
+  ReaderStrip appended(StripChapter chapter) =>
+      ReaderStrip([...chapters, chapter]);
+
+  ReaderStrip prepended(StripChapter chapter) =>
+      ReaderStrip([chapter, ...chapters]);
+}
+
 /// One render unit: a tile of a page. Single-tile pages have exactly one
 /// entry with tileIndex 0.
 class TileItem {

@@ -417,6 +417,19 @@ and progress stable even before image bytes finish loading. Progress, bookmarks,
 and the page indicator stay page-based; tiles are a rendering detail unknown to
 the DB.
 
+With unlimited scroll the reader is a continuous strip rather than one chapter
+per page. `ReaderStrip` chains the opened chapter with its neighbours; the next
+and the previous chapter's page list is fetched once the viewport is within
+three screens of that end, so crossing into it never waits on
+a load and never reloads the page. A separator at each boundary shows the chapter
+that was finished and the one that follows (title, position in the comic, page
+count). The chapter at the viewport centre drives the top bar, page bar, marks
+and progress; moving into the next chapter marks the previous one read and
+records the new one immediately. Prepending a chapter above the viewport shifts
+the scroll offset by exactly its height so the page being read does not move.
+Tile prefetch, eviction and the exact-total sliver work unchanged over the whole
+strip, split per chapter.
+
 The reader chrome (toolbar, Display/Mark panels, segmented page bar) is an
 overlay rebuilt on its own version counter (`_overlayVersion`), so opening a
 panel or moving the current page never relayouts the page strip. Keyboard:

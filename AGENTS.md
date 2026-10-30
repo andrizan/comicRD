@@ -134,6 +134,18 @@ Tall pages are split into stacked tiles so no single GPU texture exceeds 2048x20
 - Progress, bookmarks, and the page indicator stay page-based (`tile → page` maps by stored index). The DB schema does not know tiles.
 - Prefetch/evict operate on tile windows (`current - 2` through `current + 2` tiles); eviction stays page-based (`evictChapterPages` drops all tiles of pages outside the window).
 
+### Continuous Chapter Strip (Unlimited Scroll)
+
+With unlimited scroll on, neighbouring chapters are chained into one scroll view instead of replacing each other:
+
+- Crossing a chapter boundary by scrolling must never navigate (`context.go('/reader/..')`), reload, or reset the scroll position. The chapters live in a `ReaderStrip` (`state/reader_state.dart`); the route's `chapterId` is only the chapter the reader was opened at.
+- Tiles are addressed strip-wide (`ReaderStrip.locate`), but every chapter keeps its own Rust-provided tile grid and page list. Still one list item per tile: the first page of a chapter that follows another carries a fixed-height (`_transitionExtent`) "finished / next chapter" header inside its item, so the item extent is header + tile + gap.
+- Neighbour chapters load metadata only (page list, never bytes) once the viewport is within `_preloadViewports` viewport heights of that end of the strip. A chapter that fails to load or has no pages is not retried automatically.
+- Prepending (scroll up) must keep what is on screen in place: apply the exact shift with `ScrollPosition.correctBy` in the same frame as the new strip, and only once scrolling is idle (a running animation would undo the correction).
+- The chapter under the viewport centre is the active one. The top bar, page bar, marks, progress and "last opened" follow it immediately: scrolling on into the next chapter writes the previous chapter as read and the new one at once (no debounce), even if a fast scroll skipped its last page.
+- The prefetch window is the same `current - 2` through `current + 2` tiles, now over the whole strip and split per chapter; chapters the window left get one `evictChapterPages(id, [])`. Rust still caps page sources at 2, so do not widen the window to keep a third chapter warm.
+- The prev/next chapter buttons and arrow keys jump inside the strip when the target is already chained in; only an unloaded target goes through the route (which resets the strip).
+
 ### Format Rules
 
 - Folder pages: read metadata up front, then read only the requested page file on demand.

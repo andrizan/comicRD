@@ -35,9 +35,12 @@ void main() {
     expect(find.text('Zoom'), findsOneWidget);
     expect(find.text('Page Gap'), findsOneWidget);
 
-    await tester.tap(find.text('Unlimited Scroll Up'));
+    // The one scroll switch covers both directions; there is no separate
+    // "scroll up" switch any more.
+    expect(find.text('Unlimited Scroll Up'), findsNothing);
+    await tester.tap(find.text('Unlimited Scroll'));
     await _settle(tester);
-    expect(api.savedSettings['unlimited_scroll_up'], 'true');
+    expect(api.savedSettings['unlimited_scroll'], 'false');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await _settle(tester);
