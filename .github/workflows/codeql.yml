@@ -40,18 +40,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: rust
-
+      # CodeQL reads Rust straight from source (`build-mode: none`), so there
+      # is no `cargo build` step. The toolchain comes first because the
+      # extractor needs cargo (and the native libraries' pkg-config files).
       - name: Setup toolchain
         uses: ./.github/actions/setup-toolchain
         with:
           flutter: "false"
 
-      - name: Build Rust workspace
-        run: cargo build --workspace
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: rust
+          build-mode: none
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
