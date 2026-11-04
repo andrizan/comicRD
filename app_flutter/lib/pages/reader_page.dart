@@ -1046,12 +1046,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (persist) {
       // Scrolling on into the next chapter means the previous one was read to
       // its end, even if a fast scroll skipped past its last page.
-      unawaited(_persistProgress(previous, leftPage));
-      unawaited(_persistProgress(active, page));
+      unawaited(_persistCrossing(previous, leftPage, active, page));
       _rememberLastOpened(active);
     } else {
       _savedPages[active.chapterId] = page;
     }
+  }
+
+  /// Writes the chapter being left, then the one entered. Two bridge calls
+  /// started together can land in either order, and both rows carry the same
+  /// second; in order, the chapter entered is always the one written last.
+  Future<void> _persistCrossing(
+    StripChapter left,
+    int leftPage,
+    StripChapter entered,
+    int enteredPage,
+  ) async {
+    await _persistProgress(left, leftPage);
+    await _persistProgress(entered, enteredPage);
   }
 
   void _rememberLastOpened(StripChapter chapter) {

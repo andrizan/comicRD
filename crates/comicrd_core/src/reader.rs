@@ -234,26 +234,32 @@ pub(crate) fn list_reading_history_conn(
     let mut stmt = conn
         .prepare(
             r#"
-          SELECT
-            c.source_path,
-            c.title,
-            ch.title,
-            ch.source_path,
-            ch.id,
-            r.last_page,
-            r.total_pages,
-            r.is_read,
-            r.updated_at
-          FROM reading_progress r
-          INNER JOIN chapters ch ON ch.id = r.chapter_id
-          INNER JOIN comics c ON c.id = ch.comic_id
-          INNER JOIN (
-            SELECT ch2.comic_id, MAX(r2.updated_at) AS max_updated
-            FROM reading_progress r2
-            INNER JOIN chapters ch2 ON ch2.id = r2.chapter_id
-            GROUP BY ch2.comic_id
-          ) latest ON latest.comic_id = c.id AND latest.max_updated = r.updated_at
-          ORDER BY r.updated_at DESC
+          SELECT comic_path, comic_title, chapter_title, chapter_path,
+                 chapter_id, last_page, total_pages, is_read, updated_at
+          FROM (
+            SELECT
+              c.source_path AS comic_path,
+              c.title AS comic_title,
+              ch.title AS chapter_title,
+              ch.source_path AS chapter_path,
+              ch.id AS chapter_id,
+              r.last_page AS last_page,
+              r.total_pages AS total_pages,
+              r.is_read AS is_read,
+              r.updated_at AS updated_at,
+              -- One row per comic: the most recently written chapter. Chapters
+              -- written in the same second (scrolling out of one into the next
+              -- writes both) go to the later chapter, never to both.
+              ROW_NUMBER() OVER (
+                PARTITION BY c.id
+                ORDER BY r.updated_at DESC, ch.chapter_index DESC, ch.id DESC
+              ) AS latest
+            FROM reading_progress r
+            INNER JOIN chapters ch ON ch.id = r.chapter_id
+            INNER JOIN comics c ON c.id = ch.comic_id
+          )
+          WHERE latest = 1
+          ORDER BY updated_at DESC, comic_title ASC
           "#,
         )
         .map_err(|e| format!("failed preparing reading history query: {e}"))?;

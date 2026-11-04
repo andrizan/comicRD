@@ -28,6 +28,66 @@ final comicReadingHistoryProvider =
           .toList();
     });
 
+/// The chapter reading resumes from, shared by the "Continue" button, the
+/// highlighted row and the list's auto-scroll so they never disagree.
+///
+/// That is the chapter opened last in this session, else the one whose
+/// progress was written most recently; two chapters written in the same
+/// second (scrolling out of one into the next writes both) resolve to the
+/// later one. A chapter that is finished hands over to the next unread one
+/// after it. Older chapters left half-read play no part: ignoring "last
+/// read" in favour of "in progress" is what sent Continue back to a chapter
+/// abandoned long ago once the reader started running through chapters.
+bridge.RawChapter? resumeChapter(
+  List<bridge.RawChapter> chapters,
+  String? lastOpenedPath,
+) {
+  if (chapters.isEmpty) {
+    return null;
+  }
+  bridge.RawChapter? last;
+  if (lastOpenedPath != null) {
+    for (final chapter in chapters) {
+      if (chapter.sourcePath == lastOpenedPath) {
+        last = chapter;
+        break;
+      }
+    }
+  }
+  if (last == null) {
+    for (final chapter in chapters) {
+      if (chapter.progressUpdatedAt <= 0) {
+        continue;
+      }
+      if (last == null ||
+          chapter.progressUpdatedAt > last.progressUpdatedAt ||
+          (chapter.progressUpdatedAt == last.progressUpdatedAt &&
+              chapter.chapterIndex > last.chapterIndex)) {
+        last = chapter;
+      }
+    }
+  }
+  if (last == null) {
+    return chapters.firstWhere(
+      (chapter) => !chapter.isRead,
+      orElse: () => chapters.first,
+    );
+  }
+  if (!last.isRead) {
+    return last;
+  }
+  bridge.RawChapter? next;
+  for (final chapter in chapters) {
+    if (chapter.isRead || chapter.chapterIndex <= last.chapterIndex) {
+      continue;
+    }
+    if (next == null || chapter.chapterIndex < next.chapterIndex) {
+      next = chapter;
+    }
+  }
+  return next ?? last;
+}
+
 class ComicStats {
   const ComicStats({
     required this.totalSize,
@@ -69,42 +129,8 @@ final comicStatsProvider = Provider.family<ComicStats, String>((
       .where((chapter) => chapter.lastPage > 0 && !chapter.isRead)
       .length;
 
-  String? continueTitle;
   final lastOpened = ref.watch(lastOpenedChapterProvider)[comicPath];
-  if (lastOpened != null) {
-    for (final chapter in chapters) {
-      if (chapter.sourcePath == lastOpened) {
-        continueTitle = chapter.title;
-        break;
-      }
-    }
-  }
-
-  if (continueTitle == null) {
-    final chaptersWithProgress = chapters.where((c) => c.progressUpdatedAt > 0);
-    if (chaptersWithProgress.isNotEmpty) {
-      continueTitle = chaptersWithProgress
-          .reduce((a, b) => a.progressUpdatedAt > b.progressUpdatedAt ? a : b)
-          .title;
-    }
-  }
-  if (continueTitle == null) {
-    for (final chapter in chapters) {
-      if (chapter.lastPage > 0 && !chapter.isRead) {
-        continueTitle = chapter.title;
-        break;
-      }
-    }
-  }
-  if (continueTitle == null) {
-    for (final chapter in chapters) {
-      if (!chapter.isRead) {
-        continueTitle = chapter.title;
-        break;
-      }
-    }
-    continueTitle ??= chapters.isNotEmpty ? chapters.first.title : null;
-  }
+  final continueTitle = resumeChapter(chapters, lastOpened)?.title;
   return ComicStats(
     totalSize: totalSize,
     chapterCount: chapters.length,

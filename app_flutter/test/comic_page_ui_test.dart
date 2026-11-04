@@ -46,6 +46,104 @@ void main() {
     expect(find.text('reader:7'), findsOneWidget);
   });
 
+  testWidgets(
+    'continues from the chapter last read, not an old half-read one',
+    (tester) async {
+      // Chapter 1 was abandoned on page 5 long ago. Reading since then ran
+      // through 2-4 and into 5, which is only on page 0: the row and the button
+      // must both point at 5.
+      final api = FakeComicRdApi(
+        chapters: {
+          fakeFeaturedPath: [
+            fakeChapter(
+              fakeFeaturedPath,
+              1,
+              lastPage: 5,
+              progressUpdatedAt: 100,
+            ),
+            fakeChapter(
+              fakeFeaturedPath,
+              2,
+              isRead: true,
+              progressUpdatedAt: 200,
+            ),
+            fakeChapter(
+              fakeFeaturedPath,
+              3,
+              isRead: true,
+              progressUpdatedAt: 250,
+            ),
+            fakeChapter(
+              fakeFeaturedPath,
+              4,
+              isRead: true,
+              progressUpdatedAt: 300,
+            ),
+            fakeChapter(fakeFeaturedPath, 5, progressUpdatedAt: 300),
+          ],
+        },
+      );
+      // Tall enough that chapter 5's row is built (the list is virtualised).
+      await pumpRoutedPage(
+        tester,
+        api: api,
+        page: const ComicPage(comicPath: fakeFeaturedPath),
+        size: const Size(1280, 1500),
+      );
+
+      expect(find.text('Continue Chapter 5'), findsOneWidget);
+      // The highlighted row's own button, not the one under the cover.
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(
+        api.openedChapters.single.chapterSourcePath,
+        '$fakeFeaturedPath/Chapter 5',
+      );
+    },
+  );
+
+  testWidgets('moves on to the next chapter when the last one was finished', (
+    tester,
+  ) async {
+    final api = FakeComicRdApi(
+      chapters: {
+        fakeFeaturedPath: [
+          fakeChapter(
+            fakeFeaturedPath,
+            1,
+            isRead: true,
+            progressUpdatedAt: 100,
+          ),
+          fakeChapter(
+            fakeFeaturedPath,
+            2,
+            isRead: true,
+            progressUpdatedAt: 200,
+          ),
+          fakeChapter(
+            fakeFeaturedPath,
+            3,
+            isRead: true,
+            progressUpdatedAt: 300,
+          ),
+          fakeChapter(fakeFeaturedPath, 4),
+          fakeChapter(fakeFeaturedPath, 5),
+        ],
+      },
+    );
+    await _pump(tester, api);
+
+    expect(find.text('Continue Chapter 4'), findsOneWidget);
+    await tester.tap(find.text('Continue Chapter 4'));
+    await tester.pumpAndSettle();
+
+    expect(
+      api.openedChapters.single.chapterSourcePath,
+      '$fakeFeaturedPath/Chapter 4',
+    );
+  });
+
   testWidgets('"Start from Beginning" opens the first chapter', (tester) async {
     final api = FakeComicRdApi();
     await _pump(tester, api);

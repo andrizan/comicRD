@@ -457,6 +457,36 @@ void main() {
       expect(host.router.routeInformationProvider.value.uri.path, '/reader/7');
     });
 
+    testWidgets('crossing writes the chapter left before the one entered', (
+      tester,
+    ) async {
+      final api = _ReaderFakeComicRdApi(
+        lastPage: 0,
+        pageCount: 6,
+        pageHeight: 240,
+        nextChapterIds: const {7: 8},
+        prevChapterIds: const {8: 7},
+        unlimitedScroll: true,
+        chapterTitles: const {7: 'Chapter 27', 8: 'Chapter 28'},
+        chapterPositions: const {7: 27, 8: 28},
+        unstartedChapterIds: const {8},
+      );
+      await pumpStrip(tester, api, chapterId: 7);
+      api.savedProgress.clear();
+
+      await scrollTo(tester, 78 + chapterExtent + 168 - 300);
+
+      // Both land in the same second, so the order is what makes the chapter
+      // being read the most recent one.
+      expect(
+        [
+          for (final p in api.savedProgress)
+            (p.chapterId, p.lastPage, p.isRead),
+        ],
+        [(7, 5, true), (8, 0, false)],
+      );
+    });
+
     testWidgets('scrolling back switches the status back', (tester) async {
       final api = twoChapters();
       await pumpStrip(tester, api, chapterId: 7);
@@ -776,12 +806,16 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     this.chapterTitles = const {},
     this.chapterPositions = const {},
     this.failingChapterIds = const {},
+    this.unstartedChapterIds = const {},
   });
 
   final String chapterTitle;
   final Map<int, String> chapterTitles;
   final Map<int, int> chapterPositions;
   final Set<int> failingChapterIds;
+
+  /// Chapters with no stored progress at all (never opened).
+  final Set<int> unstartedChapterIds;
   final int lastPage;
   final int pageCount;
   final int pageWidth;
@@ -862,6 +896,9 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 
   @override
   Future<bridge.ReadingProgress?> getProgress(int chapterId) async {
+    if (unstartedChapterIds.contains(chapterId)) {
+      return null;
+    }
     return bridge.ReadingProgress(
       chapterId: chapterId,
       lastPage: lastPage,

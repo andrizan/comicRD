@@ -319,21 +319,13 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     );
   }
 
-  /// The chapter the reader would resume: the latest in-progress one, or
-  /// the chapter last opened from this page.
+  /// The chapter the reader would resume (see [resumeChapter]).
   String? _currentChapterPath(
     List<bridge.RawChapter>? items,
     String? lastOpened,
   ) {
     if (items == null) return lastOpened;
-    bridge.RawChapter? best;
-    for (final chapter in items) {
-      if (chapter.isRead || chapter.lastPage <= 0) continue;
-      if (best == null || chapter.progressUpdatedAt > best.progressUpdatedAt) {
-        best = chapter;
-      }
-    }
-    return best?.sourcePath ?? lastOpened;
+    return resumeChapter(items, lastOpened)?.sourcePath ?? lastOpened;
   }
 
   Future<void> _copy(String value) async {
@@ -414,36 +406,11 @@ class _ComicPageState extends ConsumerState<ComicPage> {
     final items = await ref.read(
       comicChaptersProvider(widget.comicPath).future,
     );
-    if (items.isEmpty) return;
-
-    final lastOpened = ref.read(lastOpenedChapterProvider)[widget.comicPath];
-    if (lastOpened != null) {
-      final match = items.firstWhere(
-        (chapter) => chapter.sourcePath == lastOpened,
-        orElse: () => items.first,
-      );
-      await _openChapter(match);
-      return;
-    }
-
-    bridge.RawChapter? target;
-    final chaptersWithProgress = items.where((c) => c.progressUpdatedAt > 0);
-    if (chaptersWithProgress.isNotEmpty) {
-      target = chaptersWithProgress.reduce(
-        (a, b) => a.progressUpdatedAt > b.progressUpdatedAt ? a : b,
-      );
-    } else {
-      for (final chapter in items) {
-        if (chapter.lastPage > 0 && !chapter.isRead) {
-          target = chapter;
-          break;
-        }
-      }
-      target ??= items.firstWhere(
-        (chapter) => !chapter.isRead,
-        orElse: () => items.first,
-      );
-    }
+    final target = resumeChapter(
+      items,
+      ref.read(lastOpenedChapterProvider)[widget.comicPath],
+    );
+    if (target == null) return;
     await _openChapter(target);
   }
 
@@ -1279,6 +1246,14 @@ class _ChapterRowState extends State<_ChapterRow> {
             ),
           ),
         ],
+      );
+    } else if (current) {
+      // Where reading picks up even though nothing of it was read yet, e.g.
+      // the chapter after one that was just finished.
+      status = SoftButton(
+        label: text.continueReading,
+        variant: SoftButtonVariant.primary,
+        onPressed: widget.onOpen,
       );
     } else if (_isModifiedToday(chapter.dateModified.toInt())) {
       status = SoftBadge(label: text.newBadge, tone: SoftBadgeTone.amber);

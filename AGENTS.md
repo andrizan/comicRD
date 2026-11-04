@@ -180,6 +180,12 @@ Do not expand reader raw-image cache, Flutter provider retention, or prefetch wi
 
 **Do not** make the filtering provider watch the raw provider's `.future` — this causes async cascade where every query change triggers a loading state.
 
+### Resuming A Comic
+
+- "Continue", the highlighted chapter row and the chapter list's auto-scroll all go through `resumeChapter` (`state/comic_state.dart`). Do not give one of them its own rule: when the button and the row disagree, Continue appears to jump to an old half-read chapter.
+- The rule is last opened in this session, else the most recently written progress (same-second ties go to the later chapter); a finished chapter hands over to the next unread one. Half-read chapters older than that are ignored.
+- `list_reading_history` returns exactly one row per comic, picked by `updated_at DESC, chapter_index DESC`. `updated_at` has second resolution and the reader writes two chapters at once when it scrolls from one into the next, so never rely on timestamps alone to order chapters.
+
 ### Search Debounce
 
 Always debounce search input with a 300ms timer. Do not call `setQuery()` on every keystroke.
