@@ -103,7 +103,7 @@ void main() {
     },
   );
 
-  testWidgets('moves on to the next chapter when the last one was finished', (
+  testWidgets('keeps pointing at the chapter last read even when finished', (
     tester,
   ) async {
     final api = FakeComicRdApi(
@@ -134,13 +134,15 @@ void main() {
     );
     await _pump(tester, api);
 
-    expect(find.text('Continue Chapter 4'), findsOneWidget);
-    await tester.tap(find.text('Continue Chapter 4'));
+    // Chapter 3 is the last one read; 4 is merely the next unread.
+    expect(find.text('Continue Chapter 3'), findsOneWidget);
+    expect(find.text('Continue Chapter 4'), findsNothing);
+    await tester.tap(find.text('Continue Chapter 3'));
     await tester.pumpAndSettle();
 
     expect(
       api.openedChapters.single.chapterSourcePath,
-      '$fakeFeaturedPath/Chapter 4',
+      '$fakeFeaturedPath/Chapter 3',
     );
   });
 

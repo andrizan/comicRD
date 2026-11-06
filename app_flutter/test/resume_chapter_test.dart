@@ -39,7 +39,9 @@ void main() {
       );
     });
 
-    test('moves on to the next chapter once the last one is finished', () {
+    test('stays on the chapter last read even when it is finished', () {
+      // Finishing chapter 2 does not make Continue jump ahead to an unread
+      // chapter: it points at where reading last was.
       expect(
         _resume([
           _chapter(1, read: true, updated: 100),
@@ -47,7 +49,7 @@ void main() {
           _chapter(3),
           _chapter(4),
         ]),
-        'Chapter 3',
+        'Chapter 2',
       );
     });
 
@@ -102,15 +104,14 @@ void main() {
         _chapter(3),
       ];
       expect(_resume(chapters, '$_comic/Chapter 2'), 'Chapter 2');
-      // A last-opened chapter that is finished still moves on, to the next
-      // chapter that has not been read.
+      // A finished last-opened chapter is still the one to resume.
       expect(
         _resume([
           _chapter(1, read: true, updated: 100),
           _chapter(2, read: true, updated: 150),
           _chapter(3),
         ], '$_comic/Chapter 1'),
-        'Chapter 3',
+        'Chapter 1',
       );
     });
 

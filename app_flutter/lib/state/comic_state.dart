@@ -31,13 +31,13 @@ final comicReadingHistoryProvider =
 /// The chapter reading resumes from, shared by the "Continue" button, the
 /// highlighted row and the list's auto-scroll so they never disagree.
 ///
-/// That is the chapter opened last in this session, else the one whose
-/// progress was written most recently; two chapters written in the same
-/// second (scrolling out of one into the next writes both) resolve to the
-/// later one. A chapter that is finished hands over to the next unread one
-/// after it. Older chapters left half-read play no part: ignoring "last
-/// read" in favour of "in progress" is what sent Continue back to a chapter
-/// abandoned long ago once the reader started running through chapters.
+/// That is the chapter last read: the one opened last in this session, else
+/// the one whose progress was written most recently, finished or not. Two
+/// chapters written in the same second (scrolling out of one into the next
+/// writes both) resolve to the later one. It deliberately never skips ahead
+/// to "the next unread chapter", and half-read chapters older than the last
+/// one play no part: either is what made Continue point somewhere other than
+/// where reading actually stopped.
 bridge.RawChapter? resumeChapter(
   List<bridge.RawChapter> chapters,
   String? lastOpenedPath,
@@ -73,19 +73,7 @@ bridge.RawChapter? resumeChapter(
       orElse: () => chapters.first,
     );
   }
-  if (!last.isRead) {
-    return last;
-  }
-  bridge.RawChapter? next;
-  for (final chapter in chapters) {
-    if (chapter.isRead || chapter.chapterIndex <= last.chapterIndex) {
-      continue;
-    }
-    if (next == null || chapter.chapterIndex < next.chapterIndex) {
-      next = chapter;
-    }
-  }
-  return next ?? last;
+  return last;
 }
 
 class ComicStats {
