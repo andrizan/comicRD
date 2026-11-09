@@ -146,6 +146,8 @@ With unlimited scroll on, neighbouring chapters are chained into one scroll view
 - The chapter under the viewport centre is the active one. The top bar, page bar, marks, progress and "last opened" follow it immediately: scrolling on into the next chapter writes the previous chapter as read and the new one at once (no debounce), even if a fast scroll skipped its last page.
 - The prefetch window is the same `current - 2` through `current + 2` tiles, now over the whole strip and split per chapter; chapters the window left get one `evictChapterPages(id, [])`. Rust still caps page sources at 2, so do not widen the window to keep a third chapter warm.
 - The prev/next chapter buttons and arrow keys jump inside the strip when the target is already chained in; only an unloaded target goes through the route (which resets the strip).
+- The route's `chapterId` is only where the session started, not the chapter being read. Closing or switching sets `_leaving`, releases the strip and must never rebuild one from the route's chapter: `build` still watches that chapter's provider, and a strip rebuilt from it was saved by `dispose` with the real chapter's page, overwriting the session's starting chapter and making it the "last read" one (it sent Continue back to a chapter read days earlier). Only the active chapter is ever written on close, and exactly once.
+- `ReaderSaveGuard` (the exit-time write) is cleared once progress is saved, so closing the app never replays a stale chapter with a fresh timestamp.
 
 ### Format Rules
 
@@ -234,6 +236,7 @@ src/library.rs::tests      — library_source_status_for edge cases
 - Tests that use `list_library_comics_raw` must first call `scan_libraries()` if they expect non-zero counts.
 - Tests that use `list_library_comics_raw` without scanning should expect `0/0/0` counts (shallow FS, no DB data).
 - Don't use dead APIs (e.g., `list_comics()`) in tests — use the production path.
+- A Flutter test for reader progress must run the whole flow the user does (open at one chapter, read on through the strip, close with Esc, let the route change and the page dispose) and check what was actually written. A test that only checks the state mid-reading, or that feeds the logic hand-made data, passed while this reader overwrote the wrong chapter on every close.
 
 ### Flutter Tests
 

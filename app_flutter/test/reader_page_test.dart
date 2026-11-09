@@ -362,6 +362,10 @@ void main() {
               chapterId: int.parse(state.pathParameters['chapterId']!),
             ),
           ),
+          GoRoute(
+            path: '/comic/:comicPath',
+            builder: (context, state) => const SizedBox.shrink(),
+          ),
         ],
       );
       addTearDown(router.dispose);
@@ -485,6 +489,114 @@ void main() {
         ],
         [(7, 5, true), (8, 0, false)],
       );
+    });
+
+    testWidgets(
+      'closing the reader never rewrites the chapter it was opened at',
+      (tester) async {
+        // The route opens chapter 7, but the reading ends two pages into
+        // chapter 8. Closing used to rebuild a one-chapter strip from the
+        // route's chapter and save *that* chapter with chapter 8's page, which
+        // made the chapter the session started at the "last read" one. That is
+        // what sent Continue back to wherever a session had begun.
+        final api = twoChapters();
+        final host = await pumpStrip(tester, api, chapterId: 7);
+
+        // Centre on the third page of chapter 28 (index 2).
+        await scrollTo(tester, 78 + chapterExtent + 168 + 2 * 323.6 + 50 - 300);
+        expect(find.text(' (28/33)'), findsOneWidget);
+        api.savedProgress.clear();
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+
+        expect(
+          [for (final p in api.savedProgress) (p.chapterId, p.lastPage)],
+          everyElement(predicate<(int, int)>((write) => write.$1 == 8)),
+          reason:
+              'only the chapter that was being read may be written on close',
+        );
+        expect(api.savedProgress.where((p) => p.chapterId == 7), isEmpty);
+        expect(
+          host.router.routeInformationProvider.value.uri.path,
+          startsWith('/comic/'),
+        );
+      },
+    );
+
+    testWidgets(
+      'a session that reads on for several chapters ends on the last',
+      (tester) async {
+        // Opened at chapter 7 (as when picked from the list), read through 8 and
+        // into 9, then closed: the only chapter left as most recently written
+        // must be 9, and the exit-time guard must not replay anything.
+        final api = _ReaderFakeComicRdApi(
+          lastPage: 0,
+          pageCount: 6,
+          pageHeight: 240,
+          nextChapterIds: const {7: 8, 8: 9},
+          prevChapterIds: const {8: 7, 9: 8},
+          unlimitedScroll: true,
+          chapterTitles: const {
+            7: 'Chapter 27',
+            8: 'Chapter 28',
+            9: 'Chapter 29',
+          },
+          chapterPositions: const {7: 27, 8: 28, 9: 29},
+          unstartedChapterIds: const {8, 9},
+        );
+        await pumpStrip(tester, api, chapterId: 7);
+
+        // Into chapter 8, then near its end so chapter 9 is chained in, then on
+        // to the second page of chapter 9.
+        await scrollTo(tester, 78 + chapterExtent + 168 + 100);
+        await scrollTo(tester, 78 + 2 * chapterExtent + 168 - 500);
+        await scrollTo(tester, 78 + 2 * chapterExtent + 2 * 168 + 400);
+        expect(find.text(' (29/33)'), findsOneWidget);
+        expect(
+          {for (final p in api.savedProgress) p.chapterId},
+          containsAll([7, 8]),
+          reason: 'the chapters read through were written as they were left',
+        );
+        api.savedProgress.clear();
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+
+        expect([
+          for (final p in api.savedProgress) p.chapterId,
+        ], everyElement(9));
+        expect(ReaderSaveGuard.chapterId, isNull);
+      },
+    );
+
+    testWidgets('switching chapter through the route saves only the one left', (
+      tester,
+    ) async {
+      final api = _ReaderFakeComicRdApi(
+        lastPage: 3,
+        pageCount: 6,
+        pageHeight: 240,
+        nextChapterIds: const {7: 8},
+        chapterTitles: const {7: 'Chapter 27', 8: 'Chapter 28'},
+        chapterPositions: const {7: 27, 8: 28},
+      );
+      final host = await pumpStrip(tester, api, chapterId: 7);
+      api.savedProgress.clear();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(host.router.routeInformationProvider.value.uri.path, '/reader/8');
+      // Chapter 7 is written once, at the page it was left on, and nothing
+      // else is written for it afterwards.
+      expect(api.savedProgress.where((p) => p.chapterId == 7), hasLength(1));
     });
 
     testWidgets('scrolling back switches the status back', (tester) async {

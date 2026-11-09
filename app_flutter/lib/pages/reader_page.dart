@@ -253,6 +253,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   final Set<int> _idleChapters = {};
   bool _ignoreNextScrollUpdate = false;
   bool _restoredProgress = false;
+
+  /// Set once the reader is closing or switching chapter: progress was saved
+  /// and the strip released, so nothing may be rebuilt or written afterwards.
+  bool _leaving = false;
   bool _initialScrollDone = false;
   bool _fullscreen = false;
   bool _toolbarVisible = true;
@@ -303,8 +307,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _initialScrollTimer?.cancel();
     final strip = _strip;
     final active = _activeChapter;
-    if (active != null) {
-      unawaited(_saveProgressDirect(active));
+    if (active != null && !_leaving) {
+      unawaited(_saveAndForget(active));
     }
     if (strip != null) {
       unawaited(_releaseStripMemory(strip, invalidateRenderedPages: false));
@@ -333,6 +337,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _initialScrollTimer?.cancel();
     _initialScrollTimer = null;
     _readerGeneration++;
+    _leaving = false;
     _activeSlot = 0;
     _currentPage = 0;
     _ignoreNextScrollUpdate = false;
@@ -415,6 +420,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         color: context.appReader.canvas,
         child: reader.when(
           data: (data) {
+            // Closing or switching releases the strip. The route's own chapter
+            // is not necessarily the one being read, so a strip rebuilt from it
+            // would be saved as if it were: that overwrote the chapter a
+            // session started at with the page of the chapter it ended in.
+            if (_leaving || (_strip == null && _restoredProgress)) {
+              return const SizedBox.shrink();
+            }
             final strip = _ensureStrip(data);
             _restoreProgress(data);
             if (!_pageMarks.containsKey(widget.chapterId)) {
@@ -1307,6 +1319,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
+  /// [_saveProgressDirect] for a reader that is being torn down without going
+  /// through [_close]: once written, the exit-time guard must not replay it.
+  Future<void> _saveAndForget(StripChapter chapter) async {
+    await _saveProgressDirect(chapter);
+    if (ReaderSaveGuard.chapterId == chapter.chapterId) {
+      ReaderSaveGuard.clear();
+    }
+  }
+
   /// Saves [chapter]'s current page without the "already stored" shortcut;
   /// used where the app is about to leave the reader.
   Future<void> _saveProgressDirect(StripChapter chapter) async {
@@ -1516,10 +1537,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _close(ReaderData fallback) async {
+    if (_leaving) {
+      return;
+    }
+    _leaving = true;
     final strip = _strip;
     final active = _activeChapter ?? StripChapter(widget.chapterId, fallback);
     final data = active.data;
     await _saveProgressDirect(active);
+    // Saved for good: an exit-time write must not replay it with a fresh time.
+    ReaderSaveGuard.clear();
     _invalidateProgressProviders(data, onClose: true);
     for (final chapter in strip?.chapters ?? [active]) {
       ref.invalidate(readerDataProvider(chapter.chapterId));
@@ -1552,6 +1579,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       _jumpToChapterPage(slot, strip.chapters[slot].data.initialPage);
       return;
     }
+    if (_leaving) {
+      return;
+    }
+    _leaving = true;
     final active = _activeChapter;
     if (active != null) {
       await _saveProgressDirect(active);
