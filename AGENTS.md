@@ -148,6 +148,7 @@ With unlimited scroll on, neighbouring chapters are chained into one scroll view
 - The prev/next chapter buttons and arrow keys jump inside the strip when the target is already chained in; only an unloaded target goes through the route (which resets the strip).
 - The route's `chapterId` is only where the session started, not the chapter being read. Closing or switching sets `_leaving`, releases the strip and must never rebuild one from the route's chapter: `build` still watches that chapter's provider, and a strip rebuilt from it was saved by `dispose` with the real chapter's page, overwriting the session's starting chapter and making it the "last read" one (it sent Continue back to a chapter read days earlier). Only the active chapter is ever written on close, and exactly once.
 - `ReaderSaveGuard` (the exit-time write) is cleared once progress is saved, so closing the app never replays a stale chapter with a fresh timestamp.
+- Leaving the reader (`_close`, and `_switchChapter` when the target is not in the strip) changes the route first and never awaits the bridge: saving progress, the running prefetch and `evictChapterPages` all queue behind page decodes in the same thread pool, so waiting for them left the reader up, blank, for as long as that backlog took. Remember the chapter synchronously, start the save without awaiting it (invalidate the progress providers through the `ProviderContainer`, not `ref`, when it lands), and let `dispose`/`didUpdateWidget` release the strip.
 
 ### Format Rules
 

@@ -276,62 +276,66 @@ void main() {
     );
   });
 
-  testWidgets('switching chapter waits for pending prefetch before cleanup', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1200, 800);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'switching chapter loads the next at once, cleans up after prefetch',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1200, 800);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final prefetchGate = Completer<void>();
-    final api = _ReaderFakeComicRdApi(
-      lastPage: 0,
-      pageCount: 6,
-      nextChapterIds: const {7: 8},
-      prefetchGate: prefetchGate,
-    );
-    final router = GoRouter(
-      initialLocation: '/reader/7',
-      routes: [
-        GoRoute(
-          path: '/reader/:chapterId',
-          builder: (context, state) => ReaderPage(
-            chapterId: int.parse(state.pathParameters['chapterId']!),
+      final prefetchGate = Completer<void>();
+      final api = _ReaderFakeComicRdApi(
+        lastPage: 0,
+        pageCount: 6,
+        nextChapterIds: const {7: 8},
+        prefetchGate: prefetchGate,
+      );
+      final router = GoRouter(
+        initialLocation: '/reader/7',
+        routes: [
+          GoRoute(
+            path: '/reader/:chapterId',
+            builder: (context, state) => ReaderPage(
+              chapterId: int.parse(state.pathParameters['chapterId']!),
+            ),
           ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [comicRdApiProvider.overrideWithValue(api)],
+          child: wrap(const ReaderPage(chapterId: 7), router: router),
         ),
-      ],
-    );
-    addTearDown(router.dispose);
+      );
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [comicRdApiProvider.overrideWithValue(api)],
-        child: wrap(const ReaderPage(chapterId: 7), router: router),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+      expect(api.events, contains('prefetch-start-7'));
 
-    expect(api.events, contains('prefetch-start-7'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
+      // The next chapter does not wait for the old one's running prefetch (Rust
+      // keeps two page sources, so both may be live), but the old one is not
+      // given back until that prefetch has finished.
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(api.loadedChapterIds, contains(8));
+      expect(api.events.where((event) => event == 'evict-7-[]'), isEmpty);
 
-    expect(api.loadedChapterIds, isNot(contains(8)));
-    expect(api.events.where((event) => event == 'evict-7-[]'), isEmpty);
+      prefetchGate.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
-    prefetchGate.complete();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-
-    expect(api.loadedChapterIds, contains(8));
-    final prefetchComplete = api.events.indexOf('prefetch-complete-7');
-    final finalEvict = api.events.indexOf('evict-7-[]');
-    expect(prefetchComplete, isNonNegative);
-    expect(finalEvict, greaterThan(prefetchComplete));
-  });
+      final prefetchComplete = api.events.indexOf('prefetch-complete-7');
+      final finalEvict = api.events.indexOf('evict-7-[]');
+      expect(prefetchComplete, isNonNegative);
+      expect(finalEvict, greaterThan(prefetchComplete));
+    },
+  );
 
   group('continuous chapter strip', () {
     // 900x240 pages are landscape, so they draw 1176 px wide (the window less
@@ -598,6 +602,81 @@ void main() {
       // else is written for it afterwards.
       expect(api.savedProgress.where((p) => p.chapterId == 7), hasLength(1));
     });
+
+    testWidgets(
+      'closing leaves the reader at once even when the bridge is busy',
+      (tester) async {
+        final api = twoChapters();
+        final host = await pumpStrip(tester, api, chapterId: 7);
+        await scrollTo(tester, 400);
+
+        // Everything queued behind a backlog of page decodes.
+        final busy = Completer<void>();
+        api.stall = busy.future;
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // The screen changes without waiting for the save, the running prefetch
+        // or the eviction: none of them is the user's business.
+        expect(
+          host.router.routeInformationProvider.value.uri.path,
+          startsWith('/comic/'),
+          reason: 'the reader stayed up, blank, until the bridge freed up',
+        );
+        // And Continue already knows where reading stopped.
+        expect(
+          host.container.read(
+            lastOpenedChapterProvider,
+          )['/library/Kaichou wa Maid-sama!'],
+          '/library/Kaichou wa Maid-sama!/Chapter 27',
+        );
+
+        // Nothing is lost: once the backlog drains the progress is written, the
+        // chapters are given back, and the exit-time guard is cleared.
+        busy.complete();
+        await tester.pumpAndSettle();
+        expect(api.savedProgress.where((p) => p.chapterId == 7), isNotEmpty);
+        expect(api.events, contains('evict-7-[]'));
+        expect(ReaderSaveGuard.chapterId, isNull);
+      },
+    );
+
+    testWidgets(
+      'switching chapter changes the route at once when the bridge is busy',
+      (tester) async {
+        final api = _ReaderFakeComicRdApi(
+          lastPage: 3,
+          pageCount: 6,
+          pageHeight: 240,
+          nextChapterIds: const {7: 8},
+          chapterTitles: const {7: 'Chapter 27', 8: 'Chapter 28'},
+          chapterPositions: const {7: 27, 8: 28},
+        );
+        final host = await pumpStrip(tester, api, chapterId: 7);
+
+        final busy = Completer<void>();
+        api.stall = busy.future;
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(
+          host.router.routeInformationProvider.value.uri.path,
+          '/reader/8',
+        );
+        expect(
+          host.container.read(
+            lastOpenedChapterProvider,
+          )['/library/Kaichou wa Maid-sama!'],
+          '/library/Kaichou wa Maid-sama!/Chapter 28',
+        );
+
+        busy.complete();
+        await tester.pumpAndSettle();
+        expect(api.savedProgress.where((p) => p.chapterId == 7), hasLength(1));
+      },
+    );
 
     testWidgets('scrolling back switches the status back', (tester) async {
       final api = twoChapters();
@@ -928,6 +1007,10 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 
   /// Chapters with no stored progress at all (never opened).
   final Set<int> unstartedChapterIds;
+
+  /// While set, the bridge calls the reader makes on its way out wait for it,
+  /// as they do when the real thread pool is busy decoding pages.
+  Future<void>? stall;
   final int lastPage;
   final int pageCount;
   final int pageWidth;
@@ -1039,6 +1122,7 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
 
   @override
   Future<void> prefetchTiles(bridge.PrefetchTilesPayload payload) async {
+    await stall;
     events.add('prefetch-start-${payload.chapterId}');
     final gate = prefetchGate;
     if (gate != null && !_prefetchGateUsed && payload.chapterId == 7) {
@@ -1054,12 +1138,14 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     required int chapterId,
     required List<int> keepPages,
   }) async {
+    await stall;
     events.add('evict-$chapterId-[${keepPages.join(',')}]');
     evictedWindows.add(keepPages.toList());
   }
 
   @override
   Future<void> saveProgress(bridge.SaveProgressPayload payload) async {
+    await stall;
     savedProgress.add(payload);
   }
 

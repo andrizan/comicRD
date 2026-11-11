@@ -1350,17 +1350,31 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _invalidateProgressProviders(ReaderData data, {required bool onClose}) {
+    _invalidateProgressProvidersIn(
+      ProviderScope.containerOf(context),
+      data,
+      onClose: onClose,
+    );
+  }
+
+  /// Takes the container rather than `ref` so it can run after this reader is
+  /// gone (the save on close finishes once the comic page is already up).
+  void _invalidateProgressProvidersIn(
+    ProviderContainer container,
+    ReaderData data, {
+    required bool onClose,
+  }) {
     final comicPath = data.context?.comicSourcePath;
     if (onClose) {
-      ref.invalidate(comicsWithProgressProvider);
-      ref.invalidate(rawLibraryComicsProvider);
-      ref.invalidate(libraryComicsProvider);
-      ref.invalidate(readingHistoryProvider);
+      container.invalidate(comicsWithProgressProvider);
+      container.invalidate(rawLibraryComicsProvider);
+      container.invalidate(libraryComicsProvider);
+      container.invalidate(readingHistoryProvider);
     }
     if (comicPath == null || comicPath.isEmpty) {
       return;
     }
-    ref.invalidate(comicChaptersProvider(comicPath));
+    container.invalidate(comicChaptersProvider(comicPath));
   }
 
   // -------------------------------------------------------------------------
@@ -1536,42 +1550,50 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
   }
 
-  Future<void> _close(ReaderData fallback) async {
+  /// Leaves the reader. The screen changes at once: saving the page, the
+  /// running prefetch and giving the chapters back all go through the same
+  /// bridge thread pool that is busy decoding pages, so waiting for any of
+  /// them left the reader up, blank, for as long as that backlog took. They
+  /// finish afterwards instead: the chapter to continue from is remembered
+  /// synchronously, the save invalidates the providers that show progress when
+  /// it lands, and `dispose` releases the strip.
+  void _close(ReaderData fallback) {
     if (_leaving) {
       return;
     }
     _leaving = true;
-    final strip = _strip;
     final active = _activeChapter ?? StripChapter(widget.chapterId, fallback);
-    final data = active.data;
-    await _saveProgressDirect(active);
-    // Saved for good: an exit-time write must not replay it with a fresh time.
-    ReaderSaveGuard.clear();
-    _invalidateProgressProviders(data, onClose: true);
-    for (final chapter in strip?.chapters ?? [active]) {
-      ref.invalidate(readerDataProvider(chapter.chapterId));
-    }
-    await _releaseStripMemory(strip);
-    if (!mounted) {
-      return;
-    }
-    final comicPath = data.context?.comicSourcePath;
+    final comicPath = active.data.context?.comicSourcePath;
+    // The app-wide container outlives this widget, which the save below does.
+    final container = ProviderScope.containerOf(context);
     _rememberLastOpened(active);
-
-    // Defer navigation so provider invalidations finish before the comic page
-    // is rebuilt. This avoids "setState during build" errors in Riverpod 3.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final target = comicPath;
-      if (target == null || target.isEmpty) {
-        context.go('/');
-      } else {
-        context.go('/comic/${encodeRoutePath(target)}');
-      }
-    });
+    // Starts now (it reads the current page before its first await); nothing
+    // waits for it.
+    final saved = _saveProgressDirect(active);
+    unawaited(
+      saved.whenComplete(() {
+        // Saved for good: an exit-time write must not replay it with a fresh
+        // time.
+        if (ReaderSaveGuard.chapterId == active.chapterId) {
+          ReaderSaveGuard.clear();
+        }
+        _invalidateProgressProvidersIn(container, active.data, onClose: true);
+      }),
+    );
+    if (comicPath == null || comicPath.isEmpty) {
+      context.go('/');
+    } else {
+      context.go('/comic/${encodeRoutePath(comicPath)}');
+    }
   }
 
-  Future<void> _switchChapter(int chapterId) async {
+  /// Moves to [chapterId]. When it is already chained into the strip this is a
+  /// jump; otherwise the route changes, and it changes at once for the same
+  /// reason [_close] does: the save, the running prefetch and the release of
+  /// the old chapters all queue behind page decodes in the bridge. They finish
+  /// afterwards (`didUpdateWidget` releases the old strip once the route has
+  /// moved), and the new chapter starts loading without waiting for them.
+  void _switchChapter(int chapterId) {
     final strip = _strip;
     final slot = strip?.slotOfChapter(chapterId) ?? -1;
     if (strip != null && slot >= 0) {
@@ -1584,34 +1606,49 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     _leaving = true;
     final active = _activeChapter;
-    if (active != null) {
-      await _saveProgressDirect(active);
-    }
-
-    // Update last opened chapter immediately so the comic page shows the
-    // correct "continue reading" target even if the app is killed right after.
+    final container = ProviderScope.containerOf(context);
     final comicPath = active?.data.context?.comicSourcePath;
-    if (comicPath != null && comicPath.isNotEmpty) {
-      try {
-        final newCtx = await _api.getChapterContext(chapterId);
-        final newChapterPath = newCtx?.chapterSourcePath ?? '';
-        if (newChapterPath.isNotEmpty) {
-          ref
-              .read(lastOpenedChapterProvider.notifier)
-              .remember(comicPath, newChapterPath);
-        }
-      } catch (_) {
-        // Non-critical: worst case the old chapter stays as "last opened".
-      }
+    if (active != null) {
+      final saved = _saveProgressDirect(active);
+      unawaited(
+        saved.whenComplete(() {
+          if (ReaderSaveGuard.chapterId == active.chapterId) {
+            ReaderSaveGuard.clear();
+          }
+          _invalidateProgressProvidersIn(
+            container,
+            active.data,
+            onClose: false,
+          );
+        }),
+      );
     }
+    // Update last opened chapter so the comic page shows the correct
+    // "continue reading" target even if the app is killed right after.
+    unawaited(_rememberOpened(container, comicPath, chapterId));
+    context.go('/reader/$chapterId');
+  }
 
-    for (final chapter in strip?.chapters ?? const <StripChapter>[]) {
-      ref.invalidate(readerDataProvider(chapter.chapterId));
+  /// Marks [chapterId] as the comic's last opened chapter once its path is
+  /// known (one bridge call, which is why nothing waits for it).
+  Future<void> _rememberOpened(
+    ProviderContainer container,
+    String? comicPath,
+    int chapterId,
+  ) async {
+    if (comicPath == null || comicPath.isEmpty) {
+      return;
     }
-    ref.invalidate(readerDataProvider(widget.chapterId));
-    await _releaseStripMemory(strip);
-    if (mounted) {
-      context.go('/reader/$chapterId');
+    try {
+      final context = await _api.getChapterContext(chapterId);
+      final chapterPath = context?.chapterSourcePath ?? '';
+      if (chapterPath.isNotEmpty) {
+        container
+            .read(lastOpenedChapterProvider.notifier)
+            .remember(comicPath, chapterPath);
+      }
+    } catch (_) {
+      // Non-critical: worst case the old chapter stays as "last opened".
     }
   }
 
