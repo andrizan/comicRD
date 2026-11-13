@@ -1,5 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:flutter_rust_bridge/flutter_rust_bridge.dart'
+    as frb
+    show Int64List;
 import 'package:path_provider/path_provider.dart';
 
 import '../bridge_generated.dart' as bridge;
@@ -83,6 +86,11 @@ class ComicRdApi {
 
   Future<void> prefetchTiles(bridge.PrefetchTilesPayload payload) =>
       bridge.prefetchTiles(payload: payload);
+
+  /// Which chapters the reader has open; Rust drops queued tile work for any
+  /// other chapter. Synchronous so it lands ahead of the queue it cuts short.
+  void setReaderChapters(List<int> chapterIds) =>
+      bridge.setReaderChapters(chapterIds: frb.Int64List.fromList(chapterIds));
 
   Future<void> evictChapterPages({
     required int chapterId,

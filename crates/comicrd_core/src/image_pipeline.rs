@@ -54,6 +54,9 @@ pub(crate) struct PageCache {
     /// Pages being decoded right now, so overlapping requests share one
     /// decode (see `page_work`).
     inflight: Mutex<HashMap<(i64, usize), PageWorkSlot>>,
+    /// Chapters the reader has open, once it has said so (`None` until then).
+    /// Tile work for any other chapter is dropped (see `is_chapter_open`).
+    open_chapters: Mutex<Option<std::collections::HashSet<i64>>>,
 }
 
 /// One page's raw bytes and the tile plan derived from them, shared by every
@@ -137,6 +140,29 @@ impl PageCache {
             state: Mutex::new(PageCacheState::default()),
             rar_session_base: base,
             inflight: Mutex::new(HashMap::new()),
+            open_chapters: Mutex::new(None),
+        }
+    }
+
+    /// Replaces the set of chapters the reader has open.
+    pub(crate) fn set_open_chapters(&self, chapter_ids: &[i64]) {
+        if let Ok(mut open) = self.open_chapters.lock() {
+            *open = Some(chapter_ids.iter().copied().collect());
+        }
+    }
+
+    /// Whether tile work for [chapter_id] is still wanted.
+    ///
+    /// A fast scroll through the strip queues a render for every tile it
+    /// passes, and the bridge runs them one after another on a fixed pool. On
+    /// a dozen chapters that was ~600 renders and ~5.5 s of work still running
+    /// after the reader closed, which every later call (the comic page's
+    /// chapter list, the progress save) had to wait behind. Work for a chapter
+    /// the reader no longer has open returns straight away instead.
+    pub(crate) fn is_chapter_open(&self, chapter_id: i64) -> bool {
+        match self.open_chapters.lock() {
+            Ok(open) => open.as_ref().is_none_or(|ids| ids.contains(&chapter_id)),
+            Err(_) => true,
         }
     }
 

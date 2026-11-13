@@ -645,6 +645,15 @@ pub fn get_chapter_pages(chapter_id: i64) -> Result<Vec<PageInfo>, String> {
         .collect())
 }
 
+/// Which chapters the reader has open; tile work for any other chapter is
+/// dropped. Synchronous on purpose: it has to take effect ahead of the queue of
+/// renders it is meant to cut short, which an async call would wait behind.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_reader_chapters(chapter_ids: Vec<i64>) -> Result<(), String> {
+    core()?.set_reader_chapters(chapter_ids);
+    Ok(())
+}
+
 pub fn render_page_tile(payload: RenderPageTilePayload) -> Result<RenderedPage, String> {
     core()?.render_page_tile(payload.into()).map(Into::into)
 }

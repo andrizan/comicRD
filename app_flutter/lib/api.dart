@@ -83,6 +83,12 @@ Future<ChapterContext?> getChapterContext({required PlatformInt64 chapterId}) =>
 Future<List<PageInfo>> getChapterPages({required PlatformInt64 chapterId}) =>
     RustLib.instance.api.crateApiGetChapterPages(chapterId: chapterId);
 
+/// Which chapters the reader has open; tile work for any other chapter is
+/// dropped. Synchronous on purpose: it has to take effect ahead of the queue of
+/// renders it is meant to cut short, which an async call would wait behind.
+void setReaderChapters({required Int64List chapterIds}) =>
+    RustLib.instance.api.crateApiSetReaderChapters(chapterIds: chapterIds);
+
 Future<RenderedPage> renderPageTile({required RenderPageTilePayload payload}) =>
     RustLib.instance.api.crateApiRenderPageTile(payload: payload);
 

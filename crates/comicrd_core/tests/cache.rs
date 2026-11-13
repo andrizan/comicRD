@@ -347,3 +347,75 @@ fn create_avif(path: impl AsRef<std::path::Path>, width: u32, height: u32) {
         .save_with_format(path, ImageFormat::Avif)
         .expect("save avif");
 }
+
+#[test]
+fn reader_gate_drops_work_for_chapters_the_reader_no_longer_has_open() {
+    // Scrolling fast through a strip leaves a queue of tile renders behind.
+    // Once the reader closes (or a chapter leaves it), the queued work must
+    // return at once instead of decoding pages nobody will see.
+    let temp = tempdir().expect("tempdir");
+    let app_data = temp.path().join("app-data");
+    let library = temp.path().join("library");
+    let comic = library.join("Comic A");
+    let mut chapters = Vec::new();
+    for number in 1..=2 {
+        let chapter = comic.join(format!("Chapter {number}"));
+        fs::create_dir_all(&chapter).expect("chapter");
+        create_png(chapter.join("001.png"), 400, 300);
+        chapters.push(chapter);
+    }
+    let core = ComicRdCore::open(&app_data).expect("open core");
+    core.set_setting(
+        "library_source_input",
+        &serde_json::to_string(&library).unwrap(),
+    )
+    .expect("set library source");
+    let ids: Vec<i64> = chapters
+        .iter()
+        .map(|chapter| {
+            core.open_chapter_for_reading(OpenChapterPayload {
+                comic_source_path: comic.to_string_lossy().to_string(),
+                chapter_source_path: chapter.to_string_lossy().to_string(),
+            })
+            .expect("open chapter")
+        })
+        .collect();
+    let render = |chapter_id: i64| {
+        core.render_page_tile(RenderPageTilePayload {
+            chapter_id,
+            page_index: 0,
+            tile_index: 0,
+        })
+    };
+    let prefetch = |chapter_id: i64| {
+        core.prefetch_tiles(PrefetchTilesPayload {
+            chapter_id,
+            tiles: vec![PageTile {
+                page_index: 0,
+                tile_index: 0,
+            }],
+        })
+    };
+
+    // Until a reader says what it has open, nothing is held back.
+    assert!(render(ids[0]).is_ok());
+
+    core.set_reader_chapters(vec![ids[0]]);
+    assert!(render(ids[0]).is_ok());
+    assert!(render(ids[1]).is_err(), "chapter 2 is not open in the reader");
+    let loads_before = core.cache_stats_for_test().page_bytes_loads;
+    prefetch(ids[1]).expect("a dropped prefetch is not an error");
+    assert_eq!(
+        core.cache_stats_for_test().page_bytes_loads,
+        loads_before,
+        "nothing was decoded for a chapter that is not open"
+    );
+
+    // Closing the reader drops everything still queued for it.
+    core.set_reader_chapters(Vec::new());
+    assert!(render(ids[0]).is_err());
+
+    // Opening again lets work through.
+    core.set_reader_chapters(vec![ids[1]]);
+    assert!(render(ids[1]).is_ok());
+}

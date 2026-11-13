@@ -275,6 +275,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   int _renderEnd = -1;
   int _readerGeneration = 0;
 
+  /// The reader whose open chapters Rust currently honours. A closing reader
+  /// can still be disposing when the next one opens, so only the owner may
+  /// clear the set.
+  static _ReaderPageState? _gateOwner;
+
+  /// Tells Rust which chapters this reader has open, so queued tile work for
+  /// any other chapter is dropped instead of decoded.
+  void _publishOpenChapters(ReaderStrip strip) {
+    _gateOwner = this;
+    try {
+      _api.setReaderChapters([for (final c in strip.chapters) c.chapterId]);
+    } catch (_) {
+      // Only an optimisation: reading works without it.
+    }
+  }
+
+  /// Leaving: every tile render still queued for this reader becomes a no-op,
+  /// so the screen it leaves for is not left waiting behind them.
+  void _withdrawOpenChapters() {
+    if (!identical(_gateOwner, this)) {
+      return;
+    }
+    _gateOwner = null;
+    try {
+      _api.setReaderChapters(const []);
+    } catch (_) {
+      // Only an optimisation: reading works without it.
+    }
+  }
+
   StripChapter? get _activeChapter {
     final strip = _strip;
     if (strip == null || strip.chapters.isEmpty) {
@@ -313,6 +343,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (strip != null) {
       unawaited(_releaseStripMemory(strip, invalidateRenderedPages: false));
     }
+    _withdrawOpenChapters();
     _activeInstances--;
     if (_activeInstances <= 0) {
       _activeInstances = 0;
@@ -663,6 +694,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final strip = ReaderStrip([StripChapter(widget.chapterId, data)]);
     _strip = strip;
     _activeSlot = 0;
+    _publishOpenChapters(strip);
     return strip;
   }
 
@@ -1230,6 +1262,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _setStrip(ReaderStrip next) {
+    _publishOpenChapters(next);
     setState(() => _strip = next);
     // New tiles are only prefetched once the window is recomputed.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1243,6 +1276,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// scroll offset grows by exactly how far the content in view was pushed.
   void _prependChapter(ReaderStrip current, StripChapter chapter) {
     final next = current.prepended(chapter);
+    _publishOpenChapters(next);
     final added = chapter.data.tiles.length;
     if (!_scroll.hasClients) {
       setState(() {
@@ -1562,6 +1596,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _leaving = true;
+    _withdrawOpenChapters();
     final active = _activeChapter ?? StripChapter(widget.chapterId, fallback);
     final comicPath = active.data.context?.comicSourcePath;
     // The app-wide container outlives this widget, which the save below does.
@@ -1605,6 +1640,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return;
     }
     _leaving = true;
+    _withdrawOpenChapters();
     final active = _activeChapter;
     final container = ProviderScope.containerOf(context);
     final comicPath = active?.data.context?.comicSourcePath;

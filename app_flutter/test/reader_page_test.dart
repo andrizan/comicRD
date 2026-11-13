@@ -610,10 +610,16 @@ void main() {
         final host = await pumpStrip(tester, api, chapterId: 7);
         await scrollTo(tester, 400);
 
+        // While reading, Rust knows both chapters of the strip are open.
+        expect(api.readerChapterCalls.last, [7, 8]);
+
         // Everything queued behind a backlog of page decodes.
         final busy = Completer<void>();
         api.stall = busy.future;
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        // The queued tile work is dropped synchronously, before anything else:
+        // it is what the next screen would otherwise wait behind.
+        expect(api.readerChapterCalls.last, isEmpty);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
@@ -655,9 +661,12 @@ void main() {
         );
         final host = await pumpStrip(tester, api, chapterId: 7);
 
+        expect(api.readerChapterCalls.last, [7]);
         final busy = Completer<void>();
         api.stall = busy.future;
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        // Chapter 7's queued tiles are dropped before the route even changes.
+        expect(api.readerChapterCalls.last, isEmpty);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
@@ -675,6 +684,8 @@ void main() {
         busy.complete();
         await tester.pumpAndSettle();
         expect(api.savedProgress.where((p) => p.chapterId == 7), hasLength(1));
+        // The new chapter is announced once its strip exists.
+        expect(api.readerChapterCalls.last, [8]);
       },
     );
 
@@ -1132,6 +1143,13 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
     events.add('prefetch-complete-${payload.chapterId}');
     prefetchedWindows.add([for (final tile in payload.tiles) tile.pageIndex]);
   }
+
+  /// Every set of open chapters the reader announced, in order.
+  final readerChapterCalls = <List<int>>[];
+
+  @override
+  void setReaderChapters(List<int> chapterIds) =>
+      readerChapterCalls.add(List.of(chapterIds));
 
   @override
   Future<void> evictChapterPages({

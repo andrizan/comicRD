@@ -831,10 +831,21 @@ impl ComicRdCore {
         get_progress_conn(&conn, chapter_id)
     }
 
+    /// Tells the core which chapters the reader has open; tile renders and
+    /// prefetches for any other chapter return at once. An empty list (the
+    /// reader closed) drops everything still queued. Cheap: one small lock, so
+    /// the bridge can call it synchronously, ahead of the queue it clears.
+    pub fn set_reader_chapters(&self, chapter_ids: Vec<i64>) {
+        self.page_cache.set_open_chapters(&chapter_ids);
+    }
+
     pub fn render_page_tile(
         &self,
         payload: RenderPageTilePayload,
     ) -> Result<RenderedPage, String> {
+        if !self.page_cache.is_chapter_open(payload.chapter_id) {
+            return Err("chapter is no longer open in the reader".to_string());
+        }
         // Short scoped lock for the DB row; IO + decode + encode run lock-free.
         let (source_path, source_type) = {
             let conn = self
@@ -847,6 +858,10 @@ impl ComicRdCore {
     }
 
     pub fn prefetch_tiles(&self, payload: PrefetchTilesPayload) -> Result<(), String> {
+        // Background work: nobody waits on a dropped prefetch, so it is no error.
+        if !self.page_cache.is_chapter_open(payload.chapter_id) {
+            return Ok(());
+        }
         // Resolve once: all tiles in a payload belong to one chapter.
         let (source_path, source_type) = {
             let conn = self
@@ -865,6 +880,10 @@ impl ComicRdCore {
             }
         }
         for (page_index, tile_indices) in pages {
+            // The reader may close or move on while a batch is still running.
+            if !self.page_cache.is_chapter_open(payload.chapter_id) {
+                return Ok(());
+            }
             prefetch_page_tiles_conn(
                 &self.page_cache,
                 &source_path,

@@ -492,6 +492,13 @@ class FakeComicRdApi extends ComicRdApi {
   @override
   Future<void> prefetchTiles(bridge.PrefetchTilesPayload payload) async {}
 
+  /// Every set of open chapters the reader announced, in order.
+  final readerChapterCalls = <List<int>>[];
+
+  @override
+  void setReaderChapters(List<int> chapterIds) =>
+      readerChapterCalls.add(List.of(chapterIds));
+
   @override
   Future<void> evictChapterPages({
     required int chapterId,
