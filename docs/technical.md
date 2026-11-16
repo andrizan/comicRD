@@ -23,7 +23,7 @@ Contents:
 
 ## Requirements
 
-- Flutter desktop SDK (3.47+, Dart ^3.12.1)
+- Flutter desktop SDK (3.50+, Dart ^3.14.0)
 - Rust toolchain (`rustc 1.98`)
 - `flutter_rust_bridge_codegen` 2.13.0, `cargo-expand`
 - Platform desktop build tools (below)
