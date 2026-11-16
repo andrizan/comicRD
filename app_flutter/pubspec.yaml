@@ -37,9 +37,9 @@ dependencies:
   go_router: ^18.0.0
   flutter_riverpod: ^3.0.3
   file_selector: ^1.0.4
-  forui: ^0.27.3
-  forui_lucide: ^0.27.0
-  window_manager: ^0.5.1
+  forui: ^0.28.0
+  forui_lucide: ^0.28.0
+  window_manager: ^0.7.0
   package_info_plus: ^10.1.0
   material_ui: ^1.0.1
 

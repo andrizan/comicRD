@@ -31,10 +31,10 @@ Contents:
 ### Linux (Arch/CachyOS)
 
 ```bash
-sudo pacman -S --needed base-devel clang cmake ninja pkgconf gtk3 dav1d
+sudo pacman -S --needed base-devel clang cmake ninja pkgconf gtk3 libx11 libxi dav1d
 ```
 
-Debian/Ubuntu: `build-essential clang cmake ninja-build pkg-config libgtk-3-dev libdav1d-dev`.
+Debian/Ubuntu: `build-essential clang cmake ninja-build pkg-config libgtk-3-dev libx11-dev libxi-dev libdav1d-dev`.
 
 ### Windows
 

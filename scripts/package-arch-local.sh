@@ -41,6 +41,8 @@ depends=(
   'gtk3'
   'hicolor-icon-theme'
   'libepoxy'
+  'libx11'
+  'libxi'
 )
 provides=('comicrd')
 conflicts=('comicrd')

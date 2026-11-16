@@ -173,7 +173,7 @@ class _ComicRdShellState extends ConsumerState<ComicRdShell> {
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onPanStart: (_) => windowManager.startDragging(),
+      onPanStart: (_) => WindowManager.instance.getCurrent()?.startDragging(),
       onDoubleTap: () {},
       child: Shortcuts(
         shortcuts: <LogicalKeySet, Intent>{

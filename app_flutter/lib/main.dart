@@ -11,34 +11,43 @@ import 'state/api_state.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
-  const windowOptions = WindowOptions(
-    size: Size(1024, 680),
-    center: true,
-    minimumSize: Size(960, 640),
-  );
-  await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+  final window = WindowManager.instance.getCurrent()!;
+  window.setSize(const Size(1024, 680).toNative(), false);
+  window.minimumSize = const Size(960, 640).toNative();
+  window.center();
+  window.show();
+  window.focus();
   const api = ComicRdApi();
-  windowManager.setPreventClose(true);
-  windowManager.addListener(_WindowListener(onClose: () => api.shutdown()));
+  window.addListener(
+    _WindowCloser(window, onClose: () => api.shutdown()).onEvent,
+  );
   await api.init();
   runApp(const ProviderScope(child: ComicRdApp()));
 }
 
-class _WindowListener extends WindowListener {
-  _WindowListener({required this.onClose});
+/// Intercepts the first close request, runs the bounded cleanup, then closes
+/// the window again; that second request is let through.
+class _WindowCloser {
+  _WindowCloser(this.window, {required this.onClose});
 
+  final Window window;
   final Future<void> Function() onClose;
+  bool _closing = false;
 
-  @override
-  void onWindowClose() async {
+  void onEvent(WindowEvent event) {
+    if (event is! WindowCloseRequestedEvent || _closing) {
+      return;
+    }
+    _closing = true;
+    event.request.cancel();
+    unawaited(_shutdownAndClose());
+  }
+
+  Future<void> _shutdownAndClose() async {
     // Hide the window FIRST so the close feels instant to the user. All
     // cleanup below then happens while an invisible window is being torn
     // down, instead of the user staring at a frozen window.
-    unawaited(windowManager.hide());
+    window.hide();
 
     // Bounded cleanup so window close on Windows doesn't freeze
     // for seconds (WAL TRUNCATE + FRB dispose are slow on NTFS/Defender).
@@ -64,6 +73,6 @@ class _WindowListener extends WindowListener {
       // Timeout or error: still destroy window. The original
       // onClose future keeps running in background (timeout doesn't cancel it).
     }
-    unawaited(windowManager.destroy());
+    window.close();
   }
 }

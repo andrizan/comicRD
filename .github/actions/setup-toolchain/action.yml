@@ -52,6 +52,8 @@ runs:
           git \
           libdav1d-dev \
           libgtk-3-dev \
+          libx11-dev \
+          libxi-dev \
           ninja-build \
           pkg-config \
           unzip \

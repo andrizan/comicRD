@@ -1867,14 +1867,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _setPanel(_openPanel == panel ? _ReaderPanel.none : panel);
   }
 
-  Future<void> _toggleFullscreen() async {
+  void _toggleFullscreen() {
     _fullscreen = !_fullscreen;
+    final window = WindowManager.instance.getCurrent();
     if (_fullscreen) {
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-      await windowManager.setFullScreen(true);
+      window?.titleBarStyle = TitleBarStyle.hidden;
+      window?.isFullScreen = true;
     } else {
-      await windowManager.setFullScreen(false);
-      await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+      window?.isFullScreen = false;
+      window?.titleBarStyle = TitleBarStyle.normal;
     }
     if (mounted) {
       _refreshOverlay();
