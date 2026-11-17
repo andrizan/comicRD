@@ -754,7 +754,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           right: 0,
           bottom: 0,
           width: _ChapterScrollbar.width,
-          child: _ChapterScrollbar(controller: _scroll, layout: layout),
+          child: _ChapterScrollbar(
+            controller: _scroll,
+            layout: layout,
+            onPage: _scrollPage,
+          ),
         ),
       ],
     );
@@ -1556,20 +1560,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       } else {
         context.pop();
       }
-    } else if (key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.pageDown) {
-      _scrollBy(
-        key == LogicalKeyboardKey.pageDown
-            ? MediaQuery.sizeOf(context).height * 0.85
-            : 520,
-      );
-    } else if (key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.pageUp) {
-      _scrollBy(
-        key == LogicalKeyboardKey.pageUp
-            ? -MediaQuery.sizeOf(context).height * 0.85
-            : -520,
-      );
+    } else if (key == LogicalKeyboardKey.arrowDown) {
+      _scrollBy(520);
+    } else if (key == LogicalKeyboardKey.pageDown) {
+      _scrollPage(1);
+    } else if (key == LogicalKeyboardKey.arrowUp) {
+      _scrollBy(-520);
+    } else if (key == LogicalKeyboardKey.pageUp) {
+      _scrollPage(-1);
     } else if (key == LogicalKeyboardKey.arrowRight &&
         data?.context?.nextChapterId != null) {
       _switchChapter(data!.context!.nextChapterId!);
@@ -1801,9 +1799,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     }
     unawaited(_prefetchWindow(_renderStart, _renderEnd));
     if (_scroll.hasClients) {
-      final targetOffset = _currentLayout(
-        strip,
-      ).contentTops[tile].clamp(0, _scroll.position.maxScrollExtent).toDouble();
+      final targetOffset = _currentLayout(strip).contentTops[tile]
+          .clamp(0, _scroll.position.maxScrollExtent)
+          .toDouble();
       if ((_scroll.position.pixels - targetOffset).abs() > 0.5) {
         _ignoreNextScrollUpdate = _initialScrollDone;
         _scroll.jumpTo(targetOffset);
@@ -1811,6 +1809,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _ignoreNextScrollUpdate = false;
       }
     }
+  }
+
+  /// One screen down (1) or up (-1): PageDown/PageUp and a click on the
+  /// scrollbar track.
+  void _scrollPage(int direction) {
+    _scrollBy(direction * MediaQuery.sizeOf(context).height * 0.85);
   }
 
   void _scrollBy(double delta) {
@@ -2055,12 +2059,19 @@ class _TileLayout {
 /// only the active chapter's stretch of the strip: its thumb restarts at the
 /// top when the next chapter begins, and dragging it moves within that chapter.
 class _ChapterScrollbar extends StatefulWidget {
-  const _ChapterScrollbar({required this.controller, required this.layout});
+  const _ChapterScrollbar({
+    required this.controller,
+    required this.layout,
+    required this.onPage,
+  });
 
   static const double width = 16;
 
   final ScrollController controller;
   final _TileLayout layout;
+
+  /// Scrolls one screen towards a click on the track: 1 down, -1 up.
+  final ValueChanged<int> onPage;
 
   @override
   State<_ChapterScrollbar> createState() => _ChapterScrollbarState();
@@ -2070,8 +2081,9 @@ class _ChapterScrollbarState extends State<_ChapterScrollbar> {
   static const double _thickness = 12;
   static const double _minThumb = 36;
 
-  /// Pointer distance from the thumb's top while it is being dragged.
-  double _grab = 0;
+  /// Pointer distance from the thumb's top while it is being dragged; null
+  /// when the press did not start on the thumb.
+  double? _grab;
 
   @override
   void initState() {
@@ -2121,6 +2133,11 @@ class _ChapterScrollbarState extends State<_ChapterScrollbar> {
     );
   }
 
+  bool _onThumb(
+    ({double top, double thumb, double region, double range}) m,
+    double dy,
+  ) => dy >= m.top && dy <= m.top + m.thumb;
+
   void _seek(double thumbTop, double track) {
     final measured = _measure(track);
     if (measured == null || measured.range <= 0) {
@@ -2146,28 +2163,31 @@ class _ChapterScrollbarState extends State<_ChapterScrollbar> {
           animation: widget.controller,
           builder: (context, _) {
             final measured = _measure(track);
+            // Like a stock scrollbar: a click on the track scrolls a screen
+            // towards it, animated, and pressing the thumb only grabs it.
+            // Moving the page to the pointer on press made it jump.
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapDown: (details) {
                 final m = _measure(track);
-                if (m != null) {
-                  _seek(details.localPosition.dy - m.thumb / 2, track);
-                }
-              },
-              onVerticalDragStart: (details) {
-                final m = _measure(track);
-                if (m == null) {
-                  return;
-                }
                 final dy = details.localPosition.dy;
-                final onThumb = dy >= m.top && dy <= m.top + m.thumb;
-                _grab = onThumb ? dy - m.top : m.thumb / 2;
-                if (!onThumb) {
-                  _seek(dy - _grab, track);
+                if (m != null && !_onThumb(m, dy)) {
+                  widget.onPage(dy < m.top ? -1 : 1);
                 }
               },
-              onVerticalDragUpdate: (details) =>
-                  _seek(details.localPosition.dy - _grab, track),
+              onVerticalDragDown: (details) {
+                final m = _measure(track);
+                final dy = details.localPosition.dy;
+                _grab = m != null && _onThumb(m, dy) ? dy - m.top : null;
+              },
+              onVerticalDragUpdate: (details) {
+                final grab = _grab;
+                if (grab != null) {
+                  _seek(details.localPosition.dy - grab, track);
+                }
+              },
+              onVerticalDragEnd: (_) => _grab = null,
+              onVerticalDragCancel: () => _grab = null,
               child: Align(
                 alignment: Alignment.centerRight,
                 child: SizedBox(

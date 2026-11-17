@@ -761,6 +761,68 @@ void main() {
       expect(find.text(' (27/33)'), findsOneWidget);
     });
 
+    testWidgets('pressing the thumb grabs it without moving the page', (
+      tester,
+    ) async {
+      final api = twoChapters();
+      await pumpStrip(tester, api, chapterId: 7);
+      final thumb = tester.getRect(
+        find.byKey(const ValueKey('reader-scrollbar-thumb')),
+      );
+      // The chapter opens on its first page, below the top padding.
+      final start = position(tester).pixels;
+
+      // Pressed near its bottom and held past the tap timeout, the way a
+      // mouse grabs a thumb before moving it.
+      final gesture = await tester.startGesture(
+        Offset(thumb.center.dx, thumb.bottom - 10),
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(position(tester).pixels, start);
+
+      // Then the page follows the thumb by exactly how far it was pulled.
+      await gesture.moveBy(const Offset(0, 50));
+      await gesture.moveBy(const Offset(0, 50));
+      await tester.pump();
+      const range = 78 + chapterExtent - 800;
+      expect(
+        position(tester).pixels,
+        moreOrLessEquals(
+          (thumb.top + 100) / (800 - thumb.height) * range,
+          epsilon: 1,
+        ),
+      );
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets('clicking the track scrolls a screen towards it, animated', (
+      tester,
+    ) async {
+      final api = twoChapters();
+      await pumpStrip(tester, api, chapterId: 7);
+      final x = tester.getRect(find.byType(Scrollable).first).right - 6;
+      final start = position(tester).pixels;
+      const screen = 800 * 0.85;
+
+      // Below the thumb: one screen down (as PageDown), not to the click.
+      await tester.tapAt(Offset(x, 500));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      final midway = position(tester).pixels;
+      expect(midway, greaterThan(start));
+      expect(midway, lessThan(start + screen));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(position(tester).pixels, moreOrLessEquals(start + screen));
+
+      // Above the thumb: one screen back up.
+      await tester.tapAt(Offset(x, 150));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(position(tester).pixels, moreOrLessEquals(start));
+    });
+
     testWidgets(
       'next chapter button jumps within the strip without reloading',
       (tester) async {
