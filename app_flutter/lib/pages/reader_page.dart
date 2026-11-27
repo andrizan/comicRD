@@ -842,7 +842,47 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       totalExtent: total,
     );
     _tileLayout = built;
+    if (cached != null && identical(cached.strip, strip)) {
+      _keepCentreInPlace(cached, built);
+    }
     return built;
+  }
+
+  /// Zoom, page gap, portrait mode and window width rescale every tile but
+  /// not the scroll offset, so the same offset would land pages away (zooming
+  /// out to 50% moved the reader to twice as far down the chapter). Moves the
+  /// offset so the spot at the viewport centre, which picks the current page,
+  /// stays at the centre. Applied in the frame of the new layout, like a
+  /// prepend, so the old position is never drawn with the new sizes.
+  void _keepCentreInPlace(_TileLayout before, _TileLayout after) {
+    if (!_scroll.hasClients) {
+      return;
+    }
+    final position = _scroll.position;
+    if (!position.hasPixels || !position.hasViewportDimension) {
+      return;
+    }
+    final half = position.viewportDimension / 2;
+    final centre = position.pixels + half;
+    final tile = before.tileForOffset(centre);
+    final top = before.contentTops[tile];
+    final height = before.bottoms[tile] - top;
+    final fraction = height > 0
+        ? ((centre - top) / height).clamp(0.0, 1.0)
+        : 0.0;
+    final newTop = after.contentTops[tile];
+    final target = newTop + fraction * (after.bottoms[tile] - newTop) - half;
+    final shift = math.max(0.0, target) - position.pixels;
+    if (shift.abs() < 0.5) {
+      return;
+    }
+    position.correctBy(shift);
+    // More or fewer tiles now fit on screen: recompute the prefetch window.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateViewportWindow(persistProgress: false);
+      }
+    });
   }
 
   _TileLayout _currentLayout(ReaderStrip strip) {

@@ -7,6 +7,7 @@ import 'package:comicrd_flutter/bridge_generated.dart' as bridge;
 import 'package:comicrd_flutter/pages/reader_page.dart';
 import 'package:comicrd_flutter/state/api_state.dart';
 import 'package:comicrd_flutter/state/comic_state.dart';
+import 'package:comicrd_flutter/state/settings_state.dart';
 import 'package:comicrd_flutter/utils/forui_theme.dart';
 import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
@@ -721,6 +722,47 @@ void main() {
       expect(find.text('6'), findsOneWidget);
     });
 
+    testWidgets('changing the zoom keeps the page in view', (tester) async {
+      // 900x1300 pages draw 1000 px wide at zoom 1 and 500 px at zoom 0.5,
+      // 10 px apart, below the 78 px top padding.
+      final api = _ReaderFakeComicRdApi(lastPage: 0, pageCount: 20);
+      final host = await pumpStrip(tester, api, chapterId: 7);
+      double pageExtent(double zoom) => 1000 * zoom * 1300 / 900 + 10;
+      int pageAtCentre(double zoom) {
+        final centre =
+            position(tester).pixels + position(tester).viewportDimension / 2;
+        return ((centre - 78) / pageExtent(zoom)).floor();
+      }
+
+      await scrollTo(
+        tester,
+        78 + 10.5 * pageExtent(1) - position(tester).viewportDimension / 2,
+      );
+      expect(pageAtCentre(1), 10);
+
+      final settings = host.container.read(readerSettingsProvider.notifier);
+      settings.setZoom(0.5);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(pageAtCentre(0.5), 10);
+
+      // Zooming back in keeps it too (1.1 still fits the 1176 px column).
+      settings.setZoom(1.1);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(pageAtCentre(1.1), 10);
+
+      settings.setZoom(0.5);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Scrolling on continues from that page instead of jumping ahead.
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(pageAtCentre(0.5), anyOf(10, 11));
+    });
+
     testWidgets('scrollbar thumb starts over with each chapter', (
       tester,
     ) async {
@@ -1121,6 +1163,9 @@ class _ReaderFakeComicRdApi extends ComicRdApi {
       const bridge.SettingEntry(key: 'app_locale', valueJson: '"en"'),
     ];
   }
+
+  @override
+  Future<void> setSetting(String key, String valueJson) async {}
 
   @override
   Future<bridge.ChapterContext?> getChapterContext(int chapterId) async {
